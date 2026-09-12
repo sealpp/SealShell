@@ -172,5 +172,6 @@ onBeforeUnmount(() => {
   --dv-activegroup-visiblepanel-tab-color: #ffffff;
   --dv-inactivegroup-visiblepanel-tab-color: rgba(255, 255, 255, 0.5);
   --dv-tab-divider-color: #1f1f1f;
+  --dv-separator-border: #3c3c3c;
 }
 </style>
