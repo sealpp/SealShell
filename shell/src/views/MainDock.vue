@@ -8,6 +8,7 @@ import TerminalPanel from './TerminalPanel.vue'
 import TerminalTab from './TerminalTab.vue'
 
 const api = ref<DockviewApi | null>(null)
+const dockEl = ref<HTMLElement | null>(null)
 let unsubs: (() => void)[] = []
 let ignoreStoreActive = false
 let ignoreDockviewActive = false
@@ -17,6 +18,24 @@ const tabComponents = { terminalTab: TerminalTab }
 
 function onReady(event: DockviewReadyEvent) {
   api.value = event.api
+
+  // Dockview relays container resizes to layout() through a
+  // requestAnimationFrame-deferred ResizeObserver, so the grid's
+  // pixel-positioned groups keep their previous size for one frame —
+  // e.g. collapsing the sidebar paints a strip of the terminal-area
+  // background where the content has not caught up yet. Laying out
+  // synchronously inside our own observer removes that frame gap.
+  const dockElement = dockEl.value
+  if (dockElement) {
+    const observer = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect
+      if (rect) {
+        api.value?.layout(Math.round(rect.width), Math.round(rect.height))
+      }
+    })
+    observer.observe(dockElement)
+    unsubs.push(() => observer.disconnect())
+  }
 
   // Keep terminal activity independent from the bottom workspace.
   const activeSub = event.api.onDidActivePanelChange(({ panel }) => {
@@ -140,17 +159,24 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <DockviewVue
-    class="main-dock"
-    :theme="themeAbyss"
-    :components="(components as any)"
-    :tab-components="(tabComponents as any)"
-    :default-tab-component="(TerminalTab as any)"
-    @ready="onReady"
-  />
+  <div ref="dockEl" class="main-dock-host">
+    <DockviewVue
+      class="main-dock"
+      :theme="themeAbyss"
+      :components="(components as any)"
+      :tab-components="(tabComponents as any)"
+      :default-tab-component="(TerminalTab as any)"
+      @ready="onReady"
+    />
+  </div>
 </template>
 
 <style>
+.main-dock-host {
+  width: 100%;
+  height: 100%;
+}
+
 .main-dock {
   width: 100%;
   height: 100%;
