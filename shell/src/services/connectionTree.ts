@@ -207,28 +207,30 @@ export function resolvePasteFolderId(
 
 export function siblingNames(
   parentId: string | null,
-  kind: TreeNodeKind,
   folders: FolderProfile[],
   hosts: HostProfile[],
 ): Set<string> {
-  if (kind === 'folder') {
-    return new Set(folders.filter((folder) => folder.parentId === parentId).map((folder) => folder.name))
+  const names = new Set<string>()
+  for (const folder of folders) {
+    if (folder.parentId === parentId) names.add(folder.name)
   }
-  return new Set(hosts.filter((host) => host.folderId === parentId).map((host) => host.name))
+  for (const host of hosts) {
+    if (host.folderId === parentId) names.add(host.name)
+  }
+  return names
 }
 
 export function findSiblingNameConflict(
-  kind: TreeNodeKind,
   name: string,
   parentId: string | null,
   folders: FolderProfile[],
   hosts: HostProfile[],
   excludeId?: string,
 ): FolderProfile | HostProfile | undefined {
-  if (kind === 'folder') {
-    return folders.find((folder) => folder.id !== excludeId && folder.parentId === parentId && folder.name === name)
-  }
-  return hosts.find((host) => host.id !== excludeId && host.folderId === parentId && host.name === name)
+  return (
+    folders.find((folder) => folder.id !== excludeId && folder.parentId === parentId && folder.name === name) ??
+    hosts.find((host) => host.id !== excludeId && host.folderId === parentId && host.name === name)
+  )
 }
 
 export function nodeInsideFolder(key: string, folderId: string, folders: FolderProfile[], hosts: HostProfile[]): boolean {
@@ -301,11 +303,20 @@ export async function moveNodes(
   if (!canMoveToFolder(normalized, targetFolderId, folders)) throw new Error('不能将文件夹移动到自身或其子文件夹中')
   const folderIds: string[] = []
   const hostIds: string[] = []
+  const movedNames = new Set<string>()
   for (const key of normalized) {
     const parsed = parseNodeKey(key)
     if (!parsed) continue
+    const item = parsed.kind === 'folder'
+      ? folders.find((folder) => folder.id === parsed.id)
+      : hosts.find((host) => host.id === parsed.id)
+    if (!item) continue
+    if (movedNames.has(item.name) || findSiblingNameConflict(item.name, targetFolderId, folders, hosts, item.id)) {
+      throw new Error(`同级已存在同名项 "${item.name}"`)
+    }
+    movedNames.add(item.name)
     if (parsed.kind === 'folder') folderIds.push(parsed.id)
-    else if (hosts.some((host) => host.id === parsed.id)) hostIds.push(parsed.id)
+    else hostIds.push(parsed.id)
   }
   await moveTreeNodes(folderIds, hostIds, targetFolderId)
   return normalized

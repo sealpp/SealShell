@@ -8,7 +8,7 @@ import {
   saveHost,
   saveFolder,
 } from './storage'
-import { moveNodes } from './connectionTree'
+import { findSiblingNameConflict, moveNodes } from './connectionTree'
 import {
   initializeVault,
   loadCredentialRecord,
@@ -93,6 +93,9 @@ export async function listHosts(): Promise<void> {
 
 export async function createHost(host: HostProfile): Promise<void> {
   const normalized = { ...host, folderId: host.folderId ?? null }
+  if (findSiblingNameConflict(normalized.name, normalized.folderId, store.folders, store.hosts, normalized.id)) {
+    throw new Error(`同级已存在同名项 "${normalized.name}"`)
+  }
   await saveHost(normalized)
   const current = store.hosts.findIndex((item) => item.id === normalized.id)
   if (current === -1) store.hosts.push(normalized)
@@ -100,6 +103,9 @@ export async function createHost(host: HostProfile): Promise<void> {
 }
 
 export async function createFolder(folder: FolderProfile): Promise<void> {
+  if (findSiblingNameConflict(folder.name, folder.parentId, store.folders, store.hosts, folder.id)) {
+    throw new Error(`同级已存在同名项 "${folder.name}"`)
+  }
   await saveFolder(folder)
   const current = store.folders.findIndex((item) => item.id === folder.id)
   if (current === -1) store.folders.push(folder)

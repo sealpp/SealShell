@@ -14,6 +14,7 @@ import {
   type TreeNode,
 } from '../services/connectionTree'
 import { moveConnectionNodes } from '../services/ws'
+import { alertDialog } from '../services/dialogs'
 
 const draggingKeys = ref<string[]>([])
 const visibleNodes = computed(() => buildVisibleNodes(store.folders, store.hosts, store.expandedFolderIds))
@@ -136,7 +137,11 @@ function onDragOverFolder(node: TreeNode, event: DragEvent) {
 async function onDropFolder(node: TreeNode, event: DragEvent) {
   event.preventDefault()
   if (node.kind !== 'folder' || !canDrop(node.id)) return
-  await moveConnectionNodes(new Set(draggingKeys.value), node.id)
+  try {
+    await moveConnectionNodes(new Set(draggingKeys.value), node.id)
+  } catch (error) {
+    await alertDialog('无法移动', error instanceof Error ? error.message : String(error))
+  }
   const expanded = new Set(store.expandedFolderIds)
   expanded.add(node.id)
   store.expandedFolderIds = expanded
@@ -154,7 +159,11 @@ async function onDropRoot(event: DragEvent) {
   if ((event.target as HTMLElement | null)?.closest('.conn-item')) return
   event.preventDefault()
   if (!canDrop(null)) return
-  await moveConnectionNodes(new Set(draggingKeys.value), null)
+  try {
+    await moveConnectionNodes(new Set(draggingKeys.value), null)
+  } catch (error) {
+    await alertDialog('无法移动', error instanceof Error ? error.message : String(error))
+  }
   onDragEnd()
 }
 

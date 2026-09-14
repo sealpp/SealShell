@@ -77,7 +77,7 @@ async function pasteConnections(targetKey?: string): Promise<void> {
         : store.hosts.find((host) => host.id === parsed.id)
       if (!item) continue
       if (clipboard.mode === 'copy') {
-        const name = resolveCopyName(item.name, siblingNames(targetFolderId, parsed.kind, store.folders, store.hosts))
+        const name = resolveCopyName(item.name, siblingNames(targetFolderId, store.folders, store.hosts))
         const cloned = cloneConnectionNodes(key, targetFolderId, name, store.folders, store.hosts)
         if (!cloned) continue
         for (const folder of cloned.folders) await createFolder(folder)
@@ -93,9 +93,13 @@ async function pasteConnections(targetKey?: string): Promise<void> {
         ? (item as { parentId: string | null }).parentId
         : (item as { folderId: string | null }).folderId
       if (parentId === targetFolderId) continue
-      const conflict = findSiblingNameConflict(parsed.kind, item.name, targetFolderId, store.folders, store.hosts, parsed.id)
+      const conflict = findSiblingNameConflict(item.name, targetFolderId, store.folders, store.hosts, parsed.id)
       if (conflict) {
         const conflictIsFolder = 'parentId' in conflict
+        if (conflictIsFolder !== (parsed.kind === 'folder')) {
+          await alertDialog('无法粘贴', `目标位置已存在同名${conflictIsFolder ? '文件夹' : '主机'} "${item.name}"，不能替换。`)
+          continue
+        }
         if (conflictIsFolder && keys.some((entry) => nodeInsideFolder(entry, conflict.id, store.folders, store.hosts))) {
           await alertDialog('无法替换', `同名文件夹 "${item.name}" 包含被移动的项目，不能替换。`)
           continue

@@ -30,22 +30,10 @@ function close() {
   error.value = ''
 }
 
-function hasDuplicate(value: string): boolean {
-  return store.folders.some((folder) => {
-    if (folder.id === store.editingFolderId) return false
-    if (folder.parentId !== store.folderParentId) return false
-    return folder.name.trim() === value
-  })
-}
-
 async function submit() {
   const value = name.value.trim()
   if (!value) {
     error.value = '文件夹名称不能为空'
-    return
-  }
-  if (hasDuplicate(value)) {
-    error.value = '同级已存在同名文件夹'
     return
   }
   saving.value = true

@@ -52,14 +52,17 @@ describe('resolveCopyName', () => {
 })
 
 describe('siblingNames / findSiblingNameConflict', () => {
-  it('collects names per kind at the given level', () => {
-    expect(siblingNames(null, 'folder', folders, hosts)).toEqual(new Set(['Alpha', 'Beta']))
-    expect(siblingNames('fa', 'host', folders, hosts)).toEqual(new Set(['db']))
+  it('collects names across kinds at the given level', () => {
+    expect(siblingNames(null, folders, hosts)).toEqual(new Set(['Alpha', 'Beta', 'web']))
+    expect(siblingNames('fa', folders, hosts)).toEqual(new Set(['Nested', 'db']))
   })
-  it('finds a conflicting sibling excluding the moving item', () => {
-    expect(findSiblingNameConflict('host', 'db', 'fa', folders, hosts)?.id).toBe('h2')
-    expect(findSiblingNameConflict('host', 'db', 'fa', folders, hosts, 'h2')).toBeUndefined()
-    expect(findSiblingNameConflict('folder', 'Alpha', null, folders, hosts)?.id).toBe('fa')
+  it('finds a conflicting sibling across kinds excluding the moving item', () => {
+    expect(findSiblingNameConflict('db', 'fa', folders, hosts)?.id).toBe('h2')
+    expect(findSiblingNameConflict('db', 'fa', folders, hosts, 'h2')).toBeUndefined()
+    expect(findSiblingNameConflict('Alpha', null, folders, hosts)?.id).toBe('fa')
+    expect(findSiblingNameConflict('web', null, folders, hosts)?.id).toBe('h1')
+    const mixed = [...folders, { id: 'fd', name: 'web', parentId: null }]
+    expect(findSiblingNameConflict('web', null, mixed, hosts)?.id).toBe('fd')
   })
 })
 
