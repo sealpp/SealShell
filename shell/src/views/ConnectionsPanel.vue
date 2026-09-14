@@ -139,12 +139,12 @@ async function onDropFolder(node: TreeNode, event: DragEvent) {
   if (node.kind !== 'folder' || !canDrop(node.id)) return
   try {
     await moveConnectionNodes(new Set(draggingKeys.value), node.id)
+    const expanded = new Set(store.expandedFolderIds)
+    expanded.add(node.id)
+    store.expandedFolderIds = expanded
   } catch (error) {
     await alertDialog('无法移动', error instanceof Error ? error.message : String(error))
   }
-  const expanded = new Set(store.expandedFolderIds)
-  expanded.add(node.id)
-  store.expandedFolderIds = expanded
   onDragEnd()
 }
 
