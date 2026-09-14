@@ -97,7 +97,10 @@ registerAction({
     if (!await confirmDialog('确认删除', `确认递归删除 ${selectedPaths(ctx).length} 个项目？`, { confirmLabel: '删除', danger: true })) return
     await deleteFileEntries(ctx.tabId, selectedPaths(ctx))
   },
-  keybindings: [{ key: 'Delete' }, { key: 'Backspace' }],
+  keybindings: [
+    { key: 'Delete', when: 'area == "file"' },
+    { key: 'Backspace', when: 'area == "file"' },
+  ],
   menus: [{ menuId: MenuId.FileContext, order: 60 }],
 })
 
