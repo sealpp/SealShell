@@ -17,7 +17,7 @@
       import '/src/services/actions'
       import ConnectionsPanel from '/src/views/ConnectionsPanel.vue'
       import FolderDialog from '/src/components/FolderDialog.vue'
-      import FolderDeleteConfirm from '/src/components/FolderDeleteConfirm.vue'
+      import ConnectionsDeleteConfirm from '/src/components/ConnectionsDeleteConfirm.vue'
       import InteractionDialog from '/src/components/InteractionDialog.vue'
       import { saveFolder, saveHost } from '/src/services/storage'
       import { initializeVault, saveCredentialRecord } from '/src/services/vault'
@@ -49,7 +49,8 @@
       store.selectedNodeIds = new Set()
       store.selectedHostIds = new Set()
       store.folderModalOpen = false
-      store.deleteFolderConfirmOpen = false
+      store.deleteNodeConfirmOpen = false
+      store.deleteNodeKeys = []
       store.connectionModalOpen = false
       store.connectionClipboard = null
 
@@ -66,7 +67,7 @@
           return h('div', { class: 'primary-sidebar' }, [
             h(ConnectionsPanel),
             store.folderModalOpen ? h(FolderDialog) : null,
-            store.deleteFolderConfirmOpen ? h(FolderDeleteConfirm) : null,
+            store.deleteNodeConfirmOpen ? h(ConnectionsDeleteConfirm) : null,
             h(InteractionDialog),
           ])
         },

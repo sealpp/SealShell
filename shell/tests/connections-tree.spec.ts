@@ -58,13 +58,23 @@ test('supports mixed multi-select and moves selected nodes into a folder', async
 
 test('confirms recursive folder deletion without affecting open tab state', async ({ page }) => {
   await page.locator('.conn-item.folder').filter({ hasText: 'Alpha' }).click({ button: 'right' })
-  await page.getByRole('menuitem', { name: '删除文件夹' }).click()
+  await page.getByRole('menuitem', { name: '删除' }).click()
   const dialog = page.getByRole('alertdialog')
-  await expect(dialog).toContainText('2 个主机配置')
+  await expect(dialog).toContainText('Alpha')
+  await expect(dialog).toContainText('文件夹及其中的主机配置和凭据将被一并删除')
   await dialog.getByRole('button', { name: '删除' }).click()
   await expect(page.locator('.conn-item').filter({ hasText: 'Alpha' })).toHaveCount(0)
   await expect(page.locator('.conn-item').filter({ hasText: 'Nested' })).toHaveCount(0)
   await expect(page.locator('.conn-item').filter({ hasText: 'Alpha host' })).toHaveCount(0)
+})
+
+test('Delete key removes the selected connection node', async ({ page }) => {
+  await page.locator('.conn-item').filter({ hasText: 'Root host' }).click()
+  await page.keyboard.press('Delete')
+  const dialog = page.getByRole('alertdialog')
+  await expect(dialog).toContainText('Root host')
+  await dialog.getByRole('button', { name: '删除' }).click()
+  await expect(page.locator('.conn-item').filter({ hasText: 'Root host' })).toHaveCount(0)
 })
 
 test('normalizes legacy hosts without a folder into the virtual root', async ({ page }) => {
