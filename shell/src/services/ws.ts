@@ -128,7 +128,15 @@ export async function moveConnectionNodes(nodeIds: Set<string>, targetFolderId: 
   store.hosts = store.hosts.map((host) => selectedHosts.has(host.id) ? { ...host, folderId: targetFolderId } : host)
 }
 
+function pruneConnectionClipboard(deletedIds: Set<string>): void {
+  const clipboard = store.connectionClipboard
+  if (!clipboard) return
+  const nodeKeys = clipboard.nodeKeys.filter((key) => !deletedIds.has(key.slice(key.indexOf(':') + 1)))
+  store.connectionClipboard = nodeKeys.length ? { ...clipboard, nodeKeys } : null
+}
+
 export async function deleteFolders(folderIds: string[]): Promise<{ folderIds: string[]; hostIds: string[] }> {
+  if (!folderIds.length) return { folderIds: [], hostIds: [] }
   const deleted = await deleteStoredFolderTree(folderIds)
   const folderSet = new Set(deleted.folderIds)
   const hostSet = new Set(deleted.hostIds)
@@ -141,6 +149,7 @@ export async function deleteFolders(folderIds: string[]): Promise<{ folderIds: s
     return !folderSet.has(id) && !hostSet.has(id)
   }))
   store.selectedHostIds = new Set(Array.from(store.selectedHostIds).filter((id) => !hostSet.has(id)))
+  pruneConnectionClipboard(new Set([...deleted.folderIds, ...deleted.hostIds]))
   return deleted
 }
 
@@ -155,6 +164,7 @@ export async function deleteHosts(hostIds: string[]): Promise<void> {
   store.selectedHostIds = new Set(
     Array.from(store.selectedHostIds).filter((id) => !deleted.has(id)),
   )
+  pruneConnectionClipboard(deleted)
 }
 
 export function setTerminalOutputHandler(

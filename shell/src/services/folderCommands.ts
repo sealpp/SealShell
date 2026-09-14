@@ -1,5 +1,5 @@
 import { store } from '../stores/app'
-import { createFolder, deleteFolders } from './ws'
+import { createFolder } from './ws'
 import { registerAction } from './commands'
 import { MenuId } from './actions/menuIds'
 import { randomId } from '../utils/id'
@@ -38,22 +38,6 @@ registerAction({
   menus: [{ menuId: MenuId.FolderContext, group: '2_edit', order: 10 }],
 })
 
-registerAction({
-  id: 'folder.delete',
-  title: (ctx) => (ctx.selectedCount && ctx.selectedCount > 1 ? `删除文件夹 (${ctx.selectedCount})` : '删除文件夹'),
-  description: '递归删除文件夹及其中的主机配置',
-  category: 'workbench',
-  when: 'area == "host"',
-  enablement: 'selectedCount > 0',
-  run: (ctx) => {
-    const ids = ctx.selectedIds ?? []
-    if (!ids.length) return
-    store.deleteFolderIds = ids
-    store.deleteFolderConfirmOpen = true
-  },
-  menus: [{ menuId: MenuId.FolderContext, group: '3_delete', order: 10 }],
-})
-
 export async function saveNewFolder(name: string): Promise<void> {
   const parentId = store.folderParentId
   await createFolder({ id: randomId(), name, parentId })
@@ -70,6 +54,3 @@ export async function saveRenamedFolder(name: string): Promise<void> {
   await createFolder({ ...folder, name })
 }
 
-export async function confirmFolderDeletion(folderIds = store.deleteFolderIds): Promise<void> {
-  await deleteFolders(folderIds)
-}

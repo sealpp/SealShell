@@ -12,9 +12,8 @@ import MainDock from './views/MainDock.vue'
 import ActionsToolbar from './views/ActionsToolbar.vue'
 import PrimarySidebar from './views/PrimarySidebar.vue'
 import SecondarySidebar from './views/SecondarySidebar.vue'
-import DeleteConfirm from './components/DeleteConfirm.vue'
+import ConnectionsDeleteConfirm from './components/ConnectionsDeleteConfirm.vue'
 import FolderDialog from './components/FolderDialog.vue'
-import FolderDeleteConfirm from './components/FolderDeleteConfirm.vue'
 import TerminalSessionInfo from './components/TerminalSessionInfo.vue'
 import ManualPasteDialog from './components/ManualPasteDialog.vue'
 import HostKeyPrompt from './components/HostKeyPrompt.vue'
@@ -396,9 +395,8 @@ onBeforeUnmount(() => {
     <ManualPasteDialog v-if="store.manualPaste?.open" />
     <EncodingPickerDialog v-if="store.encodingPicker" />
     <HostKeyPrompt />
-    <DeleteConfirm v-if="store.deleteConfirmOpen" />
+    <ConnectionsDeleteConfirm v-if="store.deleteNodeConfirmOpen" />
     <FolderDialog v-if="store.folderModalOpen" />
-    <FolderDeleteConfirm v-if="store.deleteFolderConfirmOpen" />
     <SettingsDialog v-if="store.settingsModalOpen" />
     <KeyboardShortcutsDialog v-if="store.keyboardShortcutsModalOpen" />
     <AboutDialog v-if="store.aboutModalOpen" />

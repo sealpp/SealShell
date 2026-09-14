@@ -51,21 +51,4 @@ registerAction({
   menus: [{ menuId: MenuId.HostContext, order: 20 }],
 })
 
-registerAction({
-  id: 'host.delete',
-  title: (ctx) => {
-    const count = ctx.selectedCount ?? 0
-    return count > 1 ? `删除 (${count})` : '删除'
-  },
-  description: '删除选中的主机配置',
-  category: 'workbench',
-  when: 'area == "host"',
-  enablement: 'selectedCount > 0',
-  run: (ctx) => {
-    store.deleteConfirmIds = ctx.selectedIds ?? []
-    store.deleteConfirmOpen = true
-  },
-  menus: [{ menuId: MenuId.HostContext, order: 30 }],
-})
-
 export { HOST_MENU_ID } from './actions/menuIds'

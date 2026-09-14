@@ -202,3 +202,29 @@ registerAction({
   },
   keybindings: [{ key: 'Escape', when: 'area == "host"' }],
 })
+
+registerAction({
+  id: 'conn.delete',
+  title: (ctx) => {
+    const count = ctx.selectedNodeIds?.length ?? store.selectedNodeIds.size
+    return count > 1 ? `删除 (${count})` : '删除'
+  },
+  description: '删除选中的主机或文件夹',
+  category: 'workbench',
+  when: 'area == "host"',
+  enablement: (ctx) => (ctx.selectedNodeIds?.length ?? 0) > 0,
+  run: (ctx) => {
+    const keys = selectedKeys(ctx)
+    if (!keys.size) return
+    store.deleteNodeKeys = Array.from(keys)
+    store.deleteNodeConfirmOpen = true
+  },
+  keybindings: [
+    { key: 'Delete', when: 'area == "host"' },
+    { key: 'Backspace', when: 'area == "host"' },
+  ],
+  menus: [
+    { menuId: MenuId.HostContext, order: 30 },
+    { menuId: MenuId.FolderContext, group: '3_delete', order: 10 },
+  ],
+})

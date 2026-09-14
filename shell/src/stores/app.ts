@@ -236,10 +236,8 @@ export interface AppState {
   folderModalOpen: boolean
   editingFolderId: string
   folderParentId: string | null
-  deleteFolderIds: string[]
-  deleteFolderConfirmOpen: boolean
-  deleteConfirmOpen: boolean
-  deleteConfirmIds: string[]
+  deleteNodeKeys: string[]
+  deleteNodeConfirmOpen: boolean
   terminalSessionInfo: {
     open: boolean
     tabId: string
@@ -308,10 +306,8 @@ export const store = reactive<AppState>({
   folderModalOpen: false,
   editingFolderId: '',
   folderParentId: null,
-  deleteFolderIds: [],
-  deleteFolderConfirmOpen: false,
-  deleteConfirmOpen: false,
-  deleteConfirmIds: [],
+  deleteNodeKeys: [],
+  deleteNodeConfirmOpen: false,
   terminalSessionInfo: null,
   manualPaste: null,
   nodeConnected: false,
