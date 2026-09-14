@@ -71,7 +71,7 @@ export function buildVisibleNodes(
         kind: 'host' as const,
         id: host.id,
         parentId: host.folderId,
-        label: host.name?.trim() || host.address,
+        label: host.name.trim() || host.address,
         host,
         depth,
         hasChildren: false,

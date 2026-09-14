@@ -89,7 +89,7 @@ export interface FileEntry {
 
 export interface HostProfile {
   id: string
-  name?: string
+  name: string
   address: string
   port: number
   username: string

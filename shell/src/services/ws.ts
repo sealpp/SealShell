@@ -192,7 +192,7 @@ export function addTab(host: HostProfile, password: string, insertAfterTabId?: s
     id: tabId,
     kind: 'terminal',
     hostId: host.id,
-    label: host.name ?? '',
+    label: host.name,
     state: 'connecting',
     error: '',
     sessionId,

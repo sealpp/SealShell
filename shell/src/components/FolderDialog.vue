@@ -31,11 +31,10 @@ function close() {
 }
 
 function hasDuplicate(value: string): boolean {
-  const normalized = value.toLocaleLowerCase()
   return store.folders.some((folder) => {
     if (folder.id === store.editingFolderId) return false
     if (folder.parentId !== store.folderParentId) return false
-    return folder.name.trim().toLocaleLowerCase() === normalized
+    return folder.name.trim() === value
   })
 }
 

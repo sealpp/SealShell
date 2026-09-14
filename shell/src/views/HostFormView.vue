@@ -34,7 +34,7 @@ function init() {
 
   const h = store.hosts.find((host) => host.id === store.editingHostId)
   if (h) {
-    name.value = h.name ?? ''
+    name.value = h.name
     address.value = h.address
     port.value = h.port
     username.value = h.username
