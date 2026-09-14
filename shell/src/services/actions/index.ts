@@ -1,6 +1,7 @@
 import '../workbenchActions'
 import '../hostCommands'
 import '../folderCommands'
+import '../connectionClipboardCommands'
 import '../nodeCommands'
 import '../tabCommands'
 import '../terminalCommands'

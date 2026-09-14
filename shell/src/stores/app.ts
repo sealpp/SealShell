@@ -157,6 +157,13 @@ export interface SftpClipboardState {
   createdAt: number
 }
 
+export interface ConnectionClipboardState {
+  version: 1
+  mode: 'copy' | 'cut'
+  nodeKeys: string[]
+  createdAt: number
+}
+
 export type InteractionDialogKind = 'confirm' | 'prompt' | 'alert'
 
 export interface InteractionDialogState {
@@ -168,6 +175,7 @@ export interface InteractionDialogState {
   danger: boolean
   value: string
   placeholder: string
+  checkboxLabel?: string
 }
 
 export interface AppState {
@@ -243,6 +251,7 @@ export interface AppState {
   } | null
   nodeConnected: boolean
   sftpClipboard: SftpClipboardState | null
+  connectionClipboard: ConnectionClipboardState | null
   terminalPreferences: TerminalPreferences
   encodingPicker: {
     tabId: string
@@ -307,6 +316,7 @@ export const store = reactive<AppState>({
   manualPaste: null,
   nodeConnected: false,
   sftpClipboard: null,
+  connectionClipboard: null,
   encodingPicker: null,
   terminalPreferences: {
     key: 'terminalPreferences',

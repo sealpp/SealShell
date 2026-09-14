@@ -1,6 +1,11 @@
 import { store, type InteractionDialogState } from '../stores/app'
 
-type DialogResult = boolean | string | null | undefined
+export interface CheckboxConfirmResult {
+  confirmed: boolean
+  checked: boolean
+}
+
+type DialogResult = boolean | string | null | undefined | CheckboxConfirmResult
 let activeResolver: ((result: DialogResult) => void) | undefined
 
 function open<T extends DialogResult>(state: InteractionDialogState, fallback: T): Promise<T> {
@@ -26,6 +31,24 @@ export function confirmDialog(
     value: '',
     placeholder: '',
   }, false)
+}
+
+export function confirmCheckboxDialog(
+  title: string,
+  message: string,
+  options: Partial<Pick<InteractionDialogState, 'confirmLabel' | 'cancelLabel' | 'danger' | 'checkboxLabel'>> = {},
+): Promise<CheckboxConfirmResult> {
+  return open({
+    kind: 'confirm',
+    title,
+    message,
+    confirmLabel: options.confirmLabel ?? '确认',
+    cancelLabel: options.cancelLabel ?? '取消',
+    danger: options.danger ?? false,
+    checkboxLabel: options.checkboxLabel,
+    value: '',
+    placeholder: '',
+  }, { confirmed: false, checked: false })
 }
 
 export function promptDialog(

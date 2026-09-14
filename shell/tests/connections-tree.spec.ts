@@ -9,7 +9,7 @@ test('renders sorted folders and compact one-line host metadata', async ({ page 
   const rows = page.locator('.conn-item')
   await expect(rows.nth(0)).toContainText('Alpha')
   await expect(rows.nth(1)).toContainText('Nested')
-  await expect(rows.nth(2)).toContainText('10.0.0.3')
+  await expect(rows.nth(2)).toContainText('Nested host')
   await expect(rows.nth(2).locator('.conn-meta')).toHaveText('root · 22')
   await expect(rows.nth(3)).toContainText('Alpha host')
   await expect(rows.nth(4)).toContainText('Zeta')

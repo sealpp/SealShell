@@ -18,7 +18,11 @@
       import ConnectionsPanel from '/src/views/ConnectionsPanel.vue'
       import FolderDialog from '/src/components/FolderDialog.vue'
       import FolderDeleteConfirm from '/src/components/FolderDeleteConfirm.vue'
+      import InteractionDialog from '/src/components/InteractionDialog.vue'
       import { saveFolder, saveHost } from '/src/services/storage'
+      import { initializeVault, saveCredentialRecord } from '/src/services/vault'
+      import { store } from '/src/stores/app'
+      import { keybindingService } from '/src/services/commands/keybindingService.ts'
 
       await Promise.all([
         saveFolder({ id: 'folder-z', name: 'Zeta', parentId: null }),
@@ -26,9 +30,10 @@
         saveFolder({ id: 'folder-child', name: 'Nested', parentId: 'folder-a' }),
         saveHost({ id: 'host-root', name: 'Root host', address: '10.0.0.1', port: 22, username: 'root', folderId: null }),
         saveHost({ id: 'host-alpha', name: 'Alpha host', address: '10.0.0.2', port: 2200, username: 'admin', folderId: 'folder-a' }),
-        saveHost({ id: 'host-nested', name: '', address: '10.0.0.3', port: 22, username: 'root', folderId: 'folder-child' }),
+        saveHost({ id: 'host-nested', name: 'Nested host', address: '10.0.0.3', port: 22, username: 'root', folderId: 'folder-child' }),
       ])
-      import { store } from '/src/stores/app'
+      await initializeVault()
+      await saveCredentialRecord('host-root', { password: 'seal-secret' })
 
       store.folders = [
         { id: 'folder-z', name: 'Zeta', parentId: null },
@@ -38,7 +43,7 @@
       store.hosts = [
         { id: 'host-root', name: 'Root host', address: '10.0.0.1', port: 22, username: 'root', folderId: null },
         { id: 'host-alpha', name: 'Alpha host', address: '10.0.0.2', port: 2200, username: 'admin', folderId: 'folder-a' },
-        { id: 'host-nested', name: '', address: '10.0.0.3', port: 22, username: 'root', folderId: 'folder-child' },
+        { id: 'host-nested', name: 'Nested host', address: '10.0.0.3', port: 22, username: 'root', folderId: 'folder-child' },
       ]
       store.expandedFolderIds = new Set(['folder-a', 'folder-child'])
       store.selectedNodeIds = new Set()
@@ -46,13 +51,23 @@
       store.folderModalOpen = false
       store.deleteFolderConfirmOpen = false
       store.connectionModalOpen = false
+      store.connectionClipboard = null
+
+      keybindingService.attach(window, () => ({
+        area: document.activeElement instanceof Element && document.activeElement.closest('.primary-sidebar')
+          ? 'host'
+          : 'global',
+        selectedNodeIds: Array.from(store.selectedNodeIds),
+        selectedCount: store.selectedNodeIds.size,
+      }))
 
       createApp({
         render() {
-          return h('div', [
+          return h('div', { class: 'primary-sidebar' }, [
             h(ConnectionsPanel),
             store.folderModalOpen ? h(FolderDialog) : null,
             store.deleteFolderConfirmOpen ? h(FolderDeleteConfirm) : null,
+            h(InteractionDialog),
           ])
         },
       }).mount('#app')

@@ -41,7 +41,7 @@ registerAction({
   when: 'area == "file"',
   enablement: (ctx) => selectedPaths(ctx).length > 0,
   run: (ctx) => { if (ctx.tabId) copySelectedFileEntries(ctx.tabId, 'copy') },
-  keybindings: [{ key: 'Mod+C' }],
+  keybindings: [{ key: 'Mod+C', when: 'area == "file"' }],
   menus: [{ menuId: MenuId.FileContext, order: 20 }],
 })
 
@@ -53,7 +53,7 @@ registerAction({
   when: 'area == "file"',
   enablement: (ctx) => selectedPaths(ctx).length > 0,
   run: (ctx) => { if (ctx.tabId) copySelectedFileEntries(ctx.tabId, 'cut') },
-  keybindings: [{ key: 'Mod+X' }],
+  keybindings: [{ key: 'Mod+X', when: 'area == "file"' }],
   menus: [{ menuId: MenuId.FileContext, order: 30 }],
 })
 
@@ -65,7 +65,7 @@ registerAction({
   when: 'area == "file"',
   enablement: (ctx) => !!ctx.canPasteFiles,
   run: async (ctx) => { if (ctx.tabId) await pasteFileTab(ctx.tabId) },
-  keybindings: [{ key: 'Mod+V' }],
+  keybindings: [{ key: 'Mod+V', when: 'area == "file"' }],
   menus: [{ menuId: MenuId.FileContext, order: 40 }],
 })
 

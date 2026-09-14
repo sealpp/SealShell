@@ -17,6 +17,9 @@ import { moveConnectionNodes } from '../services/ws'
 
 const draggingKeys = ref<string[]>([])
 const visibleNodes = computed(() => buildVisibleNodes(store.folders, store.hosts, store.expandedFolderIds))
+const cutKeys = computed(() =>
+  store.connectionClipboard?.mode === 'cut' ? new Set(store.connectionClipboard.nodeKeys) : undefined,
+)
 
 function isSelected(node: TreeNode): boolean {
   return store.selectedNodeIds.has(nodeKey(node.kind, node.id))
@@ -85,6 +88,7 @@ function nodeContext(node: TreeNode): CommandContext {
     selectedCount: selectedIds.length,
     nodeKind: kinds.size > 1 ? 'mixed' : node.kind,
     targetFolderId: node.kind === 'folder' ? node.id : null,
+    targetNodeKey: key,
   }
 }
 
@@ -173,7 +177,7 @@ onBeforeUnmount(() => {
       :context="rootContext"
       :can-open="(event) => event.target === event.currentTarget"
     >
-      <div class="conn-list" @dragover="onDragOverRoot" @drop="onDropRoot">
+      <div class="conn-list" tabindex="0" @dragover="onDragOverRoot" @drop="onDropRoot">
         <CommandContextMenu
           v-for="node in visibleNodes"
           :key="nodeKey(node.kind, node.id)"
@@ -182,7 +186,7 @@ onBeforeUnmount(() => {
         >
           <div
             class="conn-item"
-            :class="{ selected: isSelected(node), dragging: draggingKeys.includes(nodeKey(node.kind, node.id)), folder: node.kind === 'folder', 'root-host': node.kind === 'host' && node.depth === 0 }"
+            :class="{ selected: isSelected(node), dragging: draggingKeys.includes(nodeKey(node.kind, node.id)), cut: cutKeys?.has(nodeKey(node.kind, node.id)), folder: node.kind === 'folder', 'root-host': node.kind === 'host' && node.depth === 0 }"
             :style="{ paddingLeft: `${8 + node.depth * 16}px` }"
             :draggable="true"
             :title="node.kind === 'host' ? node.host?.address : node.folder?.name"
@@ -274,6 +278,7 @@ onBeforeUnmount(() => {
   min-height: 24px;
   overflow-y: auto;
   padding: 0;
+  outline: none;
 }
 
 .conn-item {
@@ -299,7 +304,8 @@ onBeforeUnmount(() => {
   border-left-color: #fff;
 }
 
-.conn-item.dragging {
+.conn-item.dragging,
+.conn-item.cut {
   opacity: 0.5;
 }
 

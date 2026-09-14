@@ -16,6 +16,7 @@ export interface CommandContext {
   selectedNodeIds?: string[]
   nodeKind?: 'host' | 'folder' | 'mixed' | 'root'
   targetFolderId?: string | null
+  targetNodeKey?: string
   isPaired?: boolean
   selectedPaths?: string[]
   filePath?: string

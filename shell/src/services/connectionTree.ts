@@ -1,4 +1,5 @@
 import type { FolderProfile, HostProfile } from '../stores/app'
+import { randomId } from '../utils/id'
 import { moveTreeNodes } from './storage'
 
 export type TreeNodeKind = 'folder' | 'host'
@@ -167,6 +168,127 @@ export function canMoveToFolder(
     current = folders.find((folder) => folder.id === current)?.parentId ?? null
   }
   return true
+}
+
+const COPY_NAME_PATTERN = /^(.+-copy)(?:-(\d+))?$/
+
+export function nextCopyName(name: string): string {
+  const match = COPY_NAME_PATTERN.exec(name)
+  if (match) return `${match[1]}-${match[2] ? Number(match[2]) + 1 : 2}`
+  return `${name}-copy`
+}
+
+export function resolveCopyName(name: string, taken: ReadonlySet<string>): string {
+  let candidate = name
+  while (taken.has(candidate)) candidate = nextCopyName(candidate)
+  return candidate
+}
+
+export function nodeParentId(key: string, folders: FolderProfile[], hosts: HostProfile[]): string | null {
+  const parsed = parseNodeKey(key)
+  if (!parsed) return null
+  if (parsed.kind === 'folder') return folders.find((folder) => folder.id === parsed.id)?.parentId ?? null
+  return hosts.find((host) => host.id === parsed.id)?.folderId ?? null
+}
+
+export function resolvePasteFolderId(
+  targetKey: string | undefined,
+  clipboardKeys: ReadonlySet<string>,
+  folders: FolderProfile[],
+  hosts: HostProfile[],
+): string | null {
+  if (!targetKey) return null
+  const parsed = parseNodeKey(targetKey)
+  if (!parsed) return null
+  if (clipboardKeys.has(targetKey)) return nodeParentId(targetKey, folders, hosts)
+  if (parsed.kind === 'folder') return folders.some((folder) => folder.id === parsed.id) ? parsed.id : null
+  return hosts.find((host) => host.id === parsed.id)?.folderId ?? null
+}
+
+export function siblingNames(
+  parentId: string | null,
+  kind: TreeNodeKind,
+  folders: FolderProfile[],
+  hosts: HostProfile[],
+): Set<string> {
+  if (kind === 'folder') {
+    return new Set(folders.filter((folder) => folder.parentId === parentId).map((folder) => folder.name))
+  }
+  return new Set(hosts.filter((host) => host.folderId === parentId).map((host) => host.name))
+}
+
+export function findSiblingNameConflict(
+  kind: TreeNodeKind,
+  name: string,
+  parentId: string | null,
+  folders: FolderProfile[],
+  hosts: HostProfile[],
+  excludeId?: string,
+): FolderProfile | HostProfile | undefined {
+  if (kind === 'folder') {
+    return folders.find((folder) => folder.id !== excludeId && folder.parentId === parentId && folder.name === name)
+  }
+  return hosts.find((host) => host.id !== excludeId && host.folderId === parentId && host.name === name)
+}
+
+export function nodeInsideFolder(key: string, folderId: string, folders: FolderProfile[], hosts: HostProfile[]): boolean {
+  let parent = nodeParentId(key, folders, hosts)
+  while (parent !== null) {
+    if (parent === folderId) return true
+    parent = folders.find((folder) => folder.id === parent)?.parentId ?? null
+  }
+  return false
+}
+
+export interface ClonedConnectionNodes {
+  folders: FolderProfile[]
+  hosts: HostProfile[]
+  credentialPairs: { from: string; to: string }[]
+  rootKey: string
+}
+
+export function cloneConnectionNodes(
+  key: string,
+  targetFolderId: string | null,
+  rootName: string,
+  folders: FolderProfile[],
+  hosts: HostProfile[],
+): ClonedConnectionNodes | undefined {
+  const parsed = parseNodeKey(key)
+  if (!parsed) return undefined
+  if (parsed.kind === 'host') {
+    const host = hosts.find((item) => item.id === parsed.id)
+    if (!host) return undefined
+    const id = randomId()
+    return {
+      folders: [],
+      hosts: [{ ...host, id, name: rootName, folderId: targetFolderId }],
+      credentialPairs: [{ from: host.id, to: id }],
+      rootKey: nodeKey('host', id),
+    }
+  }
+  const root = folders.find((item) => item.id === parsed.id)
+  if (!root) return undefined
+  const subtreeFolderIds = collectFolderDescendants([root.id], folders)
+  const subtreeHostIds = new Set(collectFolderHostIds(subtreeFolderIds, hosts))
+  const idMap = new Map<string, string>()
+  for (const id of subtreeFolderIds) idMap.set(id, randomId())
+  for (const id of subtreeHostIds) idMap.set(id, randomId())
+  return {
+    folders: folders
+      .filter((folder) => subtreeFolderIds.has(folder.id))
+      .map((folder) => ({
+        ...folder,
+        id: idMap.get(folder.id)!,
+        name: folder.id === root.id ? rootName : folder.name,
+        parentId: folder.id === root.id ? targetFolderId : idMap.get(folder.parentId!) ?? null,
+      })),
+    hosts: hosts
+      .filter((host) => subtreeHostIds.has(host.id))
+      .map((host) => ({ ...host, id: idMap.get(host.id)!, folderId: idMap.get(host.folderId!) ?? null })),
+    credentialPairs: Array.from(subtreeHostIds, (id) => ({ from: id, to: idMap.get(id)! })),
+    rootKey: nodeKey('folder', idMap.get(root.id)!),
+  }
 }
 
 export async function moveNodes(

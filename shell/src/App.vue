@@ -284,16 +284,20 @@ onMounted(async () => {
     store.error = error instanceof Error ? error.message : String(error)
   }
   startTelemetryService()
-  keybindingService.attach(window, () => ({
-    area: store.tabs.find((tab) => tab.id === getFocusedTabId())?.kind === 'file'
-      ? 'file'
-      : store.tabs.find((tab) => tab.id === getFocusedTabId())?.kind === 'editor'
-        ? 'editor'
-        : 'global',
-    tabId: getFocusedTabId(),
-    selectedPaths: store.tabs.find((tab) => tab.id === getFocusedTabId() && tab.kind === 'file')?.file?.selectedPaths,
-    canPasteFiles: !!store.sftpClipboard?.entries.length,
-  }))
+  keybindingService.attach(window, () => {
+    const tabId = getFocusedTabId()
+    const tab = store.tabs.find((item) => item.id === tabId)
+    const inConnections = document.activeElement instanceof Element
+      && !!document.activeElement.closest('.primary-sidebar')
+    return {
+      area: inConnections ? 'host' : tab?.kind === 'file' ? 'file' : tab?.kind === 'editor' ? 'editor' : 'global',
+      tabId,
+      selectedPaths: tab?.kind === 'file' ? tab.file?.selectedPaths : undefined,
+      canPasteFiles: !!store.sftpClipboard?.entries.length,
+      selectedNodeIds: inConnections ? Array.from(store.selectedNodeIds) : undefined,
+      selectedCount: inConnections ? store.selectedNodeIds.size : undefined,
+    }
+  })
 })
 
 onBeforeUnmount(() => {
