@@ -23,6 +23,7 @@ function copyRuntimeAssets() {
 }
 
 export default defineConfig({
+  optimizeDeps: { include: ['@verdigris/libssh2.js'] },
   plugins: [
     copyRuntimeAssets(),
     vue(),
