@@ -1,3 +1,4 @@
+import { shallowReactive } from 'vue'
 import { randomId } from '../../utils/id'
 import { setBottomPanelActiveTab, store, type FileTab, type HostProfile } from '../../stores/app'
 import { listDirectory } from './operations'
@@ -9,7 +10,7 @@ import type { FileBackend, FileEndpoint } from '../files/types'
 import { readMeta, saveMeta } from '../storage'
 import { transferFileEntries } from '../files/transfers'
 
-const sessions = new Map<string, FileBackend>()
+const sessions = shallowReactive(new Map<string, FileBackend>())
 const listings = new Map<string, number>()
 
 export function getFileBackend(tabId: string): FileBackend | undefined { return sessions.get(tabId) }

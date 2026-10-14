@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>File Navigation Harness</title>
+    <style>
+      body { margin: 0; background: #1e1e1e; }
+      .panes { display: flex; height: 400px; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h } from 'vue'
+      import '/src/styles/workbench.css'
+      import '/src/services/actions'
+      import FilePanel from '/src/views/FilePanel.vue'
+      import { store } from '/src/stores/app'
+      import { createFilePaths } from '/src/services/files/path'
+      import { registerFileSession, closeFileTabSession } from '/src/services/sftp/file-tabs'
+
+      const definitions = [
+        { id: 'local', endpoint: { kind: 'local', nodeId: 'test-node' }, cwd: 'C:\\fixtures\\nested', paths: createFilePaths(true) },
+        { id: 'remote', endpoint: { kind: 'sftp', hostId: 'test-host' }, cwd: '/fixtures/nested', paths: createFilePaths() },
+      ]
+      const tab = ({ id, endpoint, cwd }) => ({
+        id, kind: 'file', endpoint, label: id, state: 'connecting', error: '',
+        sessionId: id, terminalId: '', telemetry: null, encoding: 'utf-8', cwd,
+        file: { cwd, defaultPath: cwd, history: [cwd], historyIndex: 0, entries: [], selectedPaths: [], sortKey: 'name', sortDirection: 'asc', showHidden: false, loading: true, error: '' },
+      })
+      store.tabs.splice(0, store.tabs.length, ...definitions.map(tab))
+
+      function connect() {
+        for (const { id, paths } of definitions) {
+          registerFileSession(id, {
+            paths, namespace: id,
+            async disconnect() {},
+            async stat(path) { return { name: paths.basename(path), path, kind: 'directory', size: 0, modifiedAt: 0 } },
+            async list(path) { return { path, entries: [{ name: 'child', path: paths.join(path, 'child'), kind: 'directory', size: 0, modifiedAt: 0 }] } },
+          })
+          const current = store.tabs.find(tab => tab.id === id)
+          current.state = 'online'
+          current.file.loading = false
+        }
+      }
+
+      createApp({
+        render: () => h('main', [
+          h('button', { onClick: connect }, '连接文件会话'),
+          h('button', { onClick: () => Promise.all(definitions.map(({ id }) => closeFileTabSession(id))) }, '关闭文件会话'),
+          h('div', { class: 'panes' }, definitions.map(({ id }) => h(FilePanel, { key: id, params: { params: { tabId: id } } }))),
+        ]),
+      }).mount('#app')
+    </script>
+  </body>
+</html>
