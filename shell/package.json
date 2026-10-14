@@ -9,7 +9,7 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "preview:lan": "vite preview --port 18080 --host 0.0.0.0",
-    "gen:proto": "node scripts/gen-proto.mjs",
+    "gen:proto": "uv run --directory ../node --locked --extra dev python scripts/generate_proto.py --typescript-only",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:unit": "vitest run --config vitest.config.ts"

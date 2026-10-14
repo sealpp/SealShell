@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "websockets>=13,<14",
     "cryptography>=43",
+    "protobuf>=5.29,<8",
 ]
 
 [project.optional-dependencies]
