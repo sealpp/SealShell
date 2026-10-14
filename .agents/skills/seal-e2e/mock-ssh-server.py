@@ -18,7 +18,7 @@ class MockSSHServer(asyncssh.SSHServer):
         return True
 
 
-call_count = {"shell": 0, "stat": 0}
+call_count = {"shell": 0, "exec": 0, "probe": 0, "stat": 0}
 state_path = os.environ.get("MOCK_SSH_STATE_PATH")
 mock_sftp_root = Path(os.environ.get("MOCK_SFTP_ROOT", "/tmp/seal-mock-sftp"))
 mock_sftp_root.mkdir(parents=True, exist_ok=True)
@@ -56,6 +56,8 @@ def write_state() -> None:
 
 def command_output(command: str) -> tuple[str, int]:
     if command == "uname -s":
+        call_count["probe"] += 1
+        write_state()
         return "Linux\n", 0
     if command == "printf exec-ok":
         return "exec-ok", 0
@@ -69,7 +71,14 @@ def command_output(command: str) -> tuple[str, int]:
 async def handle_shell(process: asyncssh.SSHServerProcess) -> None:
     call_count["shell"] += 1
     write_state()
-    async for line in process.stdin:
+    while True:
+        try:
+            line = await process.stdin.readline()
+        except asyncssh.TerminalSizeChanged:
+            # PTY window changes are stream events, not shell termination.
+            continue
+        if not line:
+            return
         # sshclient-wasm needs a non-empty first write to trigger PTY/shell
         # startup. We use a leading VSTART (0x11) or NUL (0x00) byte for that;
         # it is not a real command and should be stripped before execution.
@@ -97,6 +106,8 @@ async def handle_shell(process: asyncssh.SSHServerProcess) -> None:
 async def handle_process(process: asyncssh.SSHServerProcess) -> None:
     command = (process.command or "").strip()
     if command:
+        call_count["exec"] += 1
+        write_state()
         output, status = command_output(command)
         process.stdout.write(output)
         if status:
@@ -116,7 +127,7 @@ async def main() -> int:
         process_factory=handle_process,
         # AsyncSSH's built-in SFTP server exercises the same v3 operations as
         # the browser backend (list/stat/read/write/rename/unlink/symlink).
-        sftp_factory=asyncssh.SFTPServer,
+        sftp_factory=lambda channel: asyncssh.SFTPServer(channel, chroot=str(mock_sftp_root)),
         server_factory=MockSSHServer,
     )
     port = server.sockets[0].getsockname()[1]

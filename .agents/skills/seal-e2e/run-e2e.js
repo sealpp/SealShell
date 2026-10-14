@@ -81,21 +81,25 @@ async function main() {
   const sshPort = await waitForLine(sshProc, /MOCK_SSH_PORT=(\d+)/);
   console.log('mock SSH port:', sshPort);
 
+  const trustDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'seal-e2e-trust-'));
   const nodeProc = startProcess(PYTHON, ['-m', 'seal.main'], {
+    SEAL_TRUST_PATH: path.join(trustDirectory, 'trust.json'),
     SEAL_PORT: '17373',
   });
   const pin = await waitForLine(nodeProc, /pairing code: (\d{6})/);
   console.log('node pairing pin:', pin);
 
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({ headless: true, ...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}) });
   const context = await browser.newContext();
   const page = await context.newPage();
+  const browserErrors = [];
   page.on('console', (message) => {
     if (message.type() === 'error') {
+      browserErrors.push(message.text());
       console.error('browser:', message.text());
     }
   });
-  page.on('pageerror', (error) => console.error('page error:', error.message));
+  page.on('pageerror', (error) => { browserErrors.push(error.message); console.error('page error:', error.message); });
 
   try {
     await page.goto(PWA_URL);
@@ -109,7 +113,8 @@ async function main() {
     async function addHost(label) {
       const expectedTabCount = await page.locator('.terminal-tab').count() + 1;
       await page.locator('.new-btn').click();
-      await page.getByPlaceholder('address').fill('127.0.0.1');
+      await page.locator('#host-name').fill(label);
+      await page.locator('#host-address').fill('127.0.0.1');
       await page.getByPlaceholder('port').fill(sshPort);
       await page.getByPlaceholder('username').fill('root');
       await page.locator('input[type="password"]').fill('test');
@@ -181,38 +186,44 @@ async function main() {
     await page.waitForSelector('[role="menu"]', { state: 'detached', timeout: 5000 });
     console.log('host and terminal context menus open and dismiss');
 
+    const monitorButton = page.getByRole('button', { name: '系统监控', exact: true });
+    await monitorButton.click();
     await waitForMetrics();
     const firstTelemetryState = await waitForMockSshState(
       (state) => state.stat >= 1,
       'the first telemetry sample',
     );
-    if (firstTelemetryState.shell !== 2) {
-      throw new Error(`expected one terminal and one reused telemetry shell, got ${firstTelemetryState.shell}`);
+    if (firstTelemetryState.exec < 2 || firstTelemetryState.probe !== 1) {
+      throw new Error(`expected direct exec probe and sample: ${JSON.stringify(firstTelemetryState)}`);
     }
     const secondTelemetryState = await waitForMockSshState(
       (state) => state.stat > firstTelemetryState.stat,
       'a second telemetry sample',
     );
-    if (secondTelemetryState.shell !== 2) {
-      throw new Error(`telemetry opened a new shell for its next sample: ${secondTelemetryState.shell}`);
+    if (secondTelemetryState.probe !== 1 || secondTelemetryState.exec <= firstTelemetryState.exec) {
+      throw new Error(`expected another direct exec sample without repeating the probe: ${JSON.stringify(secondTelemetryState)}`);
     }
     const firstValues = await page.locator('[data-metric-value]').evaluateAll((elements) =>
       elements.map((element) => element.getAttribute('data-metric-value')),
     );
     console.log('first tab values:', firstValues);
 
-    const monitorButton = page.getByRole('button', { name: '系统监控' });
     await monitorButton.click();
     await page.waitForFunction(
       () => document.querySelector('.secondary-sidebar')?.classList.contains('collapsed'),
       null,
       { timeout: 5000 },
     );
+    // Allow an in-flight sample to finish, then verify polling stays stopped.
+    await page.waitForTimeout(1000);
+    const closedMonitorSamples = readMockSshState().stat;
+    await page.waitForTimeout(2500);
+    if (readMockSshState().stat !== closedMonitorSamples) throw new Error('telemetry kept polling while the monitor was closed');
     await monitorButton.click();
     await waitForMetrics();
     const reopenedMonitorState = readMockSshState();
-    if (reopenedMonitorState.shell !== 2) {
-      throw new Error(`reopening the monitor created a new telemetry shell: ${reopenedMonitorState.shell}`);
+    if (reopenedMonitorState.probe !== 1) {
+      throw new Error(`reopening the monitor repeated the OS probe: ${JSON.stringify(reopenedMonitorState)}`);
     }
 
     await addHost('B');
@@ -236,6 +247,7 @@ async function main() {
     }
 
     const expectedReloadTabCount = await page.locator('.terminal-tab').count() + 1;
+    await page.locator('.conn-item').first().hover();
     await page.locator('.conn-item').first().locator('.conn-btn').click();
     await page.waitForFunction(
       (expected) => {
@@ -249,17 +261,19 @@ async function main() {
       throw new Error('saved credential connection unexpectedly opened a login dialog');
     }
     console.log('saved SSH credential auto-loaded after reload');
+    if (browserErrors.length) throw new Error(`browser errors: ${browserErrors.join('\n')}`);
 
     console.log('E2E test passed: PWA protocol client and PWA-owned telemetry follow active-tab lifecycle');
   } catch (error) {
     await page.screenshot({ path: path.join(TMP_DIR, 'failure.png') });
-    console.error('Test failed:', error.message);
+    console.error('Test failed:', error.stack);
     process.exitCode = 1;
   } finally {
     await context.close();
     await browser.close();
     sshProc.kill();
     nodeProc.kill();
+    fs.rmSync(trustDirectory, { recursive: true, force: true });
     console.log('cleaned up');
   }
 }

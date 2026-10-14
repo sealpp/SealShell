@@ -18,12 +18,12 @@
       import { store } from '/src/stores/app'
 
       const file = (id, label) => ({
-        id, kind: 'file', hostId: 'host-a', label, state: 'online', error: '', sessionId: `session-${id}`,
+        id, kind: 'file', endpoint: { kind: 'sftp', hostId: 'host-a' }, hostId: 'host-a', label, state: 'online', error: '', sessionId: `session-${id}`,
         terminalId: `terminal-${id}`, telemetry: null, encoding: 'utf-8', cwd: '/',
         file: { cwd: '/', defaultPath: '/', history: ['/'], historyIndex: 0, entries: [{ name: 'README.md', path: '/README.md', kind: 'file', size: 13, modifiedAt: Date.now() }], selectedPaths: [], sortKey: 'name', sortDirection: 'asc', showHidden: false, loading: false, error: '' },
       })
       const editor = {
-        id: 'editor-a', kind: 'editor', hostId: 'host-a', label: 'README.md', state: 'idle', error: '', sessionId: 'session-editor',
+        id: 'editor-a', kind: 'editor', endpoint: { kind: 'sftp', hostId: 'host-a' }, hostId: 'host-a', label: 'README.md', state: 'idle', error: '', sessionId: 'session-editor',
         terminalId: 'terminal-editor', telemetry: null, encoding: 'utf-8', cwd: '/',
         editor: { path: '/README.md', language: 'markdown', dirty: false, encoding: 'utf-8', bom: false, lineEnding: '\n', content: '# SealShell', size: 13, largeFileConfirmed: true },
       }
