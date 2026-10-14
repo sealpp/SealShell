@@ -350,6 +350,8 @@ class ClientConnection:
                 try:
                     msg.ParseFromString(raw)
                     await self.dispatch(msg)
+                except websockets.ConnectionClosed:
+                    return
                 except ProtocolError as exc:
                     await self.send_error(msg.request_id, exc.code, exc.message)
                 except Exception as exc:

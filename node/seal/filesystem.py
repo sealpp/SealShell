@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import ctypes
 import errno
 import os
 from pathlib import Path
@@ -26,7 +27,7 @@ class FileError(Exception):
 
 def file_error(exc: Exception) -> tuple[str, str]:
     if isinstance(exc, FileError):
-        return exc.code, str(exc)
+        return exc.code, str(exc)[:4096]
     codes = {
         errno.ENOENT: "not_found", errno.EACCES: "permission_denied",
         errno.EPERM: "permission_denied", errno.EEXIST: "already_exists",
@@ -34,7 +35,29 @@ def file_error(exc: Exception) -> tuple[str, str]:
         errno.ENOTEMPTY: "not_empty", errno.EXDEV: "cross_device",
         errno.ENOSPC: "no_space", errno.ELOOP: "symlink_loop",
     }
-    return codes.get(getattr(exc, "errno", None), "io_error"), str(exc)
+    return codes.get(getattr(exc, "errno", None), "io_error"), str(exc)[:4096]
+
+
+def rename_no_replace(source: str, target: str) -> None:
+    # Checking exists() then rename() races with other connections/processes.
+    # Windows rename already refuses replacement; POSIX needs an exclusive flag.
+    if os.name == "nt":
+        os.rename(source, target)
+        return
+    libc = ctypes.CDLL(None, use_errno=True)
+    if sys.platform.startswith("linux") and hasattr(libc, "renameat2"):
+        function = libc.renameat2
+        function.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+        result = function(-100, os.fsencode(source), -100, os.fsencode(target), 1)
+    elif sys.platform == "darwin" and hasattr(libc, "renamex_np"):
+        function = libc.renamex_np
+        function.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+        result = function(os.fsencode(source), os.fsencode(target), 4)
+    else:
+        raise FileError("unsupported", "Exclusive rename is unavailable on this platform")
+    if result != 0:
+        code = ctypes.get_errno()
+        raise OSError(code, os.strerror(code), target)
 
 
 def absolute(path: str) -> str:
@@ -195,9 +218,7 @@ class FileSession:
                         raise FileError("unsupported", "Replace only supports files")
                     os.replace(source, target)
                 else:
-                    if os.path.lexists(target):
-                        raise FileError("already_exists", "Destination already exists")
-                    os.rename(source, target)
+                    rename_no_replace(source, target)
             elif op == "set_time":
                 path = absolute(args.path)
                 os.utime(path, ns=(os.stat(path).st_atime_ns, args.modified_at_ms * 1_000_000))
