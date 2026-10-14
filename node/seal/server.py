@@ -11,6 +11,7 @@ from typing import Any
 import websockets
 
 from seal.seal_pb2 import SealMessage
+from seal.filesystem import FileSession
 from seal.trust import TrustRepository, verify_device_signature
 
 MAX_MESSAGE_BYTES = 64 * 1024
@@ -300,6 +301,8 @@ class ClientConnection:
         self.streams: dict[int, TransportStream] = {}
         self._send_lock = asyncio.Lock()
         self._tasks: set[asyncio.Task[Any]] = set()
+        self._file_tasks: set[asyncio.Task[Any]] = set()
+        self.files = FileSession(server.file_io_slots)
         self.closed = False
 
     def message(self) -> SealMessage:
@@ -308,9 +311,12 @@ class ClientConnection:
         return msg
 
     async def send(self, msg: SealMessage) -> None:
+        payload = msg.SerializeToString()
+        if len(payload) > MAX_MESSAGE_BYTES:
+            raise ProtocolError("message_too_large", "Response exceeds the message limit")
         async with self._send_lock:
             if not self.closed:
-                await self.websocket.send(msg.SerializeToString())
+                await self.websocket.send(payload)
 
     async def send_error(self, request_id: str, code: str, message: str, stream_id: int = 0) -> None:
         msg = self.message()
@@ -354,6 +360,9 @@ class ClientConnection:
                 task.cancel()
             for stream in list(self.streams.values()):
                 await stream.close("websocket_closed", notify=False)
+            # Cancelling to_thread does not stop OS I/O. Drain before closing fds.
+            await asyncio.gather(*self._file_tasks, return_exceptions=True)
+            await self.files.close()
 
     async def dispatch(self, msg: SealMessage) -> None:
         if msg.protocol_version != PROTOCOL_VERSION:
@@ -367,6 +376,19 @@ class ClientConnection:
             await self._auth_begin(msg)
         elif body == "auth_proof":
             await self._auth_proof(msg)
+        elif body == "fs_request":
+            self._require_authentication()
+            _is_valid_identifier(msg.request_id, "request_id")
+            if len(self._file_tasks) >= 16:
+                response = self.message()
+                response.request_id = msg.request_id
+                response.fs_response.error.code = "resource_limit"
+                response.fs_response.error.message = "Too many pending file requests"
+                await self.send(response)
+            else:
+                task = asyncio.create_task(self._file_request(msg))
+                self._file_tasks.add(task)
+                task.add_done_callback(self._file_tasks.discard)
         elif body == "transport_open_request":
             self._require_authentication()
             self._spawn(self._open_transport(msg))
@@ -388,6 +410,16 @@ class ClientConnection:
     def _require_authentication(self) -> None:
         if not self.authenticated:
             raise ProtocolError("not_authenticated", "device authentication is required")
+
+    async def _file_request(self, request: SealMessage) -> None:
+        response = self.message()
+        response.request_id = request.request_id
+        response.fs_response.CopyFrom(await self.files.execute(request.fs_request))
+        if not self.closed:
+            try:
+                await self.send(response)
+            except websockets.ConnectionClosed:
+                pass
 
     def _spawn(self, coroutine: Any) -> None:
         task = asyncio.create_task(coroutine)
@@ -627,6 +659,7 @@ class SealServer:
         self.pin_created_at = time.time()
         self.pin_attempts = 0
         self.clients: set[ClientConnection] = set()
+        self.file_io_slots = asyncio.Semaphore(4)
 
     @property
     def pin_expired(self) -> bool:

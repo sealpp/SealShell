@@ -2,13 +2,13 @@
 
 <img src="shell/public/icon.svg" width="128" alt="SealShell Logo" />
 
-Local-first PWA shell console. The PWA owns protocol clients, product logic, and product storage; SealNode is a localhost WebSocket-to-TCP/UDP transport and pairing helper.
+Local-first PWA shell console. The PWA owns protocol clients, product logic, and product storage; SealNode provides authenticated localhost TCP/UDP transport and local filesystem primitives.
 
 ## Layout
 
-- `node/` — Python SealNode: loopback WebSocket, pairing/device trust, opaque TCP/UDP transport.
+- `node/` — Python SealNode: loopback WebSocket, pairing/device trust, opaque TCP/UDP transport, local file access.
 - `shell/` — Vue 3 + Vite PWA, IndexedDB vault, WASM SSH client, telemetry providers, and UI.
-- `contracts/` — protobuf contract for pairing, device authentication, and multiplexed transport.
+- `contracts/` — protobuf contract for pairing, device authentication, multiplexed transport, and local filesystem requests.
 - `me_SealShell/` — private architecture and design documentation (separate repository).
 
 ## Quick start
@@ -71,6 +71,6 @@ cd node
 
 - SealNode binds loopback only and rejects non-loopback listen addresses. The loopback boundary plus device challenge authentication are the security controls; there is no WebSocket Origin check.
 - SSH, RDP, X11, and other client protocol implementations belong in the PWA. Adding a protocol does not require a SealNode protocol update.
-- SealNode does not expose local files, local processes, TCP listeners, SOCKS, or reverse-connection capabilities.
+- Paired devices can access local files with the SealNode process user’s permissions. File handles belong to their WebSocket connection; operations are bounded and run off the network event loop. SealNode does not expose local processes, TCP listeners, SOCKS, or reverse connections.
 - The PWA vault uses AES-256-GCM records and a browser profile key for automatic unlock. Vault data is local to the browser profile; v0 has no export, backup, migration, or recovery path.
 - Tabs and layout are runtime state. Refreshing the PWA closes active transport streams; host profiles, credentials, and pairing identity remain in IndexedDB.

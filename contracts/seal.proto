@@ -25,6 +25,8 @@ message SealMessage {
     TransportCloseRequest transport_close_request = 35;
     TransportClosedEvent transport_closed_event = 36;
     TransportErrorEvent transport_error_event = 37;
+    FsRequest fs_request = 40;
+    FsResponse fs_response = 41;
   }
 }
 
@@ -123,3 +125,75 @@ message TransportErrorEvent {
   string code = 2;
   string message = 3;
 }
+
+// File handles and directory cursors belong to the authenticated WS connection.
+message FsRequest {
+  oneof operation {
+    FsInfoRequest info = 1;
+    FsPath stat = 2;
+    FsPath open_directory = 3;
+    FsHandle read_directory = 4;
+    FsOpen open = 5;
+    FsRead read = 6;
+    FsWrite write = 7;
+    FsHandle close = 8;
+    FsPath mkdir = 9;
+    FsPath remove = 10;
+    FsRename rename = 11;
+    FsSetTime set_time = 12;
+    FsPath read_link = 13;
+    FsSymlink symlink = 14;
+  }
+}
+
+message FsInfoRequest {}
+message FsPath { string path = 1; bool follow_links = 2; }
+message FsHandle { uint64 handle = 1; }
+message FsOpen {
+  string path = 1;
+  bool write = 2;
+  bool create = 3;
+  bool exclusive = 4;
+  bool truncate = 5;
+}
+message FsRead { uint64 handle = 1; uint64 offset = 2; uint32 length = 3; }
+message FsWrite { uint64 handle = 1; uint64 offset = 2; bytes payload = 3; }
+message FsRename { string source = 1; string target = 2; bool replace = 3; }
+message FsSetTime { string path = 1; int64 modified_at_ms = 2; }
+message FsSymlink { string path = 1; string target = 2; bool directory = 3; }
+
+message FsResponse {
+  oneof result {
+    FsInfo info = 1;
+    FsEntry stat = 2;
+    FsHandle opened = 3;
+    FsDirectoryPage directory = 4;
+    FsReadResult read = 5;
+    FsWriteResult written = 6;
+    FsSuccess success = 7;
+    FsError error = 8;
+    FsLinkTarget link = 9;
+  }
+}
+message FsInfo {
+  string platform = 1;
+  string home = 2;
+  repeated string roots = 3;
+  uint32 max_chunk_bytes = 4;
+  uint32 max_handles = 5;
+}
+message FsEntry {
+  string name = 1;
+  string path = 2;
+  string kind = 3;
+  uint64 size = 4;
+  int64 modified_at_ms = 5;
+  uint32 mode = 6;
+  bool hidden = 7;
+}
+message FsDirectoryPage { repeated FsEntry entries = 1; bool eof = 2; }
+message FsReadResult { bytes payload = 1; bool eof = 2; }
+message FsWriteResult { uint32 bytes_written = 1; }
+message FsSuccess {}
+message FsError { string code = 1; string message = 2; }
+message FsLinkTarget { string target = 1; }
