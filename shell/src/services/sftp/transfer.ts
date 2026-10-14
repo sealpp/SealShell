@@ -1,9 +1,7 @@
 import { randomId } from '../../utils/id'
-import { basenameRemotePath, joinRemotePath, normalizeRemotePath } from './path'
-import type { SftpBackend } from './types'
+import { statIfExists, type FileBackend, type FileReader, type FileWriter } from '../files/types'
 
 const CHUNK_SIZE = 256 * 1024
-const POSIX_RENAME = 'posix-rename@openssh.com'
 
 export interface TransferResult {
   sourcePath: string
@@ -13,115 +11,95 @@ export interface TransferResult {
   metadataApplied: boolean
   orphanPath?: string
 }
-
 export interface TransferOptions {
   signal?: AbortSignal
   onProgress?: (bytes: number, total: number) => void
 }
-
 export class TransferCancelledError extends Error {
   readonly code = 'TRANSFER_CANCELLED'
-  readonly orphanPath?: string
-
-  constructor(orphanPath?: string) {
-    super('Transfer cancelled')
-    this.name = 'TransferCancelledError'
-    this.orphanPath = orphanPath
-  }
+  constructor(readonly orphanPath?: string) { super('传输已取消') }
 }
-
 export class TransferOrphanError extends Error {
   readonly code = 'TRANSFER_ORPHAN'
-  readonly orphanPath: string
-
-  constructor(orphanPath: string, _cause: unknown) {
-    super(`Transfer failed and temporary file was retained: ${orphanPath}`)
-    this.name = 'TransferOrphanError'
-    this.orphanPath = orphanPath
+  constructor(readonly orphanPath: string, cause: unknown) {
+    super(`${cause instanceof Error ? cause.message : String(cause)}；保留项：${orphanPath}`)
   }
 }
-
-function assertNotCancelled(signal?: AbortSignal): void {
+export function assertNotCancelled(signal?: AbortSignal): void {
   if (signal?.aborted) throw new TransferCancelledError()
 }
-
-async function bestEffortRemove(backend: SftpBackend, path: string): Promise<void> {
-  await backend.remove(path, false)
+export function temporarySibling(backend: FileBackend, target: string, suffix = 'tmp'): string {
+  return backend.paths.join(backend.paths.parent(target), `.sealshell-${randomId()}.${suffix}`)
 }
 
-async function applyMetadata(backend: SftpBackend, path: string, stat: { mode?: number; modifiedAt: number }): Promise<boolean> {
-  let applied = true
-  try {
-    if (stat.mode !== undefined && backend.chmod) await backend.chmod(path, stat.mode)
-  } catch {
-    applied = false
+// Direct replacement is used only for file providers which declare support.
+// Directory replacement keeps the old tree until the new tree is complete.
+export async function commitTemporary(backend: FileBackend, temporary: string, target: string): Promise<{ atomic: boolean; orphanPath?: string }> {
+  const previous = await statIfExists(backend, target)
+  if (!previous) return backend.rename(temporary, target, false)
+  const incoming = await backend.stat(temporary)
+  if (previous.kind !== incoming.kind) throw new Error('目标与源的文件类型不同，不能替换')
+  if (incoming.kind === 'file' && backend.atomicReplace) return backend.rename(temporary, target, true)
+  const backup = temporarySibling(backend, target, 'previous')
+  await backend.rename(target, backup, false)
+  try { await backend.rename(temporary, target, false) }
+  catch (error) {
+    try { await backend.rename(backup, target, false) }
+    catch { throw new TransferOrphanError(backup, error) }
+    throw error
   }
-  try {
-    if (backend.utimes) await backend.utimes(path, stat.modifiedAt)
-  } catch {
-    applied = false
-  }
-  return applied
-}
-
-async function commitTemporary(backend: SftpBackend, temporary: string, target: string): Promise<boolean> {
-  if (backend.supports?.(POSIX_RENAME)) {
-    const result = await backend.rename(temporary, target, true)
-    return result.atomic
-  }
-  let targetExists = false
-  try {
-    await backend.stat(target)
-    targetExists = true
-  } catch {
-    targetExists = false
-  }
-  if (targetExists) await backend.remove(target, true)
-  await backend.rename(temporary, target, false)
-  return false
+  try { await backend.remove(backup, true) }
+  catch { return { atomic: false, orphanPath: backup } }
+  return { atomic: false }
 }
 
 export async function transferFile(
-  source: SftpBackend,
-  target: SftpBackend,
-  sourcePath: string,
-  targetPath: string,
-  options: TransferOptions = {},
+  source: FileBackend, target: FileBackend,
+  sourcePath: string, targetPath: string, options: TransferOptions = {},
 ): Promise<TransferResult> {
-  const normalizedSource = normalizeRemotePath(sourcePath)
-  const normalizedTarget = normalizeRemotePath(targetPath)
-  const sourceStat = await source.stat(normalizedSource)
-  if (sourceStat.kind !== 'file') throw new Error(`Only regular files can use the file transfer pipeline: ${normalizedSource}`)
-  const temporary = joinRemotePath(normalizedTarget.slice(0, normalizedTarget.lastIndexOf('/')) || '/', `.${basenameRemotePath(normalizedTarget)}.sealshell-${randomId()}.tmp`)
+  const sourceStat = await source.stat(sourcePath)
+  if (sourceStat.kind !== 'file') throw new Error('Only regular files can use the file transfer pipeline')
+  const temporary = temporarySibling(target, targetPath)
   let bytes = 0
+  let created = false
+  let reader: FileReader | undefined
+  let writer: FileWriter | undefined
   try {
-    if (sourceStat.size === 0) await target.write(temporary, new ArrayBuffer(0), 0)
-    for (let offset = 0; offset < sourceStat.size;) {
+    try {
       assertNotCancelled(options.signal)
-      const chunk = await source.read(normalizedSource, offset, Math.min(CHUNK_SIZE, sourceStat.size - offset))
-      if (chunk.byteLength === 0) throw new Error('SFTP source returned an empty chunk before EOF')
-      const chunkLength = chunk.byteLength
-      await target.write(temporary, chunk, offset)
-      offset += chunkLength
-      bytes = offset
-      options.onProgress?.(bytes, sourceStat.size)
+      reader = await source.openReader?.(sourcePath)
+      writer = await target.openWriter?.(temporary)
+      if (!writer) await target.write(temporary, new ArrayBuffer(0), 0)
+      created = true
+      while (bytes < sourceStat.size) {
+        assertNotCancelled(options.signal)
+        const length = Math.min(CHUNK_SIZE, sourceStat.size - bytes)
+        const chunk = reader ? await reader.read(bytes, length) : await source.read(sourcePath, bytes, length)
+        if (!chunk.byteLength) throw new Error('源文件在传输完成前结束')
+        const count = chunk.byteLength
+        if (writer) await writer.write(bytes, chunk)
+        else await target.write(temporary, chunk, bytes)
+        bytes += count
+        options.onProgress?.(bytes, sourceStat.size)
+      }
+    } finally {
+      const closing = await Promise.allSettled([reader?.close(), writer?.close()])
+      const failed = closing.find((item) => item.status === 'rejected')
+      if (failed?.status === 'rejected') throw failed.reason
     }
     assertNotCancelled(options.signal)
     const temporaryStat = await target.stat(temporary)
-    if (bytes !== sourceStat.size || temporaryStat.size !== sourceStat.size) {
-      throw new Error(`SFTP byte validation failed (source=${sourceStat.size}, read=${bytes}, temporary=${temporaryStat.size})`)
-    }
-    const metadataApplied = await applyMetadata(target, temporary, sourceStat)
-    const atomic = await commitTemporary(target, temporary, normalizedTarget)
-    return { sourcePath: normalizedSource, targetPath: normalizedTarget, bytes, atomic, metadataApplied }
+    if (bytes !== sourceStat.size || temporaryStat.size !== sourceStat.size) throw new Error('传输文件大小校验失败')
+    let metadataApplied = true
+    try { if (sourceStat.mode !== undefined && target.chmod) await target.chmod(temporary, sourceStat.mode) } catch { metadataApplied = false }
+    try { if (target.utimes) await target.utimes(temporary, sourceStat.modifiedAt) } catch { metadataApplied = false }
+    const committed = await commitTemporary(target, temporary, targetPath)
+    return { sourcePath, targetPath, bytes, ...committed, metadataApplied }
   } catch (error) {
-    try {
-      await bestEffortRemove(target, temporary)
-    } catch (cleanupError) {
-      if (error instanceof TransferCancelledError) throw new TransferCancelledError(temporary)
-      throw new TransferOrphanError(temporary, cleanupError)
+    if (created) {
+      try { await target.remove(temporary, true) }
+      catch { throw new TransferOrphanError(temporary, error) }
     }
-    if (error instanceof TransferCancelledError || options.signal?.aborted) throw new TransferCancelledError()
     throw error
   }
 }
@@ -141,7 +119,7 @@ export interface TransferTaskSnapshot {
 export class TransferQueue {
   private concurrency = 2
   private running = 0
-  private readonly queue: Array<{ snapshot: TransferTaskSnapshot; run: (signal: AbortSignal) => Promise<TransferResult>; controller: AbortController; resolve: (result: TransferResult) => void; reject: (error: unknown) => void }> = []
+  private readonly queue: Array<{ snapshot: TransferTaskSnapshot; run: (signal: AbortSignal, progress: (bytes: number, total: number) => void) => Promise<TransferResult>; controller: AbortController; resolve: (result: TransferResult) => void; reject: (error: unknown) => void }> = []
   private readonly snapshots = new Map<string, TransferTaskSnapshot>()
   private readonly listeners = new Set<(snapshot: TransferTaskSnapshot) => void>()
 
@@ -159,7 +137,7 @@ export class TransferQueue {
   list(): TransferTaskSnapshot[] { return Array.from(this.snapshots.values()) }
   subscribe(listener: (snapshot: TransferTaskSnapshot) => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener) }
 
-  enqueue(label: string, run: (signal: AbortSignal) => Promise<TransferResult>): { id: string; promise: Promise<TransferResult> } {
+  enqueue(label: string, run: (signal: AbortSignal, progress: (bytes: number, total: number) => void) => Promise<TransferResult>): { id: string; promise: Promise<TransferResult> } {
     const snapshot: TransferTaskSnapshot = { id: randomId(), label, state: 'queued', progress: 0 }
     this.snapshots.set(snapshot.id, snapshot)
     let resolve!: (result: TransferResult) => void
@@ -206,10 +184,11 @@ export class TransferQueue {
       this.running += 1
       item.snapshot.state = 'running'
       this.emit(item.snapshot)
-      void item.run(item.controller.signal).then((result) => {
+      void item.run(item.controller.signal, (bytes, total) => { item.snapshot.progress = total ? Math.min(1, bytes / total) : 0; this.emit(item.snapshot) }).then((result) => {
         item.snapshot.state = 'completed'
         item.snapshot.progress = 1
         item.snapshot.result = result
+        item.snapshot.orphanPath = result.orphanPath
         item.resolve(result)
       }, (error: unknown) => {
         item.snapshot.state = error instanceof TransferCancelledError ? 'cancelled' : 'failed'

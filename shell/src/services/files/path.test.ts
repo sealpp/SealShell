@@ -23,5 +23,6 @@ describe('endpoint path semantics', () => {
     expect(windows.descendant('C:\\Work\\src', 'c:\\work')).toBe(true)
     expect(windows.descendant('C:\\Worker', 'C:\\Work')).toBe(false)
     expect(posixPaths.equal('/A', '/a')).toBe(false)
+    expect(posixPaths.descendant('/', '/')).toBe(false)
   })
 })

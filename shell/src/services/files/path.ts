@@ -46,10 +46,10 @@ export function createFilePaths(windows = false): FilePaths {
     basename(path) { const normalized = normalize(path); return normalized.split(separator).pop() || normalized },
     join(parent, name) {
       if (!name || name === '.' || name === '..' || name.includes('/') || name.includes('\0') || (windows && /[\\:]/.test(name))) throw new Error('文件名无效')
-      return normalize(normalize(parent).replace(/[\\/]$/, '') + separator + name)
+      return normalize(normalize(parent).replace(windows ? /[\\/]$/ : /\/$/, '') + separator + name)
     },
     equal(a, b) { return key(a) === key(b) },
-    descendant(path, parent) { return key(path).startsWith(key(parent).replace(/[\\/]$/, '') + separator) },
+    descendant(path, parent) { return key(path) !== key(parent) && key(path).startsWith(key(parent).replace(windows ? /[\\/]$/ : /\/$/, '') + separator) },
   }
 }
 

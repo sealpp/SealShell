@@ -305,7 +305,7 @@ export class Libssh2Session {
     const handle = await this.openFile(path, 0, 0)
     const buffer = this.module._malloc(length)
     try {
-      if (offset) this.module.ssh2_sftp_seek64(handle, offset)
+      if (offset) (this.module as any).ssh2_sftp_seek64(handle, BigInt(offset))
       const result = await this.pump(() => this.module.ssh2_sftp_read(handle, buffer, length))
       if (result < 0) throw errorFor(this.module, this.session, 'SFTP read failed')
       return this.module.HEAPU8.slice(buffer, buffer + result).buffer
@@ -320,7 +320,7 @@ export class Libssh2Session {
     const data = new Uint8Array(payload)
     const ptr = this.module._malloc(Math.max(1, data.length))
     try {
-      if (offset) this.module.ssh2_sftp_seek64(handle, offset)
+      if (offset) (this.module as any).ssh2_sftp_seek64(handle, BigInt(offset))
       this.module.HEAPU8.set(data, ptr)
       let written = 0
       while (written < data.length) {
@@ -343,8 +343,9 @@ export class Libssh2Session {
     if (recursive) {
       const stat = await this.statPath(path)
       if (stat.kind === 'directory') {
-        for (const child of await this.listDirectory(path)) await this.removePath(`${path.replace(/\/$/, '')}/${child.name}`, true)
-        await this.withStrings([path], ([pathPtr]) => this.pump(() => (this.module as any).ssh2_sftp_rmdir(this.sftp, pathPtr)))
+        for (const child of await this.listDirectory(path)) await this.removePath(`${path.replace(/\/$/, '')}/${child.name}`, child.kind === 'directory')
+        const result = await this.withStrings([path], ([pathPtr]) => this.pump(() => (this.module as any).ssh2_sftp_rmdir(this.sftp, pathPtr)))
+        if (result !== 0) throw errorFor(this.module, this.session, 'SFTP directory removal failed')
         return
       }
     }

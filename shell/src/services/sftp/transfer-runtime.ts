@@ -14,7 +14,7 @@ transferQueue.subscribe((snapshot) => {
   const index = transferRuntime.tasks.findIndex((task) => task.id === snapshot.id)
   if (index < 0) transferRuntime.tasks.push(snapshot)
   else transferRuntime.tasks[index] = snapshot
-  transferRuntime.panelOpen = transferRuntime.tasks.some((task) => task.state === 'running' || task.state === 'failed' || task.state === 'cancelled')
+  transferRuntime.panelOpen = transferRuntime.tasks.some((task) => task.state === 'running' || task.state === 'failed' || task.state === 'cancelled' || !!task.orphanPath)
 })
 
 export async function loadTransferConcurrency(): Promise<number> {
@@ -30,7 +30,7 @@ export async function setTransferConcurrency(value: number): Promise<number> {
   return concurrency
 }
 
-export function enqueueTransfer(label: string, run: (signal: AbortSignal) => Promise<TransferResult>): { id: string; promise: Promise<TransferResult> } {
+export function enqueueTransfer(label: string, run: (signal: AbortSignal, progress: (bytes: number, total: number) => void) => Promise<TransferResult>): { id: string; promise: Promise<TransferResult> } {
   transferRuntime.panelOpen = true
   return transferQueue.enqueue(label, run)
 }
