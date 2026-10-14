@@ -26,7 +26,9 @@ async function connectWorker(info: SshConnectionInfo, onState: StateHandler, onO
   const known = await readKnownHost(info.host, info.port)
   const knownHostKey = known ? base64ToBytes(known.publicKey) : undefined
   const worker = new SshWorkerClient()
-  worker.onState = onState
+  // Publish online only after connectSsh has registered the usable session.
+  // Telemetry watches this state and may immediately request an exec channel.
+  worker.onState = (state, error) => { if (state !== 'online') onState(state, error) }
   worker.onOutput = onOutput
   try {
     await worker.connect({ ...info, knownHostKey })

@@ -10,11 +10,12 @@ export class NodeSessionTransport {
   private inputSequence = 0n
   private outputSequence = 0n
   private closed = false
+  private closeError = new Error('Node transport is closed')
   private dataHandler?: (payload: Uint8Array) => void
   private waiters: Array<() => void> = []
 
   constructor() {
-    this.connection.onClosed = () => { this.closed = true; this.wake() }
+    this.connection.onClosed = (error) => { this.closeError = error; this.closed = true; this.wake() }
     this.connection.onEvent = (message) => {
       if (message.body.case === 'transportData') {
         const data = message.body.value
@@ -26,8 +27,10 @@ export class NodeSessionTransport {
       } else if (message.body.case === 'transportCredit' && message.body.value.direction === 'input') {
         this.inputCredit += Number(message.body.value.addBytes)
         this.wake()
-      } else if (message.body.case === 'transportClosedEvent' || message.body.case === 'transportErrorEvent') {
-        this.connection.close()
+      } else if (message.body.case === 'transportClosedEvent') {
+        this.connection.close(new Error(`Node transport closed: ${message.body.value.reason}`))
+      } else if (message.body.case === 'transportErrorEvent') {
+        this.connection.close(new Error(`${message.body.value.code}: ${message.body.value.message}`))
       }
     }
   }
@@ -45,14 +48,14 @@ export class NodeSessionTransport {
     for (let offset = 0; offset < payload.length; offset += MAX_CHUNK) {
       const chunk = payload.slice(offset, offset + MAX_CHUNK)
       while (this.inputCredit < chunk.length && !this.closed) await this.waitForData()
-      if (this.closed) throw new Error('Node transport is closed')
+      if (this.closed) throw this.closeError
       this.inputCredit -= chunk.length
       this.connection.send({ case: 'transportData', value: create(TransportDataSchema, { streamId: 1, sequence: this.inputSequence++, payload: chunk }) })
     }
   }
 
   async waitForData(timeoutMs = 0): Promise<void> {
-    if (this.closed) throw new Error('Node transport is closed')
+    if (this.closed) throw this.closeError
     await new Promise<void>((resolve) => {
       let timer: ReturnType<typeof setTimeout> | undefined
       const done = () => {
