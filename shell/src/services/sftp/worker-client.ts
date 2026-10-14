@@ -1,3 +1,5 @@
+import { FileOperationError } from '../files/types'
+import { posixPaths } from '../files/path'
 import { randomId } from '../../utils/id'
 import { transferablesForRequest } from './worker-protocol'
 import { requestHostKeyApproval } from '../hostKey'
@@ -5,6 +7,8 @@ import { readKnownHost, saveKnownHost } from '../storage'
 import type { SftpBackend, SftpConnectionOptions, SftpDirectoryPage, SftpRequest, SftpRequestInput, SftpResponse, SftpStat } from './types'
 
 export class SftpWorkerClient implements SftpBackend {
+  readonly paths = posixPaths
+  namespace = ''
   private readonly worker: Worker
   private readonly pending = new Map<string, { resolve: (response: SftpResponse) => void; reject: (error: Error) => void }>()
   private host = ''
@@ -35,11 +39,12 @@ export class SftpWorkerClient implements SftpBackend {
       this.pending.set(message.id, { resolve, reject })
       this.worker.postMessage(message, transferablesForRequest(message))
     })
-    if (!response.ok) throw new Error(`${response.error.code}: ${response.error.message}`)
+    if (!response.ok) throw new FileOperationError(response.error.code, response.error.message)
     return response as unknown as T
   }
 
   async connect(options: SftpConnectionOptions): Promise<void> {
+    this.namespace = `sftp:${options.host}:${options.port}:${options.username}`
     this.host = options.host
     this.port = options.port
     const known = await readKnownHost(options.host, options.port)

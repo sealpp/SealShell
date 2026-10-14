@@ -1,3 +1,4 @@
+import type { FileBackend } from '../files/types'
 import type { FileEntry } from '../../stores/app'
 
 export const SFTP_RPC_VERSION = 1 as const
@@ -23,20 +24,8 @@ export interface SftpDirectoryPage {
   nextCursor?: string
 }
 
-export interface SftpBackend {
+export interface SftpBackend extends FileBackend {
   connect(options: SftpConnectionOptions): Promise<void>
-  disconnect(): Promise<void>
-  list(path: string, cursor?: string): Promise<SftpDirectoryPage>
-  stat(path: string): Promise<SftpStat>
-  read(path: string, offset?: number, length?: number): Promise<ArrayBuffer>
-  write(path: string, data: ArrayBuffer, offset?: number): Promise<void>
-  mkdir(path: string): Promise<void>
-  remove(path: string, recursive?: boolean): Promise<void>
-  rename(source: string, target: string, overwrite?: boolean): Promise<{ atomic: boolean }>
-  chmod?(path: string, mode: number): Promise<void>
-  utimes?(path: string, modifiedAt: number): Promise<void>
-  readlink?(path: string): Promise<string>
-  symlink?(target: string, path: string): Promise<void>
   supports?(extension: string): boolean
 }
 

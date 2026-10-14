@@ -1,3 +1,5 @@
+import { FileOperationError } from '../files/types'
+import { posixPaths } from '../files/path'
 import { describe, expect, it } from 'vitest'
 import { canPasteSftpClipboard, clearSftpClipboardAfterPaste, createSftpClipboardPayload } from './clipboard'
 import { normalizeRemotePath, parentRemotePath } from './path'
@@ -13,8 +15,10 @@ function entry(path: string, kind: FileEntry['kind'], size = 0): FileEntry {
 }
 
 class MemoryBackend implements SftpBackend {
+  readonly paths = posixPaths
   readonly files = new Map<string, Uint8Array>()
   readonly stats = new Map<string, FileEntry>()
+  get atomicReplace() { return this.overwrite }
   overwrite = false
   failCleanup = false
 
@@ -26,7 +30,7 @@ class MemoryBackend implements SftpBackend {
     if (known) return known
     const data = this.files.get(path)
     if (data) return entry(path, 'file', data.byteLength)
-    throw new Error('not found')
+    throw new FileOperationError('not_found', 'not found')
   }
   async read(path: string, offset = 0, length = 256 * 1024): Promise<ArrayBuffer> { return (this.files.get(path) ?? new Uint8Array()).slice(offset, offset + length).buffer }
   async write(path: string, data: ArrayBuffer, offset = 0): Promise<void> {

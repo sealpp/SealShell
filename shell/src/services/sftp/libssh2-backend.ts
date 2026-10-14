@@ -1,3 +1,4 @@
+import { posixPaths } from '../files/path'
 import { Libssh2Session } from '../ssh/libssh2-runtime'
 import { joinRemotePath, normalizeRemotePath } from './path'
 import type { FileEntry } from '../../stores/app'
@@ -6,6 +7,7 @@ import type { SftpBackend, SftpDirectoryPage, SftpStat } from './types'
 export function createLibssh2SftpBackend(onHostKey: (publicKey: Uint8Array) => Promise<boolean>): SftpBackend {
   let session: Libssh2Session | undefined
   const backend: SftpBackend = {
+    paths: posixPaths,
     async connect(next) {
       session = new Libssh2Session()
       await session.connect({

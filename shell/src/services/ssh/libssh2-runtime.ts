@@ -1,3 +1,4 @@
+import { FileOperationError } from '../files/types'
 import createLibssh2Module, { type LIBSSH2_CHANNEL, type LIBSSH2_SESSION, type SSH2WASMModule } from '@verdigris/libssh2.js'
 import { NodeSessionTransport } from './node-session'
 
@@ -291,7 +292,10 @@ export class Libssh2Session {
     const attrsPtr = this.module._malloc(64)
     try {
       const result = await this.withStrings([path], ([pathPtr]) => this.pump(() => (this.module as any).ssh2_sftp_stat(this.sftp, pathPtr, attrsPtr)))
-      if (result !== 0) throw errorFor(this.module, this.session, 'SFTP stat failed')
+      if (result !== 0) {
+        const code = (this.module as any)._ssh2_sftp_last_error(this.sftp)
+        throw new FileOperationError(code === 2 ? 'not_found' : code === 3 ? 'permission_denied' : 'io_error', `SFTP stat failed (${code}): ${path}`)
+      }
       const parsed = this.readAttributes(attrsPtr)
       return { size: parsed.filesize, modifiedAt: parsed.mtime * 1000, mode: parsed.permissions, kind: kindFromMode(parsed.permissions) }
     } finally { this.module._free(attrsPtr) }

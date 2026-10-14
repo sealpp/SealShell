@@ -147,6 +147,7 @@ export async function saveEditorTab(tabId: string): Promise<void> {
   if (!tab || !backend) throw new Error('Editor session is unavailable')
   const payload = encodeFile(tab.editor)
   const memorySource: SftpBackend = {
+    paths: backend.paths,
     connect: async () => undefined,
     disconnect: async () => undefined,
     list: async () => ({ path: '/', entries: [] }),

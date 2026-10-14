@@ -1,3 +1,4 @@
+import { posixPaths } from '../files/path'
 import type { SftpBackend } from './types'
 
 export function createUnavailableSftpBackend(): SftpBackend {
@@ -5,7 +6,7 @@ export function createUnavailableSftpBackend(): SftpBackend {
     throw new Error('SFTP backend is not configured')
   }
   return {
-    connect: fail,
+    paths: posixPaths,    connect: fail,
     disconnect: async () => undefined,
     list: fail,
     stat: fail,
