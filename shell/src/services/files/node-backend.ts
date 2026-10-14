@@ -26,6 +26,7 @@ export class NodeFileBackend implements FileBackend {
   nodeId = ''
   info!: FsInfo
   readonly atomicReplace = true
+  fork?: () => Promise<FileBackend>
 
   async connect(): Promise<void> {
     this.nodeId = await this.connection.connect()

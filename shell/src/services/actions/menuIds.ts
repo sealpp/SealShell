@@ -9,6 +9,7 @@ export const MenuId = {
   TerminalPaste: 'terminal.paste',
   TerminalEncoding: 'terminal.encoding',
   FileContext: 'file.context',
+  FileInstances: 'file.instances',
   NodeStatus: 'node.status',
 } as const
 

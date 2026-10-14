@@ -1,5 +1,6 @@
 import { reactive } from 'vue'
 import type { CommandContext } from '../services/context'
+import type { FileEndpoint } from '../services/files/types'
 
 export type View = 'welcome' | 'shell'
 export type ShellState = 'idle' | 'connecting' | 'online' | 'error'
@@ -49,6 +50,7 @@ export type FileSortKey = 'name' | 'modified' | 'size' | 'type'
 export type FileSortDirection = 'asc' | 'desc'
 
 export interface FileWorkspaceState {
+  roots?: string[]
   cwd: string
   defaultPath: string
   history: string[]
@@ -119,7 +121,9 @@ export interface Telemetry {
 export interface Tab {
   id: string
   kind: TabKind
-  hostId: string
+  hostId?: string
+  endpoint?: FileEndpoint
+  fileSplitBeside?: string
   label: string
   state: ShellState
   error: string
@@ -140,11 +144,13 @@ export interface TerminalTab extends Tab {
 
 export interface FileTab extends Tab {
   kind: 'file'
+  endpoint: FileEndpoint
   file: FileWorkspaceState
 }
 
 export interface EditorTab extends Tab {
   kind: 'editor'
+  endpoint: FileEndpoint
   editor: EditorState
 }
 
@@ -164,7 +170,7 @@ export interface ConnectionClipboardState {
   createdAt: number
 }
 
-export type InteractionDialogKind = 'confirm' | 'prompt' | 'alert'
+export type InteractionDialogKind = 'confirm' | 'prompt' | 'alert' | 'choice'
 
 export interface InteractionDialogState {
   kind: InteractionDialogKind
@@ -176,6 +182,7 @@ export interface InteractionDialogState {
   value: string
   placeholder: string
   checkboxLabel?: string
+  choices?: Array<{ value: string; label: string }>
 }
 
 export interface AppState {
@@ -190,6 +197,7 @@ export interface AppState {
   tabs: Tab[]
   activeTerminalTabId: string
   activeFileTabId: string
+  visibleFileTabIds: string[]
   activeEditorTabId: string
   bottomPanelCategory: BottomPanelCategory
   focusedDock: FocusedDock
@@ -268,6 +276,7 @@ export const store = reactive<AppState>({
   tabs: [],
   activeTerminalTabId: '',
   activeFileTabId: '',
+  visibleFileTabIds: [],
   activeEditorTabId: '',
   bottomPanelCategory: 'files',
   focusedDock: 'terminal',

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { IconFile, IconFolder, IconMaximize, IconMaximizeOff, IconX } from '@tabler/icons-vue'
+import { IconDeviceDesktopPlus, IconFile, IconFolder, IconMaximize, IconMaximizeOff, IconX } from '@tabler/icons-vue'
 import { store, type BottomPanelCategory } from '../stores/app'
 import {
   BOTTOM_PANEL_DEFAULT_HEIGHT_RATIO,
@@ -13,6 +13,7 @@ import {
   shouldReopenBottomPanel,
 } from '../services/bottom-panel-layout'
 import BottomPanelDock from './BottomPanelDock.vue'
+import { commandService } from '../services/commands'
 
 const MIN_LIST_WIDTH = 160
 const MAX_LIST_WIDTH = 420
@@ -301,6 +302,9 @@ watch(
         <span>文件</span>
       </button>
       <div class="workspace-actions">
+        <button v-if="store.bottomPanelCategory === 'files'" type="button" class="workspace-action" :disabled="!store.paired"
+          aria-label="新建本地窗口并分栏" title="新建本地窗口并分栏 (Alt+L)"
+          @click="commandService.execute('file.newLocalSplit', { area: 'global' })"><IconDeviceDesktopPlus :size="15" /></button>
         <button
           type="button"
           class="workspace-action"

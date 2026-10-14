@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { IconArrowBackUp, IconArrowForwardUp, IconArrowUp, IconEye, IconRefresh } from '@tabler/icons-vue'
 import CommandContextMenu from '../components/CommandContextMenu.vue'
 import { FILE_MENU_ID } from '../services/actions/menuIds'
 import type { CommandContext } from '../services/context'
 import { commandService } from '../services/commands'
 import { setBottomPanelActiveTab, store, type FileEntry, type FileTab } from '../stores/app'
-import { copyEntry, moveEntry, targetNameForEntry } from '../services/sftp/operations'
-import { getSftpBackend, goBackFileTab, goForwardFileTab, navigateFileTab, navigateParentFileTab, refreshFileTab } from '../services/sftp/file-tabs'
+import { transferFileEntries } from '../services/files/transfers'
+import { getFileBackend, goBackFileTab, goForwardFileTab, navigateFileTab, navigateParentFileTab, refreshFileTab } from '../services/sftp/file-tabs'
 
 const props = defineProps<{ params: { params: { tabId: string; [key: string]: unknown }; [key: string]: unknown } }>()
 const tabId = computed(() => String(props.params?.params?.tabId ?? ''))
@@ -21,7 +21,11 @@ const ROW_HEIGHT = 32
 let activateTimer: number | undefined
 
 const sortedEntries = computed(() => tab.value?.file.entries ?? [])
-const canNavigateParent = computed(() => tab.value?.file.cwd !== '/')
+const canNavigateParent = computed(() => {
+  const current = tab.value
+  const paths = getFileBackend(tabId.value)?.paths
+  return !!current && !!paths && !!current.file.cwd && !paths.equal(current.file.cwd, paths.parent(current.file.cwd))
+})
 const renderStart = computed(() => Math.max(0, Math.floor(scrollTop.value / ROW_HEIGHT) - 8))
 const renderEnd = computed(() => Math.min(sortedEntries.value.length, renderStart.value + Math.ceil(viewportHeight.value / ROW_HEIGHT) + 16))
 const renderedEntries = computed(() => sortedEntries.value.slice(renderStart.value, renderEnd.value))
@@ -121,11 +125,12 @@ function onDragStart(event: DragEvent, entry: FileEntry): void {
   const current = tab.value
   if (!current) return
   if (!current.file.selectedPaths.includes(entry.path)) current.file.selectedPaths = [entry.path]
-  event.dataTransfer.effectAllowed = 'copyMove'
-  event.dataTransfer.setData('application/x-sealshell-sftp', JSON.stringify({ sourceTabId: tabId.value, paths: current.file.selectedPaths }))
+  event.dataTransfer.effectAllowed = 'copy'
+  event.dataTransfer.setData('application/x-sealshell-files', JSON.stringify({ sourceTabId: tabId.value, paths: current.file.selectedPaths }))
 }
 
-function onDragEnter(): void {
+function onDragEnter(event: DragEvent): void {
+  if (!event.dataTransfer?.types.includes('application/x-sealshell-files')) return
   if (activateTimer !== undefined) window.clearTimeout(activateTimer)
   activateTimer = window.setTimeout(() => { setBottomPanelActiveTab(tabId.value, 'files') }, 500)
 }
@@ -137,40 +142,40 @@ function onDragLeave(): void {
 
 async function onDrop(event: DragEvent, entry?: FileEntry): Promise<void> {
   onDragLeave()
-  event.preventDefault()
   dropTarget.value = null
-  const raw = event.dataTransfer?.getData('application/x-sealshell-sftp')
+  const raw = event.dataTransfer?.getData('application/x-sealshell-files')
   if (!raw) return
+  event.preventDefault()
+  event.stopPropagation()
   let payload: { sourceTabId: string; paths: string[] }
   try { payload = JSON.parse(raw) as { sourceTabId: string; paths: string[] } } catch { return }
-  const targetBackend = getSftpBackend(tabId.value)
-  const sourceBackend = getSftpBackend(payload.sourceTabId)
   const current = tab.value
-  if (!targetBackend || !sourceBackend || !current) return
+  if (!current) return
   const targetDirectory = entry?.kind === 'directory' ? entry.path : current.file.cwd
-  for (const sourcePath of payload.paths) {
-    const targetPath = targetNameForEntry(sourcePath, targetDirectory)
-    if (payload.sourceTabId === tabId.value) await moveEntry(targetBackend, sourcePath, targetPath)
-    else await copyEntry(sourceBackend, targetBackend, sourcePath, targetPath)
-  }
-  await refreshFileTab(tabId.value)
+  try { await transferFileEntries(payload.sourceTabId, tabId.value, payload.paths, targetDirectory) }
+  catch (error) { current.file.error = error instanceof Error ? error.message : String(error) }
 }
 
 function isSelected(entry: FileEntry): boolean { return !!tab.value?.file.selectedPaths.includes(entry.path) }
 
+watch(() => tab.value?.file.cwd, syncPath)
 onMounted(syncPath)
 onBeforeUnmount(onDragLeave)
 </script>
 
 <template>
   <CommandContextMenu v-if="tab" :menu-id="FILE_MENU_ID" :context="fileContext">
-    <div class="file-panel" tabindex="0" @keydown="onKeydown" @dragover.prevent @dragenter="onDragEnter" @dragleave="onDragLeave" @drop="onDrop">
+    <div class="file-panel" :data-file-tab="tabId" :data-endpoint="tab.endpoint?.kind" tabindex="0" @pointerdown="setBottomPanelActiveTab(tabId, 'files')" @focusin="setBottomPanelActiveTab(tabId, 'files')" @keydown="onKeydown" @dragover.prevent @dragenter="onDragEnter" @dragleave="onDragLeave" @drop="onDrop">
       <header class="file-toolbar">
         <button type="button" title="后退" :disabled="tab.file.historyIndex <= 0" @click="goBackFileTab(tabId)"><IconArrowBackUp :size="16" /></button>
         <button type="button" title="前进" :disabled="tab.file.historyIndex >= tab.file.history.length - 1" @click="goForwardFileTab(tabId)"><IconArrowForwardUp :size="16" /></button>
         <button type="button" title="上级目录" :disabled="!canNavigateParent" @click="goToParent"><IconArrowUp :size="16" /></button>
         <button type="button" title="刷新" @click="refreshFileTab(tabId)"><IconRefresh :size="16" /></button>
-        <input v-model="pathInput" aria-label="远端路径" @keydown.enter="navigateFromInput" @blur="syncPath">
+        <select v-if="tab.endpoint?.kind === 'local'" value="" aria-label="本地位置" @change="navigateFileTab(tabId, ($event.target as HTMLSelectElement).value)">
+          <option value="" disabled>本地位置</option><option :value="tab.file.defaultPath">用户主目录</option>
+          <option v-for="root in tab.file.roots ?? []" :key="root" :value="root">{{ root }}</option>
+        </select>
+        <input v-model="pathInput" :aria-label="tab.endpoint?.kind === 'local' ? '本地路径' : '远端路径'" @keydown.enter="navigateFromInput" @blur="syncPath">
         <button type="button" title="显示隐藏文件" :class="{ active: tab.file.showHidden }" @click="toggleHidden"><IconEye :size="16" /></button>
         <select :value="`${tab.file.sortKey}:${tab.file.sortDirection}`" aria-label="排序" @change="setSort">
           <option value="name:asc">文件名 A-Z</option><option value="name:desc">文件名 Z-A</option>
@@ -206,7 +211,7 @@ onBeforeUnmount(onDragLeave)
           @dragenter="dropTarget = entry.kind === 'directory' ? entry.path : null"
           @dragover.prevent
           @drop="onDrop($event, entry)"
-          @contextmenu="select(entry, $event)"
+          @contextmenu="!isSelected(entry) && select(entry, $event)"
         >
           <span class="file-name"><span class="file-kind">{{ entry.kind === 'directory' ? '▰' : entry.kind === 'symlink' ? '↗' : '•' }}</span><span>{{ entry.name }}</span></span>
           <span>{{ entry.kind === 'directory' ? '—' : entry.size }}</span>
@@ -223,5 +228,5 @@ onBeforeUnmount(onDragLeave)
 
 <style scoped>
 .file-parent{color:#ddd;cursor:pointer}.file-parent.disabled{color:#777;cursor:default}
-.file-panel{width:100%;height:100%;display:flex;flex-direction:column;background:#1e1e1e;color:#ccc;outline:none}.file-toolbar{height:40px;display:flex;align-items:center;gap:5px;padding:0 8px;background:#252526;border-bottom:1px solid #333}.file-toolbar button{width:27px;height:27px;display:inline-flex;align-items:center;justify-content:center;background:#333;border:1px solid #444;color:#ccc;cursor:pointer}.file-toolbar button:hover,.file-toolbar button.active{background:#0e639c;color:#fff}.file-toolbar button:disabled{opacity:.4;cursor:default}.file-toolbar input{min-width:140px;flex:1;height:27px;background:#1e1e1e;border:1px solid #555;color:#eee;padding:0 8px}.file-toolbar select{height:27px;max-width:160px;background:#1e1e1e;border:1px solid #555;color:#ddd}.file-error{padding:8px 12px;color:#f48771;background:#3a1d1d;border-bottom:1px solid #633}.file-list{min-height:0;flex:1;overflow:auto}.file-list-head,.file-row{box-sizing:border-box;display:grid;grid-template-columns:minmax(200px,2fr) 100px 170px 100px;gap:10px;align-items:center;padding:0 12px;min-width:max(100%,624px);min-height:32px;height:32px;border-bottom:1px solid #2a2a2a}.virtual-spacer{pointer-events:none}.file-list-head{position:sticky;top:0;background:#2d2d2d;color:#aaa;font-size:12px;z-index:1}.file-row{cursor:default}.file-row:hover{background:#2a2d2e}.file-row.selected{background:#094771;color:#fff}.file-row.drop{outline:1px solid #3794ff}.file-name{display:flex;align-items:center;gap:8px;min-width:0}.file-name span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-kind{color:#dcdcaa}.file-empty{padding:28px;color:#777;text-align:center}
+.file-panel{min-width:0;overflow:hidden;width:100%;height:100%;display:flex;flex-direction:column;background:#1e1e1e;color:#ccc;outline:none}.file-toolbar{min-height:40px;flex-wrap:wrap;display:flex;align-items:center;gap:5px;padding:5px 8px;background:#252526;border-bottom:1px solid #333}.file-toolbar button{width:27px;height:27px;display:inline-flex;align-items:center;justify-content:center;background:#333;border:1px solid #444;color:#ccc;cursor:pointer}.file-toolbar button:hover,.file-toolbar button.active{background:#0e639c;color:#fff}.file-toolbar button:disabled{opacity:.4;cursor:default}.file-toolbar input{min-width:100px;flex:1;height:27px;background:#1e1e1e;border:1px solid #555;color:#eee;padding:0 8px}.file-toolbar select{height:27px;max-width:120px;background:#1e1e1e;border:1px solid #555;color:#ddd}.file-error{padding:8px 12px;color:#f48771;background:#3a1d1d;border-bottom:1px solid #633}.file-list{min-height:0;flex:1;overflow:auto}.file-list-head,.file-row{box-sizing:border-box;display:grid;grid-template-columns:minmax(140px,2fr) 80px 155px 80px;gap:10px;align-items:center;padding:0 12px;min-width:max(100%,510px);min-height:32px;height:32px;border-bottom:1px solid #2a2a2a}.virtual-spacer{pointer-events:none}.file-list-head{position:sticky;top:0;background:#2d2d2d;color:#aaa;font-size:12px;z-index:1}.file-row{cursor:default}.file-row:hover{background:#2a2d2e}.file-row.selected{background:#094771;color:#fff}.file-row.drop{outline:1px solid #3794ff}.file-row>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.file-name{display:flex;align-items:center;gap:8px;min-width:0}.file-name span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-kind{color:#dcdcaa}.file-empty{padding:28px;color:#777;text-align:center}
 </style>

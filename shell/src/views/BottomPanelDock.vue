@@ -8,6 +8,8 @@ import { commandService } from '../services/commands'
 import { arrangeWorkspaceInstances, canDropWorkspaceInstance } from '../services/workspace-docking'
 import FilePanel from './FilePanel.vue'
 import EditorPanel from './EditorPanel.vue'
+import CommandContextMenu from '../components/CommandContextMenu.vue'
+import { MenuId } from '../services/actions/menuIds'
 
 const props = defineProps<{ category: BottomPanelCategory }>()
 type PanelMoveGroup = NonNullable<Parameters<DockviewPanelApi['moveTo']>[0]['group']>
@@ -177,6 +179,7 @@ function applyWorkspaceGroupVisibility(
   syncingPanels = true
   try {
     const visibleGroups = currentApi.groups.filter((group) => dockWorkspaceGroups.get(group.id) === targetGroupId)
+    if (props.category === 'files') store.visibleFileTabIds = visibleGroups.flatMap((group) => group.activePanel ? [group.activePanel.id] : [])
     for (const group of currentApi.groups) {
       const shouldBeVisible = dockWorkspaceGroups.get(group.id) === targetGroupId
       if (group.api.isVisible !== shouldBeVisible) group.api.setVisible(shouldBeVisible)
@@ -253,8 +256,25 @@ function addPanel(tab: Tab): void {
   if (currentApi.getPanel(tab.id)) return
 
   const preservedSizes = captureVisibleGroupSizes(currentApi)
+  const shouldActivate = (props.category === 'files' ? store.activeFileTabId : store.activeEditorTabId) === tab.id
   const group = currentApi.activeGroup ?? currentApi.groups[0]
-  const workspaceGroupId = ensurePanelWorkspaceGroup(tab.id)
+  const reference = tab.fileSplitBeside ? currentApi.getPanel(tab.fileSplitBeside) : undefined
+  const referenceSize = reference ? preservedSizes.get(reference.group.id) : undefined
+  const workspaceGroupId = reference ? workspaceGroupForPanel(reference.id)! : ensurePanelWorkspaceGroup(tab.id)
+  panelWorkspaceGroups.set(tab.id, workspaceGroupId)
+  const splitGroup = reference ? currentApi.addGroup({ referenceGroup: reference.group, direction: 'left', constraints: workspacePaneConstraints, skipSetActive: true }) : undefined
+  if (splitGroup) {
+    dockWorkspaceGroups.set(splitGroup.id, workspaceGroupId)
+    // Divide the selected pane; restoring only its neighbors after Dockview's
+    // global distribution would leave the two new halves with unequal widths.
+    if (referenceSize) {
+      const half = { ...referenceSize, width: referenceSize.width / 2 }
+      for (const id of [reference!.group.id, splitGroup.id]) {
+        preservedSizes.set(id, half)
+        workspaceGroupSizes.set(id, half)
+      }
+    }
+  }
   const options = {
     id: tab.id,
     title: panelTitle(tab),
@@ -263,24 +283,34 @@ function addPanel(tab: Tab): void {
     renderer: 'always' as const,
     inactive: true,
     ...workspacePaneConstraints,
-    // Every new instance starts in its own logical group. An edge drop later
-    // merges the source and target groups into one parallel layout.
-    ...(group ? { position: { referenceGroup: group.id, direction: 'right' as const } } : {}),
+    // Ordinary instances start in their own logical group. The local split
+    // button and edge drops explicitly join a parallel layout.
+    ...(splitGroup ? { position: { referenceGroup: splitGroup.id } } : group ? { position: { referenceGroup: group.id, direction: 'right' as const } } : {}),
   }
   const panel = currentApi.addPanel(options)
   dockWorkspaceGroups.set(panel.group.id, workspaceGroupId)
+  if (reference || shouldActivate) {
+    activeWorkspaceGroupId.value = workspaceGroupId
+    tab.fileSplitBeside = undefined
+    schedulePanelActivation(tab.id)
+  }
   groupHeadersHidden()
-  applyWorkspaceGroupVisibility(undefined, preservedSizes)
+  applyWorkspaceGroupVisibility(reference || shouldActivate ? tab.id : undefined, preservedSizes)
 }
 
 function removePanel(tabId: string): void {
   const currentApi = api.value
   const panel = currentApi?.getPanel(tabId)
-  const preservedSizes = currentApi ? captureVisibleGroupSizes(currentApi) : undefined
+  let preservedSizes = currentApi ? captureVisibleGroupSizes(currentApi) : undefined
   if (panel && currentApi) {
+    const removesVisiblePane = panel.group.api.isVisible && panel.group.panels.length === 1
+      && currentApi.groups.filter((group) => group.api.isVisible).length > 1
     currentApi.removePanel(panel)
     panelWorkspaceGroups.delete(tabId)
     dockWorkspaceGroups.delete(panel.group.id)
+    // A removed split pane frees space. Keep Dockview's resulting allocation
+    // instead of restoring absolute sizes which no longer fill the layout.
+    if (removesVisiblePane) preservedSizes = captureVisibleGroupSizes(currentApi)
   }
   if (currentApi) applyWorkspaceGroupVisibility(undefined, preservedSizes)
   tick()
@@ -450,11 +480,11 @@ function readWorkspaceDrag(event: DragEvent | PointerEvent): { tabId: string; ca
 }
 
 watch(
-  () => store.tabs.map((tab) => `${tab.id}:${tab.kind}`).join(','),
+  () => tabs.value.map((tab) => tab.id).join(','),
   (_, previous) => {
     const currentApi = api.value
     if (!currentApi) return
-    const oldIds = (previous ?? '').split(',').filter(Boolean).map((value) => value.split(':')[0])
+    const oldIds = (previous ?? '').split(',').filter(Boolean)
     const currentTabs = tabs.value
     const currentIds = currentTabs.map((tab) => tab.id)
     syncingPanels = true
@@ -472,7 +502,9 @@ watch(
 watch(
   () => props.category === 'files' ? store.activeFileTabId : store.activeEditorTabId,
   (tabId) => {
-    if (!tabId || !api.value) return
+    // Selection updates before the post-flush tab watcher creates the panel.
+    // Falling back here would overwrite the requested new tab with the old one.
+    if (!tabId || !api.value?.getPanel(tabId)) return
     applyWorkspaceGroupVisibility(tabId)
   },
 )
@@ -502,11 +534,13 @@ onBeforeUnmount(() => {
         <span>{{ props.category === 'files' ? '暂无文件列表' : '暂无打开的文件' }}</span>
       </div>
     </div>
+    <CommandContextMenu :menu-id="MenuId.FileInstances" :context="{ area: 'global' }" :can-open="() => props.category === 'files'">
     <aside class="workspace-instance-list" aria-label="面板实例">
       <div v-if="!tabs.length" class="workspace-instance-empty">暂无实例</div>
       <button
         v-for="tab in orderedTabs"
         :key="tab.id"
+        :data-tab-id="tab.id"
         type="button"
         class="workspace-instance"
         :class="{ active: (props.category === 'files' ? store.activeFileTabId : store.activeEditorTabId) === tab.id, dragging: draggingId === tab.id }"
@@ -523,6 +557,7 @@ onBeforeUnmount(() => {
         <span class="workspace-instance-close" role="button" title="关闭" @click.stop="closeInstance(tab.id)"><IconX :size="13" /></span>
       </button>
     </aside>
+    </CommandContextMenu>
   </div>
 </template>
 

@@ -12,8 +12,8 @@ function close(): void { transferRuntime.panelOpen = false }
     <div v-for="task in transferRuntime.tasks" :key="task.id" class="transfer-task">
       <div class="task-head"><span>{{ task.label }}</span><span>{{ task.state }}</span></div>
       <progress max="1" :value="task.progress" />
-      <div v-if="task.error" class="task-error">{{ task.error }}</div>
-      <div class="task-actions"><button v-if="task.state === 'running' || task.state === 'queued'" type="button" title="取消" @click="cancelTransfer(task.id)"><IconX :size="13" /></button><button v-if="task.state === 'failed' || task.state === 'cancelled'" type="button" title="重试" @click="retryTransfer(task.id)"><IconRefresh :size="13" /></button><button v-if="task.state === 'failed'" type="button" title="清理 orphan" @click="dismissTransfer(task.id)"><IconTrash :size="13" /></button></div>
+      <div v-if="task.error" class="task-error">{{ task.error }}</div><div v-if="task.orphanPath" class="task-error">保留项：{{ task.orphanPath }}</div>
+      <div class="task-actions"><button v-if="task.state === 'running' || task.state === 'queued'" type="button" title="取消" @click="cancelTransfer(task.id)"><IconX :size="13" /></button><button v-if="task.state === 'failed' || task.state === 'cancelled'" type="button" title="重试" @click="retryTransfer(task.id)"><IconRefresh :size="13" /></button><button v-if="task.state === 'failed'" type="button" title="移除记录" @click="dismissTransfer(task.id)"><IconTrash :size="13" /></button></div>
     </div>
   </aside>
 </template>

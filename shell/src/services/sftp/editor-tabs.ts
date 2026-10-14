@@ -1,13 +1,11 @@
 import { randomId } from '../../utils/id'
-import { loadCredentialRecord } from '../vault'
 import { setBottomPanelActiveTab, store, type EditorTab, type FileEntry, type FileTab } from '../../stores/app'
-import { getSftpBackend, registerSftpSession } from './file-tabs'
-import { SftpWorkerClient } from './worker-client'
-import type { SftpBackend, SftpConnectionOptions } from './types'
-import { getRuntimePassword } from '../ssh'
+import { getFileBackend, registerFileSession } from './file-tabs'
+import type { FileBackend } from '../files/types'
 import { transferFile } from './transfer'
 import { confirmDialog } from '../dialogs'
 import { encodingDecoder } from '../encodings'
+import { readFileContents } from '../files/read'
 
 const MAX_EDIT_SIZE = 10 * 1024 * 1024
 
@@ -64,12 +62,13 @@ function encodeFile(editor: EditorTab['editor']): ArrayBuffer {
 export async function openEditorTab(fileTabId: string, entry: FileEntry): Promise<EditorTab | undefined> {
   const source = store.tabs.find((candidate) => candidate.id === fileTabId) as FileTab | undefined
   if (!source || source.kind !== 'file') return undefined
-  const host = store.hosts.find((candidate) => candidate.id === source.hostId)
-  if (!host) return undefined
+  const openConnection = getFileBackend(source.id)?.fork
+  if (!openConnection) throw new Error('文件会话不可用，请重新打开窗口')
   const editor: EditorTab = {
     id: randomId(),
     kind: 'editor',
     hostId: source.hostId,
+    endpoint: { ...source.endpoint },
     label: entry.name,
     state: 'connecting',
     error: '',
@@ -96,13 +95,11 @@ export async function openEditorTab(fileTabId: string, entry: FileEntry): Promis
   store.bottomPanelOpen = true
   try {
     if (entry.size > MAX_EDIT_SIZE && !await confirmDialog('文件较大', `${entry.name} 大小超过 10 MiB，仍要打开吗？`, { confirmLabel: '继续打开' })) throw new Error('Opening large file was cancelled')
-    const credential = await loadCredentialRecord(host.id)
-    const backend = new SftpWorkerClient()
-    const options: SftpConnectionOptions = { sessionId: editor.sessionId, host: host.address, port: host.port, username: host.username, password: credential?.password ?? getRuntimePassword(host.address) ?? (() => { throw new Error('SFTP credentials are unavailable for this host') })(), defaultPath: source.file.cwd }
-    await backend.connect(options)
-    registerSftpSession(editor.id, backend)
-    const stat = await backend.stat(entry.path)
-    const content = decodeFile(await backend.read(entry.path, 0, stat.size))
+    const backend = await openConnection()
+    if (!store.tabs.some((item) => item.id === editor.id)) { await backend.disconnect(); return editor }
+    registerFileSession(editor.id, backend)
+    const stat = await backend.stat(entry.path, true)
+    const content = decodeFile(await readFileContents(backend, entry.path, stat.size))
     const reactive = store.tabs.find((candidate) => candidate.id === editor.id) as EditorTab | undefined
     if (!reactive) return editor
     reactive.state = 'online'
@@ -121,14 +118,14 @@ export async function openEditorTab(fileTabId: string, entry: FileEntry): Promis
 // contentVersion tells the editor view to rebuild its document.
 export async function reopenEditorTab(tabId: string, encoding: string): Promise<void> {
   const tab = store.tabs.find((candidate) => candidate.id === tabId) as EditorTab | undefined
-  const backend = getSftpBackend(tabId)
+  const backend = getFileBackend(tabId)
   if (!tab || !backend) throw new Error('Editor session is unavailable')
   if (tab.editor.dirty) {
     const confirmed = await confirmDialog('以该编码重新打开', '当前文件有未保存的修改，重新打开将丢弃这些修改。', { confirmLabel: '丢弃修改并重新打开', danger: true })
     if (!confirmed) return
   }
-  const stat = await backend.stat(tab.editor.path)
-  const decoded = decodeFile(await backend.read(tab.editor.path, 0, stat.size), encoding)
+  const stat = await backend.stat(tab.editor.path, true)
+  const decoded = decodeFile(await readFileContents(backend, tab.editor.path, stat.size), encoding)
   tab.editor = { ...tab.editor, ...decoded, size: stat.size, dirty: false, contentVersion: tab.editor.contentVersion + 1 }
 }
 
@@ -143,12 +140,11 @@ export function setEditorEncoding(tabId: string, encoding: string, bom: boolean)
 
 export async function saveEditorTab(tabId: string): Promise<void> {
   const tab = store.tabs.find((candidate) => candidate.id === tabId) as EditorTab | undefined
-  const backend = getSftpBackend(tabId)
+  const backend = getFileBackend(tabId)
   if (!tab || !backend) throw new Error('Editor session is unavailable')
   const payload = encodeFile(tab.editor)
-  const memorySource: SftpBackend = {
+  const memorySource: FileBackend = {
     paths: backend.paths,
-    connect: async () => undefined,
     disconnect: async () => undefined,
     list: async () => ({ path: '/', entries: [] }),
     stat: async () => ({ name: tab.editor.path, path: tab.editor.path, kind: 'file', size: payload.byteLength, modifiedAt: Date.now() }),

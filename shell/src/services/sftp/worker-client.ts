@@ -1,4 +1,5 @@
 import { FileOperationError } from '../files/types'
+import type { FileBackend } from '../files/types'
 import { posixPaths } from '../files/path'
 import { randomId } from '../../utils/id'
 import { transferablesForRequest } from './worker-protocol'
@@ -9,6 +10,7 @@ import type { SftpBackend, SftpConnectionOptions, SftpDirectoryPage, SftpRequest
 export class SftpWorkerClient implements SftpBackend {
   readonly paths = posixPaths
   namespace = ''
+  fork?: () => Promise<FileBackend>
   private readonly worker: Worker
   private readonly pending = new Map<string, { resolve: (response: SftpResponse) => void; reject: (error: Error) => void }>()
   private host = ''

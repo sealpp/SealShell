@@ -1,4 +1,3 @@
-import { basenameRemotePath, joinRemotePath, normalizeRemotePath } from './path'
 import { isVisibleFileEntry, sortFileEntries } from './sort'
 import type { FileEntry, FileSortDirection, FileSortKey } from '../../stores/app'
 import { statIfExists, type FileBackend, type FileDirectoryPage } from '../files/types'
@@ -63,12 +62,4 @@ export async function copyEntry(
     }
     throw error
   }
-}
-
-export async function moveEntry(backend: FileBackend, sourcePath: string, targetPath: string, overwrite = false): Promise<{ atomic: boolean }> {
-  return backend.rename(normalizeRemotePath(sourcePath), normalizeRemotePath(targetPath), overwrite)
-}
-
-export function targetNameForEntry(sourcePath: string, targetDirectory: string): string {
-  return joinRemotePath(targetDirectory, basenameRemotePath(sourcePath))
 }

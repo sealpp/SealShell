@@ -10,6 +10,7 @@ export interface FileBackend {
   readonly paths: FilePaths
   namespace?: string
   atomicReplace?: boolean
+  fork?(): Promise<FileBackend>
   disconnect(): Promise<void>
   list(path: string, cursor?: string): Promise<FileDirectoryPage>
   stat(path: string, followLinks?: boolean): Promise<FileEntry>

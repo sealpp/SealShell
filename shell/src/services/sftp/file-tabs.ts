@@ -1,103 +1,88 @@
 import { randomId } from '../../utils/id'
-import { loadCredentialRecord } from '../vault'
-import { setBottomPanelActiveTab, store, type FileEntry, type FileTab, type HostProfile } from '../../stores/app'
-import { normalizeRemotePath, parentRemotePath, joinRemotePath } from './path'
+import { setBottomPanelActiveTab, store, type FileTab, type HostProfile } from '../../stores/app'
 import { listDirectory } from './operations'
-import { copyEntry, moveEntry, targetNameForEntry } from './operations'
-import { canPasteSftpClipboard, clearSftpClipboardAfterPaste, createSftpClipboardPayload } from './clipboard'
-import { enqueueTransfer } from './transfer-runtime'
-import { TransferCancelledError } from './transfer'
-import { SftpWorkerClient } from './worker-client'
-import { getRuntimePassword } from '../ssh'
-import type { SftpBackend, SftpConnectionOptions } from './types'
+import { createSftpClipboardPayload } from './clipboard'
+import { connectFileEndpoint } from '../files/connect'
+import { NodeFileBackend } from '../files/node-backend'
+import { posixPaths } from '../files/path'
+import type { FileBackend, FileEndpoint } from '../files/types'
+import { readMeta, saveMeta } from '../storage'
+import { transferFileEntries } from '../files/transfers'
 
-const sessions = new Map<string, SftpBackend>()
-let backendFactory: () => SftpBackend = () => new SftpWorkerClient()
+const sessions = new Map<string, FileBackend>()
+const listings = new Map<string, number>()
 
-export function setSftpBackendFactory(factory: () => SftpBackend): void {
-  backendFactory = factory
+export function getFileBackend(tabId: string): FileBackend | undefined { return sessions.get(tabId) }
+export function registerFileSession(tabId: string, backend: FileBackend): void { sessions.set(tabId, backend) }
+
+export function fileTabLabel(tab: FileTab): string {
+  const owner = tab.endpoint.kind === 'local' ? '本地' : store.hosts.find((host) => host.id === tab.hostId)?.name || 'SFTP'
+  return `${owner}: ${tab.file.cwd}`
 }
 
-export function getSftpBackend(tabId: string): SftpBackend | undefined {
-  return sessions.get(tabId)
-}
-
-export function registerSftpSession(tabId: string, backend: SftpBackend): void {
-  sessions.set(tabId, backend)
-}
-
-function createFileState(path: string) {
-  const normalized = normalizeRemotePath(path)
-  return {
-    cwd: normalized,
-    defaultPath: normalized,
-    history: [normalized],
-    historyIndex: 0,
-    entries: [] as FileEntry[],
-    selectedPaths: [] as string[],
-    sortKey: 'name' as const,
-    sortDirection: 'asc' as const,
-    showHidden: false,
-    loading: true,
-    error: '',
-  }
-}
-
-export function createFileTab(host: HostProfile, _sourceTabId: string, initialPath = '/'): FileTab {
+function newFileTab(endpoint: FileEndpoint, initialPath: string, splitBeside?: string): FileTab {
   const tab: FileTab = {
-    id: randomId(),
-    kind: 'file',
-    hostId: host.id,
-    label: `文件: ${normalizeRemotePath(initialPath)}`,
-    state: 'connecting',
-    error: '',
-    sessionId: randomId(),
-    terminalId: randomId(),
-    telemetry: null,
-    encoding: 'utf-8',
-    cwd: normalizeRemotePath(initialPath),
-    file: createFileState(initialPath),
+    id: randomId(), kind: 'file', endpoint,
+    ...(endpoint.kind === 'sftp' ? { hostId: endpoint.hostId } : {}),
+    fileSplitBeside: splitBeside,
+    label: endpoint.kind === 'local' ? '本地' : 'SFTP',
+    state: 'connecting', error: '', sessionId: randomId(), terminalId: '', telemetry: null, encoding: 'utf-8', cwd: initialPath,
+    file: { cwd: initialPath, defaultPath: initialPath, history: [initialPath], historyIndex: 0, entries: [], selectedPaths: [], sortKey: 'name', sortDirection: 'asc', showHidden: false, loading: true, error: '' },
   }
   store.tabs.push(tab)
   setBottomPanelActiveTab(tab.id, 'files')
   store.bottomPanelOpen = true
   store.view = 'shell'
-  void startFileTab(tab, host)
+  void startFileTab(tab.id)
   return tab
 }
 
-async function startFileTab(tab: FileTab, host: HostProfile): Promise<void> {
-  const reactiveTab = store.tabs.find((candidate) => candidate.id === tab.id) as FileTab | undefined
-  if (!reactiveTab) return
+export function createFileTab(host: HostProfile, _sourceTabId: string, initialPath = '/'): FileTab {
+  return newFileTab({ kind: 'sftp', hostId: host.id }, posixPaths.normalize(initialPath))
+}
+export function createLocalFileTab(split = false): FileTab {
+  return newFileTab({ kind: 'local', nodeId: '' }, '', split ? store.activeFileTabId || undefined : undefined)
+}
+
+async function startFileTab(tabId: string): Promise<void> {
+  const tab = store.tabs.find((item) => item.id === tabId) as FileTab | undefined
+  if (!tab) return
+  let backend: FileBackend | undefined
   try {
-    const credential = await loadCredentialRecord(host.id)
-    const options: SftpConnectionOptions = {
-      sessionId: reactiveTab.sessionId,
-      host: host.address,
-      port: host.port,
-      username: host.username,
-      password: credential?.password ?? getRuntimePassword(host.address) ?? (() => { throw new Error('SFTP credentials are unavailable for this host') })(),
-      defaultPath: reactiveTab.file.defaultPath,
+    backend = await connectFileEndpoint(tab.endpoint)
+    if (!store.tabs.some((item) => item.id === tabId)) { await backend.disconnect(); return }
+    sessions.set(tabId, backend)
+    let initialPath = tab.file.cwd
+    let fallbackNotice = ''
+    if (backend instanceof NodeFileBackend) {
+      tab.endpoint = { kind: 'local', nodeId: backend.nodeId }
+      tab.file.roots = backend.info.roots
+      const recent = await readMeta<{ key: string; path: string }>(`localDirectory:${backend.nodeId}`)
+      initialPath = recent?.path ?? backend.info.home
+      tab.file.defaultPath = backend.info.home
+      try { if ((await backend.stat(initialPath, true)).kind !== 'directory') throw new Error('不是目录') }
+      catch (error) { fallbackNotice = `无法打开最近目录 ${initialPath}，已回到主目录：${error instanceof Error ? error.message : String(error)}`; initialPath = backend.info.home }
+    } else {
+      try { if ((await backend.stat(initialPath, true)).kind !== 'directory') throw new Error('不是目录') }
+      catch (error) {
+        fallbackNotice = `无法打开终端目录 ${initialPath}，已回到根目录：${error instanceof Error ? error.message : String(error)}`
+        initialPath = '/'
+        tab.file.defaultPath = '/'
+      }
     }
-    const backend = backendFactory()
-    await backend.connect(options)
-    sessions.set(reactiveTab.id, backend)
-    try {
-      await backend.stat(reactiveTab.file.cwd)
-    } catch {
-      reactiveTab.file.cwd = '/'
-      reactiveTab.file.defaultPath = '/'
-      reactiveTab.file.history = ['/']
-      reactiveTab.file.historyIndex = 0
-      reactiveTab.cwd = '/'
-    }
-    reactiveTab.state = 'online'
-    await refreshFileTab(reactiveTab.id)
+    tab.file.cwd = initialPath
+    tab.cwd = initialPath
+    tab.file.history = [initialPath]
+    tab.state = 'online'
+    await refreshFileTab(tabId)
+    if (fallbackNotice) tab.file.error = fallbackNotice
   } catch (error) {
-    reactiveTab.state = 'error'
-    reactiveTab.error = error instanceof Error ? error.message : String(error)
-    reactiveTab.file.loading = false
-    reactiveTab.file.error = reactiveTab.error
+    await backend?.disconnect()
+    sessions.delete(tabId)
+    tab.state = 'error'
+    tab.error = error instanceof Error ? error.message : String(error)
+    tab.file.error = tab.error
+    tab.file.loading = false
   }
 }
 
@@ -105,113 +90,93 @@ export async function refreshFileTab(tabId: string): Promise<void> {
   const tab = store.tabs.find((candidate) => candidate.id === tabId) as FileTab | undefined
   const backend = sessions.get(tabId)
   if (!tab || !backend) return
+  const generation = (listings.get(tabId) ?? 0) + 1
+  listings.set(tabId, generation)
+  const path = tab.file.cwd
   tab.file.loading = true
   tab.file.error = ''
   try {
-    tab.file.entries = await listDirectory(backend, tab.file.cwd, {
-      showHidden: tab.file.showHidden,
-      sortKey: tab.file.sortKey,
-      sortDirection: tab.file.sortDirection,
-    })
-    tab.label = `文件: ${tab.file.cwd}`
+    const entries = await listDirectory(backend, path, { showHidden: tab.file.showHidden, sortKey: tab.file.sortKey, sortDirection: tab.file.sortDirection })
+    if (listings.get(tabId) !== generation) return
+    tab.file.entries = entries
+    tab.label = fileTabLabel(tab)
+    if (tab.endpoint.kind === 'local') await saveMeta({ key: `localDirectory:${tab.endpoint.nodeId}`, path })
   } catch (error) {
-    tab.file.error = error instanceof Error ? error.message : String(error)
-  } finally {
-    tab.file.loading = false
-  }
+    if (listings.get(tabId) === generation) tab.file.error = error instanceof Error ? error.message : String(error)
+  } finally { if (listings.get(tabId) === generation) tab.file.loading = false }
 }
 
 export async function navigateFileTab(tabId: string, path: string, pushHistory = true): Promise<void> {
   const tab = store.tabs.find((candidate) => candidate.id === tabId) as FileTab | undefined
-  if (!tab) return
-  const next = normalizeRemotePath(path, tab.file.cwd)
-  if (pushHistory) {
-    tab.file.history = tab.file.history.slice(0, tab.file.historyIndex + 1).concat(next)
-    tab.file.historyIndex = tab.file.history.length - 1
-  }
-  tab.file.cwd = next
-  tab.cwd = next
-  tab.file.selectedPaths = []
-  await refreshFileTab(tabId)
+  const backend = sessions.get(tabId)
+  if (!tab || !backend) return
+  try {
+    const next = backend.paths.normalize(path, tab.file.cwd)
+    if ((await backend.stat(next, true)).kind !== 'directory') throw new Error('目标不是目录')
+    if (pushHistory) {
+      tab.file.history = tab.file.history.slice(0, tab.file.historyIndex + 1).concat(next)
+      tab.file.historyIndex = tab.file.history.length - 1
+    }
+    tab.file.cwd = next
+    tab.cwd = next
+    tab.file.selectedPaths = []
+    await refreshFileTab(tabId)
+  } catch (error) { tab.file.error = error instanceof Error ? error.message : String(error) }
 }
-
 export async function navigateParentFileTab(tabId: string): Promise<void> {
   const tab = store.tabs.find((candidate) => candidate.id === tabId) as FileTab | undefined
-  if (tab) await navigateFileTab(tabId, parentRemotePath(tab.file.cwd))
+  const backend = sessions.get(tabId)
+  if (tab && backend) await navigateFileTab(tabId, backend.paths.parent(tab.file.cwd))
 }
-
 export async function closeFileTabSession(tabId: string): Promise<void> {
   const backend = sessions.get(tabId)
   sessions.delete(tabId)
+  listings.delete(tabId)
   await backend?.disconnect().catch(() => undefined)
 }
-
 export async function goBackFileTab(tabId: string): Promise<void> {
   const tab = store.tabs.find((candidate) => candidate.id === tabId) as FileTab | undefined
   if (!tab || tab.file.historyIndex <= 0) return
-  tab.file.historyIndex -= 1
-  tab.file.cwd = tab.file.history[tab.file.historyIndex]
-  await refreshFileTab(tabId)
+  await navigateFileTab(tabId, tab.file.history[--tab.file.historyIndex], false)
 }
-
 export async function goForwardFileTab(tabId: string): Promise<void> {
   const tab = store.tabs.find((candidate) => candidate.id === tabId) as FileTab | undefined
   if (!tab || tab.file.historyIndex >= tab.file.history.length - 1) return
-  tab.file.historyIndex += 1
-  tab.file.cwd = tab.file.history[tab.file.historyIndex]
-  await refreshFileTab(tabId)
+  await navigateFileTab(tabId, tab.file.history[++tab.file.historyIndex], false)
 }
-
 export function copySelectedFileEntries(tabId: string, mode: 'copy' | 'cut'): void {
   const tab = store.tabs.find((candidate) => candidate.id === tabId) as FileTab | undefined
   if (!tab) return
   const entries = tab.file.entries.filter((entry) => tab.file.selectedPaths.includes(entry.path))
   store.sftpClipboard = createSftpClipboardPayload(mode, tab.id, tab.sessionId, entries)
 }
-
 export async function pasteFileTab(tabId: string): Promise<void> {
-  const targetTab = store.tabs.find((candidate) => candidate.id === tabId) as FileTab | undefined
   const clipboard = store.sftpClipboard
-  if (!targetTab || !clipboard || !canPasteSftpClipboard(clipboard, targetTab.sessionId)) return
-  const targetBackend = sessions.get(targetTab.id)
-  const sourceBackend = sessions.get(clipboard.sourceTabId)
-  if (!targetBackend || !sourceBackend) throw new Error('SFTP source or target session is unavailable')
-  const sameSession = clipboard.sourceSessionId === targetTab.sessionId
-  const task = enqueueTransfer(`粘贴到 ${targetTab.file.cwd}`, async (signal) => {
-    let lastResult = { sourcePath: clipboard.entries[0]?.path ?? '', targetPath: targetTab.file.cwd, bytes: 0, atomic: sameSession, metadataApplied: false }
-    for (const entry of clipboard.entries) {
-      if (signal.aborted) throw new TransferCancelledError()
-      const destination = targetNameForEntry(entry.path, targetTab.file.cwd)
-      if (clipboard.mode === 'cut' && sameSession) {
-        const moved = await moveEntry(targetBackend, entry.path, destination)
-        lastResult = { ...lastResult, sourcePath: entry.path, targetPath: destination, atomic: moved.atomic }
-      } else {
-        const results = await copyEntry(sourceBackend, targetBackend, entry.path, destination, signal)
-        lastResult = results[results.length - 1] ?? lastResult
-      }
-    }
-    return lastResult
-  })
-  await task.promise
-  store.sftpClipboard = clearSftpClipboardAfterPaste(clipboard, targetTab.sessionId)
-  await refreshFileTab(targetTab.id)
+  if (!clipboard) return
+  await transferFileEntries(clipboard.sourceTabId, tabId, clipboard.entries.map((entry) => entry.path), undefined, clipboard.mode)
+  if (store.sftpClipboard === clipboard) store.sftpClipboard = null
 }
-
 export async function deleteFileEntries(tabId: string, paths: string[]): Promise<void> {
   const backend = sessions.get(tabId)
-  if (!backend) throw new Error('SFTP session is unavailable')
-  for (const path of paths) await backend.remove(path, true)
-  const tab = store.tabs.find((candidate) => candidate.id === tabId) as FileTab | undefined
-  if (tab) tab.file.selectedPaths = []
+  const tab = store.tabs.find((item) => item.id === tabId) as FileTab | undefined
+  if (!backend || !tab) return
+  for (const path of paths) {
+    const kind = tab.file.entries.find((item) => item.path === path)?.kind
+    await backend.remove(path, kind === 'directory')
+  }
+  tab.file.selectedPaths = []
   await refreshFileTab(tabId)
 }
-
 export async function renameFileEntry(tabId: string, path: string, name: string): Promise<void> {
   const backend = sessions.get(tabId)
-  const tab = store.tabs.find((candidate) => candidate.id === tabId) as FileTab | undefined
-  if (!backend || !tab) throw new Error('SFTP session is unavailable')
-  const trimmed = name.trim()
-  if (!trimmed || trimmed === '.' || trimmed === '..' || /[\\/\u0000]/.test(trimmed)) throw new Error('Invalid remote file name')
-  await moveEntry(backend, path, joinRemotePath(parentRemotePath(path), trimmed))
+  if (!backend) throw new Error('文件会话不可用')
+  await backend.rename(path, backend.paths.join(backend.paths.parent(path), name))
+  await refreshFileTab(tabId)
+}
+export async function createDirectory(tabId: string, name: string): Promise<void> {
+  const backend = sessions.get(tabId)
+  const tab = store.tabs.find((item) => item.id === tabId) as FileTab | undefined
+  if (!backend || !tab) return
+  await backend.mkdir(backend.paths.join(tab.file.cwd, name))
   await refreshFileTab(tabId)
 }

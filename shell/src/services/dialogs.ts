@@ -5,15 +5,22 @@ export interface CheckboxConfirmResult {
   checked: boolean
 }
 
-type DialogResult = boolean | string | null | undefined | CheckboxConfirmResult
+export interface ChoiceResult { value: string; checked: boolean }
+type DialogResult = boolean | string | null | undefined | CheckboxConfirmResult | ChoiceResult
 let activeResolver: ((result: DialogResult) => void) | undefined
+let dialogQueue: Promise<unknown> = Promise.resolve()
 
 function open<T extends DialogResult>(state: InteractionDialogState, fallback: T): Promise<T> {
-  if (store.interactionDialog || activeResolver) return Promise.resolve(fallback)
-  return new Promise<T>((resolve) => {
+  const result = dialogQueue.then(() => new Promise<T>((resolve) => {
     activeResolver = resolve as (result: DialogResult) => void
     store.interactionDialog = state
-  })
+  }))
+  dialogQueue = result.catch(() => fallback)
+  return result
+}
+
+export function choiceDialog(title: string, message: string, choices: Array<{ value: string; label: string }>, checkboxLabel?: string): Promise<ChoiceResult | null> {
+  return open({ kind: 'choice', title, message, choices, checkboxLabel, confirmLabel: '', cancelLabel: '取消', danger: false, value: '', placeholder: '' }, null as ChoiceResult | null)
 }
 
 export function confirmDialog(
