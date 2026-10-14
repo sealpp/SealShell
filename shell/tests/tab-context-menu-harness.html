@@ -36,6 +36,7 @@
       function createTab(id) {
         return {
           id,
+          kind: 'terminal',
           hostId: `host-${id}`,
           label: tabDefinitions[id].label,
           state: 'online',
@@ -50,7 +51,7 @@
 
       const initialIds = singleGroup ? groups.first : [...groups.first, ...groups.second]
       store.tabs.splice(0, store.tabs.length, ...initialIds.map(createTab))
-      store.activeTabId = 'tab-a'
+      store.activeTerminalTabId = 'tab-a'
       store.view = 'shell'
       store.paired = true
       store.deviceId = 'test-device'
@@ -75,7 +76,7 @@
         render() {
           return h('main', {}, [
             h('output', { id: 'tab-ids' }, store.tabs.map((tab) => tab.id).join(',')),
-            h('output', { id: 'active-tab' }, store.activeTabId),
+            h('output', { id: 'active-tab' }, store.activeTerminalTabId),
             h('output', { id: 'view' }, store.view),
             h('section', { id: 'tabs' }, store.tabs.map((tab) => h(TerminalTab, {
               key: tab.id,

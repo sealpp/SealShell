@@ -33,6 +33,7 @@
       function createTab(id) {
         return {
           id,
+          kind: 'terminal',
           hostId: `host-${id}`,
           label: id,
           state: 'idle',
@@ -46,7 +47,7 @@
       }
 
       store.tabs.splice(0, store.tabs.length, createTab('tab-a'), createTab('tab-b'))
-      store.activeTabId = 'tab-a'
+      store.activeTerminalTabId = 'tab-a'
       store.view = 'shell'
       store.panelOpen = true
 

@@ -6,10 +6,10 @@ const crypto = require('crypto');
 const assert = require('assert/strict');
 const REPO = path.resolve(__dirname, '../../..');
 const { chromium } = require(path.join(REPO, 'shell/node_modules/playwright'));
-const PYTHON = path.join(REPO, 'node/.venv/bin/python');
+const PYTHON = process.env.SEAL_PYTHON || path.join(REPO, 'node/.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
 const processes = [];
-const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'seal-files-e2e-'));
-const artifacts = '/tmp/seal-e2e/files';
+const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'seal-files-e2e-中文 空格-'));
+const artifacts = path.join(os.tmpdir(), 'seal-e2e/files');
 fs.mkdirSync(artifacts, { recursive: true });
 const local = path.join(fixture, 'local');
 const remote = path.join(fixture, 'remote');
@@ -34,6 +34,7 @@ function line(proc, expression) {
     let output = '';
     const timer = setTimeout(() => reject(new Error(`Startup timed out: ${output}`)), 15000);
     proc.stdout.on('data', data => { output += data; const match = output.match(expression); if (match) { clearTimeout(timer); resolve(match[1]); } });
+    proc.once('error', error => { clearTimeout(timer); reject(error); });
     proc.once('exit', code => { clearTimeout(timer); reject(new Error(`Process exited ${code}: ${output}`)); });
   });
 }
@@ -144,6 +145,7 @@ async function until(predicate, message, timeout = 45000) {
     await until(() => fs.existsSync(path.join(remote, 'archive')), 'multi-pane target choice failed');
     await page.locator(`.workspace-instance[data-tab-id="${thirdId}"] .workspace-instance-close`).click();
     await until(async () => await page.locator('.file-panel:visible').count() === 2, 'closing split pane failed');
+    await until(async () => (await paneWidths()).reduce((sum, width) => sum + width, 0) >= initialWidths.reduce((sum, width) => sum + width, 0) - 3, 'remaining panes did not reclaim the closed pane');
     const closedWidths = await paneWidths();
     assert(Math.min(...closedWidths) >= initialWidths[0] / 2 - 3, 'closing a split must not compress remaining panes');
     console.log('PASS explicit cut, permanent delete, and multi-pane target choice');
@@ -195,8 +197,8 @@ async function until(predicate, message, timeout = 45000) {
     process.exitCode = 1;
   } finally {
     await browser?.close();
-    for (const proc of processes.reverse()) proc.kill('SIGTERM');
-    await Promise.all(processes.map(proc => proc.exitCode !== null ? Promise.resolve() : new Promise(resolve => proc.once('exit', resolve))));
+    for (const proc of processes.reverse()) if (proc.pid && proc.exitCode === null) proc.kill('SIGTERM');
+    await Promise.all(processes.filter(proc => proc.pid).map(proc => proc.exitCode !== null ? Promise.resolve() : new Promise(resolve => proc.once('exit', resolve))));
     fs.rmSync(fixture, { recursive: true, force: true });
   }
 })();

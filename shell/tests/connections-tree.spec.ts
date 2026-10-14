@@ -27,12 +27,13 @@ test('shrinks username and port before the host label when selected', async ({ p
     const label = element.querySelector<HTMLElement>('.conn-label')!
     const meta = element.querySelector<HTMLElement>('.conn-meta')!
     return {
-      labelOverflow: label.scrollWidth > label.clientWidth,
-      metaOverflow: meta.scrollWidth > meta.clientWidth,
+      labelClippedPixels: label.scrollWidth - label.clientWidth,
+      metaClippedPixels: meta.scrollWidth - meta.clientWidth,
     }
   })
-  expect(overflow.labelOverflow).toBe(false)
-  expect(overflow.metaOverflow).toBe(true)
+  // Integer DOM widths can differ by one pixel with platform-specific fonts.
+  expect(overflow.labelClippedPixels).toBeLessThanOrEqual(1)
+  expect(overflow.metaClippedPixels).toBeGreaterThan(1)
 })
 
 test('opens folder context menu and creates a child folder', async ({ page }) => {

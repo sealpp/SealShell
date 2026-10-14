@@ -17,6 +17,28 @@ SealNode (Python pairing + TCP/UDP relay)
 mock SSH server (asyncssh)
 ```
 
+## 跨平台入口
+
+从仓库根目录执行以下命令，Windows 使用原生 PowerShell，无需 WSL、Bash 或独立 protoc：
+
+```text
+python scripts/setup.py
+python scripts/test.py node
+python scripts/test.py unit
+python scripts/test.py ui
+python scripts/test.py files
+python scripts/test.py ssh
+```
+
+`python scripts/test.py` 按顺序执行上述全部验证及生产构建。Python 环境由 uv 管理并锁定；
+setup 使用清华 PyPI、npmmirror npm 和 Playwright 镜像，并保留其他项目的浏览器缓存。
+`python scripts/dev.py` 同时启动日常开发的 SealNode 和 Vite，Ctrl+C（Windows 也支持 Ctrl+Break）后等待两者退出。
+
+Python 测试入口检查所需端口，发生占用时直接报错，先由使用者关闭已有服务。
+`files` 自行启动所需服务；`ssh` 由 Python 入口启动 Vite、JS runner 启动其余服务。
+Playwright 的浏览器交互保留在 JS/TS 中，解释器路径自动区分 `.venv/Scripts/python.exe` 与 `.venv/bin/python`；
+两条完整链路均可用 `SEAL_PYTHON` 覆盖解释器，并在成功、失败或启动失败后等待自启进程退出。
+
 SealNode 不实现 SSH，也不保存主机或凭据业务数据。完整链路中的 SSH 协议由 PWA/WASM
 Worker 执行；mock SSH 只属于测试依赖。
 
@@ -26,8 +48,9 @@ Worker 执行；mock SSH 只属于测试依赖。
    loopback 且不做 Origin 校验，PWA 端口变化无需调整 Node 配置。
 2. Node WebSocket 默认监听 `17373`，PWA transport 地址在 `shell/src/services/nodeClient.ts`
    中固定使用当前页面 hostname 和该端口。
-3. 如果宿主机已有进程占用 `17373`，不要终止无关进程。将 PWA、mock SSH、SealNode 和
-   Playwright 放进同一个 network namespace；`unshare --net` 后先执行 `ip link set lo up`。
+3. 如果宿主机已有进程占用 `17373`，不要终止无关进程。Windows 先关闭自己启动的开发服务再测试；
+   Linux 可将 PWA、mock SSH、SealNode 和 Playwright 放进同一个 network namespace，
+   `unshare --net` 后先执行 `ip link set lo up`。
 
 示例：
 
@@ -109,14 +132,15 @@ Vite 配置会从已锁定的 npm 依赖复制以下运行时资源到开发/构
 
 ## 文件卫生
 
-- 失败截图和临时日志放在 `/tmp/seal-e2e/`；
+- 失败截图和临时日志放在系统临时目录下的 `seal-e2e/`（Windows 通常为 `$env:TEMP\seal-e2e`）；
 - `node_modules`、`.venv`、`shell/dist`、`shell/src/proto` 和 WASM 运行时复制文件不提交；
 - 测试脚本、端口策略、选择器或链路行为变化时同步更新本 skill。
 
 ## 本机文件工作区
 
 `run-files-e2e.js` 自行启动 Vite、SealNode 和 mock SSH，使用独立的本地/远端/下载目录和
-临时配对文件，并在结束时关闭浏览器、等待子进程退出、清理 fixture。端口被占用时使用隔离网络：
+临时配对文件，并在结束时关闭浏览器、等待子进程退出、清理 fixture。fixture 路径包含中文和空格。
+Linux 端口被占用时可使用隔离网络：
 
 ```bash
 unshare --net -- bash -c 'ip link set lo up; node .agents/skills/seal-e2e/run-files-e2e.js'
@@ -129,8 +153,9 @@ unshare --net -- bash -c 'ip link set lo up; node .agents/skills/seal-e2e/run-fi
 双向复制、拖拽保留源文件、同会话剪切、永久删除、本地编辑、完整远端文本读取，以及刷新后
 关闭标签但记住本地目录。必须用第二块及之后的内容校验 SFTP seek，不能只测小文件。
 刷新后发送快捷键前应等待 `nodeConnected`；`paired` 只表示读到了已保存身份，认证与快捷键初始化可能还未结束。
+关闭分栏后，应等待剩余窗格重新填满文件区再记录宽度；DOM 中剩余两栏不表示 Dockview 布局已完成。
 
-单独协议验证可运行 `./node/.venv/bin/python -m unittest discover -s node/tests -v`，覆盖未认证拒绝、
+单独协议验证可运行 `python scripts/test.py node`，覆盖未认证拒绝、
 句柄隔离、目录分页、块大小与断开回收。Windows/macOS 的路径单元测试不替代相应 OS 实机验证。
 
 不要同时运行共享同一 checkout 的多个 Vite/browser 验证或修改 Worker：配置会复制 WASM 资源，

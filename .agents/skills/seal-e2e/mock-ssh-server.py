@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import re
+import tempfile
 from pathlib import Path
 
 import asyncssh
@@ -20,7 +21,7 @@ class MockSSHServer(asyncssh.SSHServer):
 
 call_count = {"shell": 0, "exec": 0, "probe": 0, "stat": 0}
 state_path = os.environ.get("MOCK_SSH_STATE_PATH")
-mock_sftp_root = Path(os.environ.get("MOCK_SFTP_ROOT", "/tmp/seal-mock-sftp"))
+mock_sftp_root = Path(os.environ.get("MOCK_SFTP_ROOT", str(Path(tempfile.gettempdir()) / "seal-mock-sftp")))
 mock_sftp_root.mkdir(parents=True, exist_ok=True)
 (mock_sftp_root / "README.md").write_text("SealShell SFTP mock\n", encoding="utf-8")
 SAMPLE_COMMAND = (

@@ -12,7 +12,7 @@ if (fs.existsSync(SHELL_NODE_MODULES)) {
 
 const { chromium } = require('playwright');
 
-const PYTHON = process.env.SEAL_PYTHON || path.join(REPO, 'node/.venv/bin/python');
+const PYTHON = process.env.SEAL_PYTHON || path.join(REPO, 'node/.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
 const MOCK_SSH_SCRIPT = path.join(__dirname, 'mock-ssh-server.py');
 const TMP_DIR = path.join(os.tmpdir(), 'seal-e2e');
 const MOCK_SSH_STATE_PATH = path.join(TMP_DIR, 'mock-ssh-state.json');
@@ -21,17 +21,20 @@ const PWA_URL = process.env.PWA_URL || 'http://127.0.0.1:8081';
 function waitForLine(proc, regex) {
   return new Promise((resolve, reject) => {
     const rl = readline.createInterface({ input: proc.stdout });
+    const timer = setTimeout(() => reject(new Error(`${proc.spawnfile} startup timed out`)), 15000);
     const onLine = (line) => {
       process.stdout.write(`[${proc.spawnfile}] ${line}\n`);
       const match = line.match(regex);
       if (match) {
+        clearTimeout(timer);
         rl.off('line', onLine);
         resolve(match[1]);
       }
     };
     rl.on('line', onLine);
     proc.stderr.on('data', (data) => process.stderr.write(`[${proc.spawnfile} stderr] ${data}`));
-    proc.on('exit', (code) => reject(new Error(`${proc.spawnfile} exited with ${code}`)));
+    proc.once('error', (error) => { clearTimeout(timer); reject(error); });
+    proc.once('exit', (code) => { clearTimeout(timer); reject(new Error(`${proc.spawnfile} exited with ${code}`)); });
   });
 }
 
@@ -67,7 +70,7 @@ function generatePythonBindings() {
     encoding: 'utf8',
   });
   if (result.status !== 0) {
-    throw new Error(`failed to generate Python protobuf bindings: ${result.stderr || result.stdout}`);
+    throw new Error(`failed to generate Python protobuf bindings: ${result.error?.message || result.stderr || result.stdout}`);
   }
 }
 
@@ -75,33 +78,35 @@ async function main() {
   generatePythonBindings();
   fs.mkdirSync(TMP_DIR, { recursive: true });
   fs.rmSync(MOCK_SSH_STATE_PATH, { force: true });
-  const sshProc = startProcess(PYTHON, [MOCK_SSH_SCRIPT], {
-    MOCK_SSH_STATE_PATH,
-  });
-  const sshPort = await waitForLine(sshProc, /MOCK_SSH_PORT=(\d+)/);
-  console.log('mock SSH port:', sshPort);
-
   const trustDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'seal-e2e-trust-'));
-  const nodeProc = startProcess(PYTHON, ['-m', 'seal.main'], {
-    SEAL_TRUST_PATH: path.join(trustDirectory, 'trust.json'),
-    SEAL_PORT: '17373',
-  });
-  const pin = await waitForLine(nodeProc, /pairing code: (\d{6})/);
-  console.log('node pairing pin:', pin);
-
-  const browser = await chromium.launch({ headless: true, ...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}) });
-  const context = await browser.newContext();
-  const page = await context.newPage();
+  let sshProc, nodeProc, browser, context, page;
   const browserErrors = [];
-  page.on('console', (message) => {
-    if (message.type() === 'error') {
-      browserErrors.push(message.text());
-      console.error('browser:', message.text());
-    }
-  });
-  page.on('pageerror', (error) => { browserErrors.push(error.message); console.error('page error:', error.message); });
-
   try {
+    sshProc = startProcess(PYTHON, [MOCK_SSH_SCRIPT], {
+      MOCK_SSH_STATE_PATH,
+      MOCK_SFTP_ROOT: path.join(trustDirectory, 'remote'),
+    });
+    const sshPort = await waitForLine(sshProc, /MOCK_SSH_PORT=(\d+)/);
+    console.log('mock SSH port:', sshPort);
+
+    nodeProc = startProcess(PYTHON, ['-m', 'seal.main'], {
+      SEAL_TRUST_PATH: path.join(trustDirectory, 'trust.json'),
+      SEAL_PORT: '17373',
+    });
+    const pin = await waitForLine(nodeProc, /pairing code: (\d{6})/);
+    console.log('node pairing pin:', pin);
+
+    browser = await chromium.launch({ headless: true, ...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}) });
+    context = await browser.newContext();
+    page = await context.newPage();
+    page.on('console', (message) => {
+      if (message.type() === 'error') {
+        browserErrors.push(message.text());
+        console.error('browser:', message.text());
+      }
+    });
+    page.on('pageerror', (error) => { browserErrors.push(error.message); console.error('page error:', error.message); });
+
     await page.goto(PWA_URL);
 
     await page.getByPlaceholder('000000').fill(pin);
@@ -265,14 +270,15 @@ async function main() {
 
     console.log('E2E test passed: PWA protocol client and PWA-owned telemetry follow active-tab lifecycle');
   } catch (error) {
-    await page.screenshot({ path: path.join(TMP_DIR, 'failure.png') });
+    await page?.screenshot({ path: path.join(TMP_DIR, 'failure.png') });
     console.error('Test failed:', error.stack);
     process.exitCode = 1;
   } finally {
-    await context.close();
-    await browser.close();
-    sshProc.kill();
-    nodeProc.kill();
+    await context?.close();
+    await browser?.close();
+    const children = [sshProc, nodeProc].filter(proc => proc?.pid);
+    for (const proc of children) if (proc.exitCode === null) proc.kill();
+    await Promise.all(children.map(proc => proc.exitCode !== null ? Promise.resolve() : new Promise(resolve => proc.once('exit', resolve))));
     fs.rmSync(trustDirectory, { recursive: true, force: true });
     console.log('cleaned up');
   }

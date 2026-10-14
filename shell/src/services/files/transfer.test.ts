@@ -3,7 +3,7 @@ import * as fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { FileOperationError, type FileBackend } from './types'
-import { posixPaths } from './path'
+import { createFilePaths } from './path'
 import { copyEntry } from '../sftp/operations'
 import { transferFile, TransferCancelledError } from '../sftp/transfer'
 
@@ -16,7 +16,7 @@ async function fixture() {
 afterEach(async () => { for (const root of fixtures.splice(0)) await fs.rm(root, { recursive: true, force: true }) })
 
 class DiskBackend implements FileBackend {
-  paths = posixPaths
+  paths = createFilePaths(process.platform === 'win32')
   namespace = 'test-disk'
   failCommit = ''
   failRead = false
