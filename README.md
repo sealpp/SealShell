@@ -13,30 +13,18 @@ Local-first PWA shell console. The PWA owns protocol clients, product logic, and
 
 ## Quick start
 
-### SealNode
+Install Node.js 22 or newer, Python 3.12, and uv. From the repository root:
 
-```bash
-cd node
-uv venv
-uv pip install -e ".[dev]"
-uv run python scripts/generate_proto.py
-uv run python -m seal.main
+```text
+python scripts/setup.py
+python scripts/dev.py
 ```
 
-The Node prints a six-digit pairing code and listens on `127.0.0.1:17373`. Device trust is kept in `seal-trust.json` beside the packaged executable (or beside `node/` in source mode). Set `SEAL_TRUST_PATH` to override the file path.
-
-### PWA
-
-In another shell:
-
-```bash
-cd shell
-npm install
-npm run gen:proto
-npm run dev
-```
+These Python entry points work on Windows, Linux, and macOS. Setup installs locked dependencies using uv and npm, generates both protobuf bindings, and installs Playwright Chromium. The project uses Tsinghua PyPI and npmmirror for downloads. No standalone `protoc` installation is required. Press Ctrl+C to stop both development servers.
 
 Then open `http://127.0.0.1:8080`, enter the pairing code, and add a host. The PWA stores host profiles and encrypted credentials in the browser's IndexedDB. SSH protocol traffic is implemented by the PWA WASM client and transported through SealNode as opaque bytes.
+
+SealNode prints a six-digit pairing code and listens on `127.0.0.1:17373`. Device trust is kept in `seal-trust.json` beside the packaged executable (or beside `node/` in source mode). Set `SEAL_TRUST_PATH` to override the file path.
 
 ## Environment variables
 
@@ -50,9 +38,8 @@ Then open `http://127.0.0.1:8080`, enter the pairing code, and add a host. The P
 
 After changing `contracts/seal.proto`:
 
-```bash
-cd node && uv run python scripts/generate_proto.py
-cd shell && npm run gen:proto
+```text
+uv run --directory node --locked --extra dev python scripts/generate_proto.py --typescript
 ```
 
 Generated files are not committed (see `.gitignore`).
@@ -61,10 +48,8 @@ Generated files are not committed (see `.gitignore`).
 
 Run the Node-side test for pairing, device challenge authentication, and opaque TCP/UDP transport:
 
-```bash
-cd node
-.venv/bin/python scripts/generate_proto.py
-.venv/bin/python scripts/smoke_test.py
+```text
+uv run --directory node --locked --extra dev python scripts/smoke_test.py
 ```
 
 ## Notes
