@@ -188,6 +188,10 @@
   z-index: var(--workbench-layer-dialog);
 }
 
+.workbench-dialog-overlay ~ .workbench-dialog-overlay {
+  background: transparent;
+}
+
 .workbench-alert-overlay {
   z-index: var(--workbench-layer-alert);
 }
