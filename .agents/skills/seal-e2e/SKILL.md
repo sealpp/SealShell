@@ -172,6 +172,11 @@ unshare --net -- bash -c 'ip link set lo up; node .agents/skills/seal-e2e/run-fi
 双向复制、拖拽保留源文件、同会话剪切、永久删除、本地编辑、完整远端文本读取，以及刷新后
 关闭标签但记住本地目录。必须用第二块及之后的内容校验 SFTP seek，不能只测小文件。
 刷新后发送快捷键前应等待 `nodeConnected`；`paired` 只表示读到了已保存身份，认证与快捷键初始化可能还未结束。
+活动连接、传输、后台监控命令或未保存编辑会触发浏览器退出确认。有意刷新使用同目录的
+`confirmReload(page)`，断言出现 `beforeunload` 并接受，不清空活动状态或禁用监听绕过。
+取消关闭使用 `page.close({ runBeforeUnload: true })` 并 dismiss；必须先有真实用户点击。
+取消刷新的测试通过页面内 `location.reload()` 触发，不等待 `page.reload()` 导航完成，
+因为选择留下后该导航不会提交。独立 UI 回归见 `shell/tests/close-protection.spec.ts`。
 关闭分栏后，应等待剩余窗格重新填满文件区再记录宽度；DOM 中剩余两栏不表示 Dockview 布局已完成。
 
 `shell/tests/file-navigation.spec.ts` 属于 `python scripts/test.py ui`：用延后连接的文件会话验证本地/远端

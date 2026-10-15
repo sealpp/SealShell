@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="UTF-8"><title>Close protection harness</title></head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h, onBeforeUnmount } from 'vue'
+      import { store } from '/src/stores/app'
+      import { closeProtection } from '/src/services/close-protection'
+      import { startWorkbenchCloseProtection } from '/src/services/workbench-close-protection'
+      import { enqueueTransfer, cancelTransfer, transferRuntime } from '/src/services/sftp/transfer-runtime'
+      import { TransferCancelledError } from '/src/services/sftp/transfer'
+
+      const jobs = new Map()
+      let releaseMonitor
+      let sequence = 0
+      const result = { sourcePath:'/source', targetPath:'/target', bytes:100, atomic:true, metadataApplied:true }
+      function startTransfer() {
+        const job = {}
+        const task = enqueueTransfer(`transfer ${++sequence}`, signal => new Promise((resolve, reject) => {
+          // Keep cancellation cleanup pending until the test explicitly finishes it.
+          job.finish = () => signal.aborted ? reject(new TransferCancelledError()) : resolve(result)
+        }))
+        jobs.set(task.id, job)
+        void task.promise.catch(() => {})
+      }
+      createApp({
+        setup() {
+          const stop = startWorkbenchCloseProtection(window)
+          onBeforeUnmount(stop)
+          const button = (text, onClick) => h('button', { onClick }, text)
+          return () => h('main', [
+            button('Activate page', () => {}),
+            button('Connect terminal', () => store.tabs.push({ id:'terminal', kind:'terminal', state:'connecting' })),
+            button('Disconnect', () => store.tabs = []),
+            button('Start transfer', startTransfer),
+            button('Cancel transfers', () => [...jobs.keys()].forEach(cancelTransfer)),
+            button('Finish transfer', () => {
+              const entry = [...jobs.entries()].find(([, job]) => job.finish)
+              if (entry) { jobs.delete(entry[0]); entry[1].finish() }
+            }),
+            button('Start monitoring', () => { releaseMonitor = closeProtection.acquire('remote-command') }),
+            button('Stop monitoring', () => releaseMonitor?.()),
+            button('Unmount guard', stop),
+            h('textarea', { 'aria-label':'Editor', onInput: event => {
+              store.tabs = [{ id:'editor', kind:'editor', state:'error', editor:{ dirty:!!event.target.value } }]
+            } }),
+            h('output', { id:'blocked' }, String(closeProtection.blocked.value)),
+            h('output', { id:'tasks' }, transferRuntime.tasks.map(task => task.state).join(',')),
+          ])
+        },
+      }).mount('#app')
+    </script>
+  </body>
+</html>
