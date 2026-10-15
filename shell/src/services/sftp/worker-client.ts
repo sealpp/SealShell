@@ -54,7 +54,14 @@ export class SftpWorkerClient implements SftpBackend {
     const knownHostKey = known ? base64ToBytes(known.publicKey).slice().buffer as ArrayBuffer : undefined
     await this.request({ type: 'connect', options: { ...options, knownHostKey } })
   }
-  async disconnect(): Promise<void> { await this.request({ type: 'disconnect' }); await new Promise((resolve) => setTimeout(resolve, 0)); this.worker.terminate() }
+  async disconnect(): Promise<void> {
+    try { await this.request({ type: 'disconnect' }) }
+    finally {
+      this.worker.terminate()
+      for (const { reject } of this.pending.values()) reject(new Error('SFTP worker closed'))
+      this.pending.clear()
+    }
+  }
   async list(path: string, cursor?: string): Promise<SftpDirectoryPage> { return (await this.request<{ result: SftpDirectoryPage }>({ type: 'list', path, cursor })).result }
   async stat(path: string): Promise<SftpStat> { return (await this.request<{ result: SftpStat }>({ type: 'stat', path })).result }
   async read(path: string, offset?: number, length?: number): Promise<ArrayBuffer> { return (await this.request<{ result: ArrayBuffer }>({ type: 'read', path, offset, length })).result }

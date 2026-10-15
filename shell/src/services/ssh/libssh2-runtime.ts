@@ -220,6 +220,12 @@ export class Libssh2Session {
     if (this.closed) return
     this.closed = true
     try {
+      // SFTP owns a channel and allocates through its parent session.
+      // Release it while that session and its callbacks are still alive.
+      if (this.sftp) {
+        this.module.ssh2_sftp_shutdown(this.sftp)
+        this.sftp = 0
+      }
       if (this.channel) {
         this.module.ssh2_channel_close(this.channel)
         this.module.ssh2_channel_free(this.channel)
@@ -229,10 +235,6 @@ export class Libssh2Session {
         await this.withStrings(['application closed'], ([reason]) => this.pump(() => (this.module as any).ssh2_session_disconnect(this.session, reason)))
         this.module.ssh2_session_free(this.session)
         this.session = 0
-      }
-      if (this.sftp) {
-        this.module.ssh2_sftp_shutdown(this.sftp)
-        this.sftp = 0
       }
       this.module?.ssh2_exit()
     } finally {
