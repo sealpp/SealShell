@@ -15,7 +15,7 @@ import {
 import BottomPanelDock from './BottomPanelDock.vue'
 import { commandService } from '../services/commands'
 
-const MIN_LIST_WIDTH = 160
+const MIN_LIST_WIDTH = 64
 const MAX_LIST_WIDTH = 420
 
 const panelEl = ref<HTMLElement | null>(null)
