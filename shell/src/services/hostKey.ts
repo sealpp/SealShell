@@ -8,11 +8,17 @@ export interface HostKeyPromptState {
 
 let pending: ((accepted: boolean) => void) | undefined
 
-export function requestHostKeyApproval(prompt: HostKeyPromptState): Promise<boolean> {
+export function requestHostKeyApproval(prompt: HostKeyPromptState, signal?: AbortSignal): Promise<boolean> {
+  if (signal?.aborted) return Promise.resolve(false)
   if (pending) return Promise.reject(new Error('another host key prompt is active'))
   store.hostKeyPrompt = prompt
   return new Promise((resolve) => {
-    pending = resolve
+    const cancel = () => respondHostKeyApproval(false)
+    signal?.addEventListener('abort', cancel, { once: true })
+    pending = (accepted) => {
+      signal?.removeEventListener('abort', cancel)
+      resolve(accepted)
+    }
   })
 }
 

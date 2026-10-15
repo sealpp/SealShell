@@ -40,3 +40,23 @@ it('does not wait for a reply from a worker that already crashed', async () => {
   expect(fixture.terminated).toBe(true)
   expect(fixture.events).toEqual([])
 })
+
+it('cancels a pending authentication without waiting for the server', async () => {
+  const fixture = workerFixture()
+  const connecting = fixture.client.connect({ sessionId: 'monitor', host: 'host', port: 22, username: 'user', password: '', shell: false })
+  const rejected = expect(connecting).rejects.toThrow('cancelled')
+  fixture.client.abort()
+  await rejected
+  await fixture.client.close()
+  expect(fixture.terminated).toBe(true)
+})
+
+it('rejects in-flight and subsequent commands when its owner cancels the connection', async () => {
+  const fixture = workerFixture()
+  const pending = fixture.client.exec('sleep 100')
+  const rejected = expect(pending).rejects.toThrow('cancelled')
+  fixture.client.abort()
+  await rejected
+  await expect(fixture.client.exec('uname -s')).rejects.toThrow('closed')
+  expect(fixture.terminated).toBe(true)
+})

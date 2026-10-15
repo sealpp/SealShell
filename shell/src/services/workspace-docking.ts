@@ -1,4 +1,4 @@
-export type BottomPanelCategory = 'files' | 'editors'
+import type { BottomPanelCategory } from '../stores/app'
 
 export interface WorkspaceGroupLayout {
   /** Logical group containing one or more parallel panes. */

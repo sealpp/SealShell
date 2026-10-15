@@ -1,6 +1,6 @@
 import type { Terminal } from '@xterm/xterm'
 
-export type CommandArea = 'global' | 'host' | 'node' | 'terminal' | 'file' | 'editor' | 'tab'
+export type CommandArea = 'global' | 'host' | 'node' | 'terminal' | 'file' | 'editor' | 'monitor' | 'tab'
 
 export interface CommandContext {
   area: CommandArea

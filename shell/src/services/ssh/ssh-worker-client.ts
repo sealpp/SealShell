@@ -14,6 +14,7 @@ export interface WorkerSshOptions {
   columns?: number
   rows?: number
   integrateShell?: boolean
+  shell?: boolean
 }
 
 type WorkerState = 'connecting' | 'online' | 'error' | 'idle'
@@ -26,6 +27,7 @@ export class SshWorkerClient {
   private closeDone?: () => void
   private host = ''
   private port = 0
+  private readonly lifetime = new AbortController()
   onState: ((state: WorkerState, error?: string) => void) | undefined
   onOutput: ((payload: Uint8Array) => void) | undefined
 
@@ -49,6 +51,7 @@ export class SshWorkerClient {
         columns: options.columns,
         rows: options.rows,
         integrateShell: options.integrateShell,
+        shell: options.shell,
         knownHostKey: options.knownHostKey?.slice().buffer,
       },
     }, options.knownHostKey ? [options.knownHostKey.slice().buffer] : [])
@@ -70,6 +73,7 @@ export class SshWorkerClient {
   resize(columns: number, rows: number): void { this.post({ type: 'resize', columns, rows }) }
 
   exec(command: string): Promise<{ stdout: Uint8Array; stderr: Uint8Array; exitCode: number }> {
+    if (this.closed) return Promise.reject(new Error('SSH worker closed'))
     const id = randomId()
     return new Promise((resolve, reject) => {
       this.execPending.set(id, { resolve, reject })
@@ -80,12 +84,17 @@ export class SshWorkerClient {
   async close(): Promise<void> {
     if (this.closed) return this.closing
     this.closed = true
+    this.lifetime.abort()
     this.closing = new Promise(resolve => { this.closeDone = resolve })
     this.worker.postMessage({ type: 'close' })
     await this.closing
     this.worker.terminate()
     for (const pending of this.execPending.values()) pending.reject(new Error('SSH worker closed'))
     this.execPending.clear()
+  }
+
+  abort(): void {
+    this.fail(new Error('SSH connection cancelled'))
   }
 
   private handle(event: any): void {
@@ -104,7 +113,7 @@ export class SshWorkerClient {
       return
     }
     if (event.type === 'hostKey') {
-      void this.approveHostKey(event)
+      void this.approveHostKey(event).catch(error => this.fail(error instanceof Error ? error : new Error(String(error))))
       return
     }
     if (event.type === 'execResult') {
@@ -123,7 +132,8 @@ export class SshWorkerClient {
   }
 
   private async approveHostKey(event: { publicKey: ArrayBuffer; fingerprint: string }): Promise<void> {
-    const accepted = await requestHostKeyApproval({ host: this.host, port: this.port, fingerprint: event.fingerprint })
+    const accepted = await requestHostKeyApproval({ host: this.host, port: this.port, fingerprint: event.fingerprint }, this.lifetime.signal)
+    if (this.closed) return
     if (accepted) {
       // The host and port are already displayed by the connection view; the worker
       // remains the authority that continues the paused libssh2 session.
@@ -146,10 +156,12 @@ export class SshWorkerClient {
   }
 
   private fail(error: Error): void {
+    if (this.closed) { this.closeDone?.(); return }
+    this.closed = true
+    this.lifetime.abort()
     this.onState?.('error', error.message)
     for (const pending of this.execPending.values()) pending.reject(error)
     this.execPending.clear()
-    this.closed = true
     this.worker.terminate()
     this.closeDone?.()
   }

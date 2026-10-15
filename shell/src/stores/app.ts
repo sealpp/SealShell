@@ -5,8 +5,8 @@ import type { HostProxySettings, ProxyProfile, ProxySource } from '../services/p
 
 export type View = 'welcome' | 'shell'
 export type ShellState = 'idle' | 'connecting' | 'online' | 'error'
-export type TabKind = 'terminal' | 'file' | 'editor'
-export type BottomPanelCategory = 'files' | 'editors'
+export type TabKind = 'terminal' | 'file' | 'editor' | 'monitor'
+export type BottomPanelCategory = 'files' | 'editors' | 'monitors'
 export type FocusedDock = 'terminal' | 'bottomPanel'
 
 export type TerminalFontWeight = 400 | 500 | 600 | 700
@@ -159,6 +159,19 @@ export interface EditorTab extends Tab {
   editor: EditorState
 }
 
+export interface MonitorTab extends Tab {
+  kind: 'monitor'
+  hostId: string
+  monitor: {
+    address: string
+    port: number
+    username: string
+    telemetry: Telemetry | null
+    needsPassword: boolean
+    unsupported: boolean
+  }
+}
+
 export interface SftpClipboardState {
   version: 1
   mode: 'copy' | 'cut'
@@ -205,6 +218,8 @@ export interface AppState {
   activeFileTabId: string
   visibleFileTabIds: string[]
   activeEditorTabId: string
+  activeMonitorTabId: string
+  lastFilePanelCategory: 'files' | 'editors'
   bottomPanelCategory: BottomPanelCategory
   focusedDock: FocusedDock
   bottomPanelOpen: boolean
@@ -287,6 +302,8 @@ export const store = reactive<AppState>({
   activeFileTabId: '',
   visibleFileTabIds: [],
   activeEditorTabId: '',
+  activeMonitorTabId: '',
+  lastFilePanelCategory: 'files',
   bottomPanelCategory: 'files',
   focusedDock: 'terminal',
   bottomPanelOpen: false,
@@ -346,8 +363,8 @@ export const store = reactive<AppState>({
   },
 })
 
-export function getActiveBottomPanelTabId(): string {
-  return store.bottomPanelCategory === 'files' ? store.activeFileTabId : store.activeEditorTabId
+export function getActiveBottomPanelTabId(category = store.bottomPanelCategory): string {
+  return category === 'files' ? store.activeFileTabId : category === 'editors' ? store.activeEditorTabId : store.activeMonitorTabId
 }
 
 export function getFocusedTabId(): string {
@@ -356,7 +373,9 @@ export function getFocusedTabId(): string {
 
 export function setBottomPanelActiveTab(tabId: string, category: BottomPanelCategory): void {
   if (category === 'files') store.activeFileTabId = tabId
-  else store.activeEditorTabId = tabId
+  else if (category === 'editors') store.activeEditorTabId = tabId
+  else store.activeMonitorTabId = tabId
+  if (category !== 'monitors') store.lastFilePanelCategory = category
   store.bottomPanelCategory = category
   store.focusedDock = 'bottomPanel'
 }
