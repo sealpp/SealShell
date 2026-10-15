@@ -91,6 +91,23 @@ E2E 必须解析实际六位码，不要写死。测试必须将 `SEAL_TRUST_PAT
 
 交互式 shell 必须保持存活。PWA telemetry 使用独立 libssh2 Worker 的 direct `channel_exec`，
 不依赖 shell marker，也不复用控制连接。
+
+终端连接会先在已认证会话探测 Bash；mock 默认返回空版本，继续走普通交互 shell。
+`run-e2e.js` 启用 OSC 7 目录报告并固定测试密码，覆盖双击、右键新建、Ctrl+反引号、补输密码、
+认证重试与未知目录回退；目录包含中文、空格、单引号、百分号和命令替换符。必须同时验证 shell
+实际目录和 PWA 报告目录，不能只断言复制了状态字段。
+
+设置 `SEAL_E2E_BASH` 为本机 Bash 可执行文件后，SSH runner 会将真实 Bash 进程接入 mock SSH，
+验证自动集成，而不是由 mock 伪造目录报告。Windows 可以使用 Git for Windows 的 Bash，无需 WSL：
+
+```powershell
+$env:SEAL_E2E_HOST = '127.0.0.2'
+$env:SEAL_E2E_BASH = 'C:\path\to\Git\bin\bash.exe'
+python scripts/test.py ssh
+```
+
+真实 Bash 的历史仅写入测试目录。Windows 收尾终止自启 mock SSH 的进程树，再删除 fixture，
+防止子 Bash 仍占用工作目录；不终止其他开发实例。Bash 提示符钩子与退出状态另由单元测试验证。
 AsyncSSH 的 PTY resize 会在 stdin 读取时抛出 `TerminalSizeChanged`，mock 必须消费后继续读取，
 否则终端刚上线即断开，telemetry 也无法开始 exec；不要将其误判为 Node 转发故障。
 

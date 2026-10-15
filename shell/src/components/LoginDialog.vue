@@ -62,7 +62,10 @@ async function login() {
     }
     reconnectTab(tab, h, password.value, { allowLoginDialog: false })
   } else {
-    addTab(h, password.value, store.loginDialogInsertAfterTabId, { allowLoginDialog: false })
+    addTab(h, password.value, store.loginDialogInsertAfterTabId, {
+      allowLoginDialog: false,
+      initialCwd: store.loginDialogInitialCwd,
+    })
   }
 }
 
@@ -72,6 +75,7 @@ function close() {
   store.loginDialogTabId = ''
   store.loginDialogError = ''
   store.loginDialogInsertAfterTabId = ''
+  store.loginDialogInitialCwd = undefined
   password.value = ''
   rememberPassword.value = false
   localError.value = ''

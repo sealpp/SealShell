@@ -42,7 +42,7 @@ registerAction({
     const tab = getTab(ctx)
     if (!tab) return
     const host = store.hosts.find((item) => item.id === tab.hostId)
-    if (host) void connectHost(host, tab.id)
+    if (host) void connectHost(host, tab.id, { initialCwd: tab.cwd })
   },
   keybindings: [{ key: 'Mod+Backquote' }],
   menus: [{ menuId: MenuId.TerminalContext, order: 10 }],

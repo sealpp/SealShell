@@ -136,6 +136,7 @@ export interface Tab {
   telemetryError?: string
   encoding: string
   cwd?: string
+  initialCwd?: string
   afterTabId?: string
   file?: FileWorkspaceState
   editor?: EditorState
@@ -240,6 +241,7 @@ export interface AppState {
   loginDialogTabId: string
   loginDialogError: string
   loginDialogInsertAfterTabId: string
+  loginDialogInitialCwd: string | undefined
   hostKeyPrompt: {
     host: string
     port: number
@@ -318,6 +320,7 @@ export const store = reactive<AppState>({
   loginDialogTabId: '',
   loginDialogError: '',
   loginDialogInsertAfterTabId: '',
+  loginDialogInitialCwd: undefined,
   hostKeyPrompt: null,
   editingHostId: '',
   insertAfterTabId: '',

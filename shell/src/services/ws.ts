@@ -200,6 +200,7 @@ function emitTerminalOutput(sessionId: string, data: Uint8Array): void {
 
 export interface AddTabOptions {
   allowLoginDialog?: boolean
+  initialCwd?: string
 }
 
 export function addTab(host: HostProfile, password: string, insertAfterTabId?: string, options?: AddTabOptions): Tab {
@@ -217,6 +218,7 @@ export function addTab(host: HostProfile, password: string, insertAfterTabId?: s
     terminalId,
     telemetry: null,
     encoding: host.encoding ?? 'utf-8',
+    initialCwd: options?.initialCwd,
   }
 
   if (insertAfterTabId) {
@@ -245,6 +247,7 @@ export function reconnectTab(tab: Tab, host: HostProfile, password: string, opti
   reactiveTab.error = ''
   reactiveTab.telemetry = null
   reactiveTab.telemetryError = ''
+  reactiveTab.cwd = undefined
   reactiveTab.sessionId = randomId()
   void startTab(reactiveTab, host, password, options)
   return reactiveTab
@@ -260,11 +263,12 @@ function isSavedHost(host: HostProfile): boolean {
   return store.hosts.some((item) => item.id === host.id)
 }
 
-function openLoginDialog(host: HostProfile, error: string, tabId = '', insertAfterTabId = ''): void {
+function openLoginDialog(host: HostProfile, error: string, tabId = '', insertAfterTabId = '', initialCwd?: string): void {
   store.loginDialogHostId = host.id
   store.loginDialogTabId = tabId
   store.loginDialogError = error
   store.loginDialogInsertAfterTabId = insertAfterTabId
+  store.loginDialogInitialCwd = initialCwd
   store.loginDialogOpen = true
 }
 
@@ -273,14 +277,14 @@ async function getSavedCredential(hostId: string): Promise<string | undefined> {
   return saved?.password
 }
 
-export async function connectHost(host: HostProfile, insertAfterTabId?: string): Promise<void> {
+export async function connectHost(host: HostProfile, insertAfterTabId?: string, options?: AddTabOptions): Promise<void> {
   try {
     const credential = await getSavedCredential(host.id)
     if (credential === undefined) {
-      openLoginDialog(host, '', '', insertAfterTabId)
+      openLoginDialog(host, '', '', insertAfterTabId, options?.initialCwd)
       return
     }
-    addTab(host, credential, insertAfterTabId)
+    addTab(host, credential, insertAfterTabId, options)
   } catch (error) {
     store.error = error instanceof Error ? error.message : String(error)
   }
@@ -311,7 +315,9 @@ async function startTab(tab: Tab, host: HostProfile, password: string, options?:
       (data) => {
         emitTerminalOutput(reactiveTab.sessionId, data)
       },
+      reactiveTab.initialCwd,
     )
+    delete reactiveTab.initialCwd
     updateTabState(reactiveTab.sessionId, 'online')
     if (store.loginDialogOpen && store.loginDialogHostId === host.id) {
       store.loginDialogOpen = false

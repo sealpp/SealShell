@@ -85,6 +85,9 @@ async function main() {
     sshProc = startProcess(PYTHON, [MOCK_SSH_SCRIPT], {
       MOCK_SSH_STATE_PATH,
       MOCK_SFTP_ROOT: path.join(trustDirectory, 'remote'),
+      MOCK_SSH_REPORT_CWD: '1',
+      MOCK_SSH_PASSWORD: 'test',
+      ...(process.env.SEAL_E2E_BASH ? { MOCK_SSH_BASH: process.env.SEAL_E2E_BASH } : {}),
     });
     const sshPort = await waitForLine(sshProc, /MOCK_SSH_PORT=(\d+)/);
     console.log('mock SSH port:', sshPort);
@@ -168,6 +171,86 @@ async function main() {
 
     await addHost('A');
     if (!hostKeyPromptSeen) throw new Error('first SSH connection did not request host-key confirmation');
+
+    const sourceDirectory = process.env.SEAL_E2E_BASH
+      ? path.join(trustDirectory, 'remote', "中文 path", "a'b;$(touch sentinel) #%=back").replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, drive) => `/${drive.toLowerCase()}`)
+      : "/workspace/中文 path/a'b;$(touch sentinel) #%=back";
+    if (process.env.SEAL_E2E_BASH) fs.mkdirSync(path.join(trustDirectory, 'remote', "中文 path", "a'b;$(touch sentinel) #%=back"), { recursive: true });
+    await page.evaluate(async () => {
+      const { store } = await import('/src/stores/app.ts');
+      window.sealE2eStore = store;
+    });
+
+    const sourceTabId = await page.evaluate(() => window.sealE2eStore.activeTerminalTabId);
+    const initialState = await waitForMockSshState(state => !!state.shell_cwds?.['1'], 'the initial shell directory');
+    const loginDirectory = initialState.shell_cwds['1'];
+    async function waitForSourceDirectory(directory) {
+      await page.waitForFunction(({ id, directory }) => window.sealE2eStore.tabs.find(tab => tab.id === id)?.cwd === directory,
+        { id: sourceTabId, directory });
+    }
+    async function sendSourceCommand(command) {
+      await page.evaluate(async ({ id, command }) => {
+        const { sendTerminalInput } = await import('/src/services/ws.ts');
+        const source = window.sealE2eStore.tabs.find(tab => tab.id === id);
+        sendTerminalInput(source.sessionId, new TextEncoder().encode(`${command}\r`));
+      }, { id: sourceTabId, command });
+    }
+    async function duplicate(trigger, expectedDirectory) {
+      const shellNumber = readMockSshState().shell + 1;
+      await trigger();
+      await waitForMockSshState(state => state.shell_cwds?.[shellNumber] === expectedDirectory, 'the duplicated shell to enter the source directory');
+      await page.waitForFunction(expected => {
+        const store = window.sealE2eStore;
+        const tab = store.tabs.find(tab => tab.id === store.activeTerminalTabId);
+        return tab?.state === 'online' && tab.cwd === expected;
+      }, expectedDirectory);
+      await page.locator('.terminal-tab-close').nth(1).click();
+      await page.locator('.terminal-tab').nth(1).waitFor({ state: 'detached' });
+    }
+
+    await page.locator('.xterm-screen').click();
+    await page.keyboard.type(`cd -- '${sourceDirectory.replace(/'/g, "'\\''")}'`);
+    await page.keyboard.press('Enter');
+    await waitForSourceDirectory(sourceDirectory);
+    await duplicate(() => page.locator('.terminal-tab-label').first().dblclick(), sourceDirectory);
+    await duplicate(async () => {
+      await page.locator('.xterm-screen').click({ button: 'right' });
+      await page.getByRole('menuitem', { name: /^新建终端/ }).click();
+    }, sourceDirectory);
+    await duplicate(async () => {
+      await page.locator('.xterm-screen').click();
+      await page.keyboard.press('Control+Backquote');
+    }, sourceDirectory);
+    if (fs.existsSync(path.join(trustDirectory, 'remote', 'sentinel'))) throw new Error('directory was interpreted as a shell command');
+    console.log('double-click, context menu and keyboard preserve the literal source directory');
+
+    // Keep the original snapshot even if the source changes while login is open.
+    for (const savedPassword of [undefined, 'wrong-password']) {
+      await sendSourceCommand(`cd -- '${sourceDirectory.replace(/'/g, "'\\''")}'`);
+      await waitForSourceDirectory(sourceDirectory);
+      await page.evaluate(async password => {
+        const { saveCredentialRecord } = await import('/src/services/vault.ts');
+        await saveCredentialRecord(window.sealE2eStore.hosts[0].id, { password });
+      }, savedPassword);
+      await duplicate(async () => {
+        await page.locator('.terminal-tab-label').first().dblclick();
+        await page.getByRole('dialog', { name: '登录到 A', exact: true }).waitFor();
+        await sendSourceCommand("cd -- '/'");
+        await waitForSourceDirectory('/');
+        await page.locator('#login-password').fill('test');
+        await page.getByRole('dialog', { name: '登录到 A', exact: true }).getByRole('button', { name: '登录', exact: true }).click();
+      }, sourceDirectory);
+    }
+    console.log('directory snapshots survive missing credentials and authentication retry');
+    await page.evaluate(async () => {
+      const { saveCredentialRecord } = await import('/src/services/vault.ts');
+      const store = window.sealE2eStore;
+      await saveCredentialRecord(store.hosts[0].id, { password: 'test' });
+      store.tabs.find(tab => tab.id === store.activeTerminalTabId).cwd = undefined;
+    });
+    await duplicate(() => page.locator('.terminal-tab-label').first().dblclick(), loginDirectory);
+    console.log('unknown source directory keeps the normal login directory');
+
     const credentialStore = await page.evaluate(() => new Promise((resolve, reject) => {
       const request = indexedDB.open('seal-shell');
       request.onerror = () => reject(request.error);
@@ -272,6 +355,10 @@ async function main() {
 
     console.log('E2E test passed: PWA protocol client and PWA-owned telemetry follow active-tab lifecycle');
   } catch (error) {
+    console.error('terminal state:', await page?.evaluate(async () => {
+      const { store } = await import('/src/stores/app.ts');
+      return store.tabs.map(({ id, cwd, initialCwd, state }) => ({ id, cwd, initialCwd, state }));
+    }).catch(() => undefined));
     await page?.screenshot({ path: path.join(TMP_DIR, 'failure.png') });
     console.error('Test failed:', error.stack);
     process.exitCode = 1;
@@ -279,7 +366,11 @@ async function main() {
     await context?.close();
     await browser?.close();
     const children = [sshProc, nodeProc].filter(proc => proc?.pid);
-    for (const proc of children) if (proc.exitCode === null) proc.kill();
+    for (const proc of children) if (proc.exitCode === null) {
+      if (process.platform === 'win32' && proc === sshProc && process.env.SEAL_E2E_BASH) {
+        spawnSync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
+      } else proc.kill();
+    }
     await Promise.all(children.map(proc => proc.exitCode !== null ? Promise.resolve() : new Promise(resolve => proc.once('exit', resolve))));
     fs.rmSync(trustDirectory, { recursive: true, force: true });
     console.log('cleaned up');
