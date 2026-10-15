@@ -55,7 +55,8 @@ export class Libssh2Error extends Error {
 function errorFor(module: SSH2WASMModule, session: LIBSSH2_SESSION, fallback: string): Libssh2Error {
   const code = module.ssh2_session_last_errno(session)
   const rawMessage = (module as any).ssh2_session_last_error(session)
-  const message = typeof rawMessage === 'number' ? readCString(module, rawMessage) || fallback : rawMessage || fallback
+  const message = code === -6 ? 'libssh2 memory allocation failed'
+    : typeof rawMessage === 'number' ? readCString(module, rawMessage) || fallback : rawMessage || fallback
   return new Libssh2Error(code, message)
 }
 
@@ -300,10 +301,10 @@ export class Libssh2Session {
       }
       return entries
     } finally {
-      this.closeSftpHandle(handle)
       this.module._free(namePtr)
       this.module._free(longPtr)
       this.module._free(attrsPtr)
+      await this.closeSftpHandle(handle)
     }
   }
 
@@ -329,8 +330,8 @@ export class Libssh2Session {
       if (result < 0) throw errorFor(this.module, this.session, 'SFTP read failed')
       return this.module.HEAPU8.slice(buffer, buffer + result).buffer
     } finally {
-      this.closeSftpHandle(handle)
       this.module._free(buffer)
+      await this.closeSftpHandle(handle)
     }
   }
 
@@ -348,8 +349,8 @@ export class Libssh2Session {
         written += result
       }
     } finally {
-      this.closeSftpHandle(handle)
       this.module._free(ptr)
+      await this.closeSftpHandle(handle)
     }
   }
 
@@ -431,9 +432,10 @@ export class Libssh2Session {
     return handle
   }
 
-  private closeSftpHandle(handle: number): void {
+  private async closeSftpHandle(handle: number): Promise<void> {
     const close = (this.module as any).ssh2_sftp_close ?? (this.module as any).ssh2_sftp_close_handle
-    close?.(handle)
+    const result = await this.pump(() => close(handle))
+    if (result !== 0) throw errorFor(this.module, this.session, 'SFTP handle close failed')
   }
 
   private readAttributes(ptr: number): { filesize: number; permissions: number; mtime: number } {
