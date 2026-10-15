@@ -38,6 +38,10 @@ export type SftpRequest =
   | { version: SftpRpcVersion; id: string; type: 'stat'; path: string }
   | { version: SftpRpcVersion; id: string; type: 'read'; path: string; offset?: number; length?: number }
   | { version: SftpRpcVersion; id: string; type: 'write'; path: string; payload: ArrayBuffer; offset?: number }
+  | { version: SftpRpcVersion; id: string; type: 'openReader' | 'openWriter'; path: string }
+  | { version: SftpRpcVersion; id: string; type: 'readHandle'; handle: string; offset: number; length: number }
+  | { version: SftpRpcVersion; id: string; type: 'writeHandle'; handle: string; payload: ArrayBuffer; offset: number }
+  | { version: SftpRpcVersion; id: string; type: 'closeHandle'; handle: string }
   | { version: SftpRpcVersion; id: string; type: 'mkdir'; path: string }
   | { version: SftpRpcVersion; id: string; type: 'remove'; path: string; recursive?: boolean }
   | { version: SftpRpcVersion; id: string; type: 'rename'; source: string; target: string; overwrite?: boolean }
@@ -45,7 +49,6 @@ export type SftpRequest =
   | { version: SftpRpcVersion; id: string; type: 'utimes'; path: string; modifiedAt: number }
   | { version: SftpRpcVersion; id: string; type: 'readlink'; path: string }
   | { version: SftpRpcVersion; id: string; type: 'symlink'; target: string; path: string }
-  | { version: SftpRpcVersion; id: string; type: 'cancel'; requestId: string }
 
 export type SftpRequestInput = SftpRequest extends infer Request
   ? Request extends SftpRequest
@@ -54,7 +57,8 @@ export type SftpRequestInput = SftpRequest extends infer Request
   : never
 
 export type SftpResponse =
-  | { version: SftpRpcVersion; id: string; ok: true; type: 'connected' | 'disconnected' | 'cancelled' | 'mkdir' | 'remove' | 'rename' | 'chmod' | 'utimes' | 'symlink'; result?: unknown }
+  | { version: SftpRpcVersion; id: string; ok: true; type: 'connected' | 'disconnected' | 'closed' | 'mkdir' | 'remove' | 'rename' | 'chmod' | 'utimes' | 'symlink'; result?: unknown }
+  | { version: SftpRpcVersion; id: string; ok: true; type: 'opened'; result: string }
   | { version: SftpRpcVersion; id: string; ok: true; type: 'list'; result: SftpDirectoryPage }
   | { version: SftpRpcVersion; id: string; ok: true; type: 'stat'; result: SftpStat }
   | { version: SftpRpcVersion; id: string; ok: true; type: 'read'; result: ArrayBuffer }

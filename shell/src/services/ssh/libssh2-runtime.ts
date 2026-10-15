@@ -1,4 +1,4 @@
-import { FileOperationError } from '../files/types'
+import { FileOperationError, type FileReader, type FileWriter } from '../files/types'
 import createLibssh2Module, { type LIBSSH2_CHANNEL, type LIBSSH2_SESSION, type SSH2WASMModule } from '@verdigris/libssh2.js'
 import { RoutedTransport } from '../transport/routed-transport'
 import type { ProxyConnection } from '../transport/types'
@@ -10,12 +10,15 @@ const SOCKET_EAGAIN = -6
 const CALLBACK_SEND = 5
 const CALLBACK_RECV = 6
 const BUFFER_SIZE = 64 * 1024
+const FILE_BUFFER_SIZE = 256 * 1024
 
 // libssh2_sftp_open() takes LIBSSH2_FXF_* protocol flags. These are distinct
 // from the POSIX O_* values (for example, CREAT is 0x08 and TRUNC is 0x10).
+const SFTP_FXF_READ = 0x00000001
 const SFTP_FXF_WRITE = 0x00000002
 const SFTP_FXF_CREAT = 0x00000008
 const SFTP_FXF_TRUNC = 0x00000010
+const SFTP_FXF_EXCL = 0x00000020
 
 function kindFromMode(mode: number): 'file' | 'directory' | 'symlink' | 'unknown' {
   const type = mode & 0o170000
@@ -79,6 +82,7 @@ export class Libssh2Session {
   private readonly incoming: Uint8Array[] = []
   private readonly outputHandlers = new Set<(payload: Uint8Array) => void>()
   private handshakeBytes = new Uint8Array()
+  private readonly openFiles = new Set<() => Promise<void>>()
 
   async connect(options: Libssh2SessionOptions): Promise<void> {
     this.module = await createLibssh2Module({
@@ -234,12 +238,12 @@ export class Libssh2Session {
 
   async close(): Promise<void> {
     if (this.closed) return
-    this.closed = true
     try {
+      for (const close of this.openFiles) await close()
       // SFTP owns a channel and allocates through its parent session.
       // Release it while that session and its callbacks are still alive.
       if (this.sftp) {
-        this.module.ssh2_sftp_shutdown(this.sftp)
+        await this.pump(() => this.module.ssh2_sftp_shutdown(this.sftp))
         this.sftp = 0
       }
       if (this.channel) {
@@ -254,6 +258,10 @@ export class Libssh2Session {
       }
       this.module?.ssh2_exit()
     } finally {
+      this.closed = true
+      this.incoming.length = 0
+      this.handshakeBytes = new Uint8Array()
+      this.outputHandlers.clear()
       await this.transport.close()
     }
   }
@@ -322,35 +330,75 @@ export class Libssh2Session {
   }
 
   async readPath(path: string, offset = 0, length = 256 * 1024): Promise<ArrayBuffer> {
-    const handle = await this.openFile(path, 0, 0)
-    const buffer = this.module._malloc(length)
-    try {
-      if (offset) (this.module as any).ssh2_sftp_seek64(handle, BigInt(offset))
-      const result = await this.pump(() => this.module.ssh2_sftp_read(handle, buffer, length))
-      if (result < 0) throw errorFor(this.module, this.session, 'SFTP read failed')
-      return this.module.HEAPU8.slice(buffer, buffer + result).buffer
-    } finally {
-      this.module._free(buffer)
-      await this.closeSftpHandle(handle)
-    }
+    const reader = await this.openReader(path)
+    try { return await reader.read(offset, length) } finally { await reader.close() }
   }
 
   async writePath(path: string, payload: ArrayBuffer, offset = 0): Promise<void> {
-    const handle = await this.openFile(path, SFTP_FXF_WRITE | SFTP_FXF_CREAT | (offset === 0 ? SFTP_FXF_TRUNC : 0), 0o644)
-    const data = new Uint8Array(payload)
-    const ptr = this.module._malloc(Math.max(1, data.length))
-    try {
-      if (offset) (this.module as any).ssh2_sftp_seek64(handle, BigInt(offset))
-      this.module.HEAPU8.set(data, ptr)
-      let written = 0
-      while (written < data.length) {
-        const result = await this.pump(() => this.module.ssh2_sftp_write(handle, ptr + written, data.length - written))
-        if (result <= 0) throw errorFor(this.module, this.session, 'SFTP write failed')
-        written += result
-      }
-    } finally {
-      this.module._free(ptr)
+    const writer = await this.createWriter(path, SFTP_FXF_WRITE | SFTP_FXF_CREAT | (offset === 0 ? SFTP_FXF_TRUNC : 0))
+    try { await writer.write(offset, payload) } finally { await writer.close() }
+  }
+
+  private async fileResource(path: string, flags: number): Promise<{ handle: number; buffer: number; close: () => Promise<void> }> {
+    const handle = await this.openFile(path, flags, 0o644)
+    const buffer = this.module._malloc(FILE_BUFFER_SIZE)
+    if (!buffer) {
       await this.closeSftpHandle(handle)
+      throw new Libssh2Error(-6, 'libssh2 memory allocation failed')
+    }
+    let closing: Promise<void> | undefined
+    const close = (): Promise<void> => {
+      if (!closing) {
+        this.openFiles.delete(close)
+        this.module._free(buffer)
+        closing = this.closeSftpHandle(handle)
+      }
+      return closing
+    }
+    this.openFiles.add(close)
+    return { handle, buffer, close }
+  }
+
+  async openReader(path: string): Promise<FileReader> {
+    const file = await this.fileResource(path, SFTP_FXF_READ)
+    let position = 0
+    return {
+      read: async (offset, length) => {
+        if (offset !== position) (this.module as any).ssh2_sftp_seek64(file.handle, BigInt(offset))
+        const result = await this.pump(() => this.module.ssh2_sftp_read(file.handle, file.buffer, Math.min(length, FILE_BUFFER_SIZE)))
+        if (result < 0) throw errorFor(this.module, this.session, 'SFTP read failed')
+        position = offset + result
+        return this.module.HEAPU8.slice(file.buffer, file.buffer + result).buffer
+      },
+      close: file.close,
+    }
+  }
+
+  async openWriter(path: string): Promise<FileWriter> {
+    return this.createWriter(path, SFTP_FXF_WRITE | SFTP_FXF_CREAT | SFTP_FXF_EXCL)
+  }
+
+  private async createWriter(path: string, flags: number): Promise<FileWriter> {
+    const file = await this.fileResource(path, flags)
+    let position = 0
+    return {
+      write: async (offset, payload) => {
+        if (offset !== position) (this.module as any).ssh2_sftp_seek64(file.handle, BigInt(offset))
+        const data = new Uint8Array(payload)
+        for (let start = 0; start < data.length; start += FILE_BUFFER_SIZE) {
+          const chunk = data.subarray(start, start + FILE_BUFFER_SIZE)
+          this.module.HEAPU8.set(chunk, file.buffer)
+          let written = 0
+          while (written < chunk.length) {
+            const result = await this.pump(() => this.module.ssh2_sftp_write(file.handle, file.buffer + written, chunk.length - written))
+            if (result < 0) throw errorFor(this.module, this.session, 'SFTP write failed')
+            if (result === 0) await this.transport.waitForData(25)
+            written += result
+          }
+        }
+        position = offset + data.length
+      },
+      close: file.close,
     }
   }
 

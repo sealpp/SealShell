@@ -1,5 +1,5 @@
 import { FileOperationError } from '../files/types'
-import type { FileBackend } from '../files/types'
+import type { FileBackend, FileReader, FileWriter } from '../files/types'
 import { posixPaths } from '../files/path'
 import { randomId } from '../../utils/id'
 import { transferablesForRequest } from './worker-protocol'
@@ -66,6 +66,20 @@ export class SftpWorkerClient implements SftpBackend {
   async stat(path: string): Promise<SftpStat> { return (await this.request<{ result: SftpStat }>({ type: 'stat', path })).result }
   async read(path: string, offset?: number, length?: number): Promise<ArrayBuffer> { return (await this.request<{ result: ArrayBuffer }>({ type: 'read', path, offset, length })).result }
   async write(path: string, payload: ArrayBuffer, offset?: number): Promise<void> { await this.request({ type: 'write', path, payload, offset }) }
+  async openReader(path: string): Promise<FileReader> {
+    const { result: handle } = await this.request<{ result: string }>({ type: 'openReader', path })
+    return {
+      read: async (offset, length) => (await this.request<{ result: ArrayBuffer }>({ type: 'readHandle', handle, offset, length })).result,
+      close: async () => { await this.request({ type: 'closeHandle', handle }) },
+    }
+  }
+  async openWriter(path: string): Promise<FileWriter> {
+    const { result: handle } = await this.request<{ result: string }>({ type: 'openWriter', path })
+    return {
+      write: async (offset, payload) => { await this.request({ type: 'writeHandle', handle, offset, payload }) },
+      close: async () => { await this.request({ type: 'closeHandle', handle }) },
+    }
+  }
   async mkdir(path: string): Promise<void> { await this.request({ type: 'mkdir', path }) }
   async remove(path: string, recursive?: boolean): Promise<void> { await this.request({ type: 'remove', path, recursive }) }
   async rename(source: string, target: string, overwrite?: boolean): Promise<{ atomic: boolean }> { return (await this.request<{ result: { atomic: boolean } }>({ type: 'rename', source, target, overwrite })).result }
@@ -73,8 +87,6 @@ export class SftpWorkerClient implements SftpBackend {
   async utimes(path: string, modifiedAt: number): Promise<void> { await this.request({ type: 'utimes', path, modifiedAt }) }
   async readlink(path: string): Promise<string> { return (await this.request<{ result: string }>({ type: 'readlink', path })).result }
   async symlink(target: string, path: string): Promise<void> { await this.request({ type: 'symlink', target, path }) }
-
-  async cancel(requestId: string): Promise<void> { await this.request({ type: 'cancel', requestId }) }
 
   private async handleHostKey(event: { publicKey: ArrayBuffer; fingerprint: string }): Promise<void> {
     let accepted = await requestHostKeyApproval({ host: this.host, port: this.port, fingerprint: event.fingerprint })

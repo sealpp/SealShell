@@ -44,6 +44,8 @@ export function createLibssh2SftpBackend(onHostKey: (publicKey: Uint8Array) => P
     },
     async read(path, offset, length) { if (!session) throw new Error('SFTP session is unavailable'); return session.readPath(normalizeRemotePath(path), offset, length) },
     async write(path, data, offset) { if (!session) throw new Error('SFTP session is unavailable'); await session.writePath(normalizeRemotePath(path), data, offset) },
+    async openReader(path) { if (!session) throw new Error('SFTP session is unavailable'); return session.openReader(normalizeRemotePath(path)) },
+    async openWriter(path) { if (!session) throw new Error('SFTP session is unavailable'); return session.openWriter(normalizeRemotePath(path)) },
     async mkdir(path) { if (!session) throw new Error('SFTP session is unavailable'); await session.mkdirPath(normalizeRemotePath(path)) },
     async remove(path, recursive) { if (!session) throw new Error('SFTP session is unavailable'); await session.removePath(normalizeRemotePath(path), recursive) },
     async rename(source, target, overwrite) { if (!session) throw new Error('SFTP session is unavailable'); return session.renamePath(normalizeRemotePath(source), normalizeRemotePath(target), overwrite) },

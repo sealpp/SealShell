@@ -11,7 +11,7 @@ export function responseError(id: string, code: string, message: string): SftpRe
 }
 
 export function transferablesForRequest(request: SftpRequest): Transferable[] {
-  return request.type === 'write' ? [request.payload] : []
+  return request.type === 'write' || request.type === 'writeHandle' ? [request.payload] : []
 }
 
 export function transferablesForResponse(response: SftpResponse): Transferable[] {
