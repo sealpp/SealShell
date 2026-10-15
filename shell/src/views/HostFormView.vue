@@ -6,6 +6,9 @@ import { DEFAULT_ENCODING, ENCODINGS } from '../services/encodings'
 import { loadCredentialRecord, saveCredentialRecord } from '../services/vault'
 import { randomId } from '../utils/id'
 import UiDialog from '../components/UiDialog.vue'
+import HostProxyFields from '../components/HostProxyFields.vue'
+import { copyHostProxy, defaultHostProxy } from '../services/proxy/types'
+import { validateProxy } from '../services/transport/types'
 
 const name = ref('')
 const address = ref('')
@@ -18,6 +21,9 @@ const saving = ref(false)
 const nameBlurred = ref(false)
 const addressTouched = ref(false)
 const syncing = ref(false)
+const proxy = ref(defaultHostProxy())
+const inlinePasswordChange = ref<string | null | undefined>()
+const savedInlinePassword = ref(false)
 
 onMounted(init)
 
@@ -47,6 +53,12 @@ function init() {
     encoding.value = DEFAULT_ENCODING
   }
   password.value = ''
+  proxy.value = copyHostProxy(h?.proxy)
+  inlinePasswordChange.value = undefined
+  savedInlinePassword.value = false
+  if (h) void loadCredentialRecord(h.id).then(record => {
+    if (store.editingHostId === h.id) savedInlinePassword.value = record?.inlineProxyPassword !== undefined
+  })
   nameBlurred.value = false
   addressTouched.value = false
   syncing.value = false
@@ -86,7 +98,7 @@ function hostFromForm(): HostProfile {
     port: port.value,
     username: username.value,
     encoding: encoding.value,
-    proxy: store.hosts.find(item => item.id === id)?.proxy,
+    proxy: copyHostProxy(proxy.value),
     folderId: store.editingHostId
       ? (store.hosts.find((item) => item.id === store.editingHostId)?.folderId ?? null)
       : store.newHostFolderId,
@@ -102,12 +114,24 @@ function isValid(): boolean {
     localError.value = '地址不能为空'
     return false
   }
+  if (proxy.value.enabled) {
+    try {
+      if (proxy.value.mode === 'inline') validateProxy(proxy.value.inline, inlinePasswordChange.value ?? undefined)
+      else if (!store.proxies.some(item => item.id === proxy.value.savedId)) throw new Error('请选择代理服务器')
+    } catch (reason) { localError.value = reason instanceof Error ? reason.message : String(reason); return false }
+  }
   return true
 }
 
 async function saveCredential(id: string) {
-  if (!password.value) return
-  await saveCredentialRecord(id, { ...await loadCredentialRecord(id), password: password.value })
+  const sshPassword = password.value
+  const proxyPassword = inlinePasswordChange.value
+  if (!sshPassword && proxyPassword === undefined) return
+  const credential = { ...await loadCredentialRecord(id) }
+  if (sshPassword) credential.password = sshPassword
+  if (proxyPassword === null) delete credential.inlineProxyPassword
+  else if (proxyPassword !== undefined) credential.inlineProxyPassword = proxyPassword
+  await saveCredentialRecord(id, credential)
 }
 
 async function saveHost(): Promise<HostProfile | undefined> {
@@ -208,6 +232,7 @@ function close() {
       </select>
     </div>
     <p v-if="localError || store.error" class="error">{{ localError || store.error }}</p>
+    <HostProxyFields v-model="proxy" v-model:password-change="inlinePasswordChange" :host-id="store.editingHostId || undefined" :target="{ host: address, port }" :saved-password="savedInlinePassword" />
 
     <template #actions>
       <button

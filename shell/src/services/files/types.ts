@@ -1,5 +1,6 @@
 import type { FileEntry } from '../../stores/app'
 import type { FilePaths } from './path'
+import type { ProxySource } from '../proxy/types'
 
 export type FileEndpoint = { kind: 'local'; nodeId: string } | { kind: 'sftp'; hostId: string }
 export interface FileDirectoryPage { path: string; entries: FileEntry[]; nextCursor?: string }
@@ -28,7 +29,7 @@ export interface FileBackend {
 }
 
 export class FileOperationError extends Error {
-  constructor(readonly code: string, message: string) { super(message) }
+  constructor(readonly code: string, message: string, readonly proxySource?: ProxySource) { super(message) }
 }
 
 export async function statIfExists(backend: FileBackend, path: string): Promise<FileEntry | undefined> {

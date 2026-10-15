@@ -68,6 +68,7 @@ export async function openEditorTab(fileTabId: string, entry: FileEntry): Promis
     id: randomId(),
     kind: 'editor',
     hostId: source.hostId,
+    proxySource: source.proxySource,
     endpoint: { ...source.endpoint },
     label: entry.name,
     state: 'connecting',

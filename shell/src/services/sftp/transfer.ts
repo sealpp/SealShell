@@ -1,5 +1,6 @@
 import { randomId } from '../../utils/id'
-import { statIfExists, type FileBackend, type FileReader, type FileWriter } from '../files/types'
+import { FileOperationError, statIfExists, type FileBackend, type FileReader, type FileWriter } from '../files/types'
+import type { ProxySource } from '../proxy/types'
 
 const CHUNK_SIZE = 256 * 1024
 
@@ -112,6 +113,7 @@ export interface TransferTaskSnapshot {
   state: TransferTaskState
   progress: number
   error?: string
+  proxySource?: ProxySource
   result?: TransferResult
   orphanPath?: string
 }
@@ -166,6 +168,7 @@ export class TransferQueue {
     if (!item || !['failed', 'cancelled'].includes(item.snapshot.state)) return false
       item.snapshot.state = 'queued'
       item.snapshot.error = undefined
+      item.snapshot.proxySource = undefined
       item.controller = new AbortController()
     item.snapshot.progress = 0
     this.emit(item.snapshot)
@@ -193,6 +196,7 @@ export class TransferQueue {
       }, (error: unknown) => {
         item.snapshot.state = error instanceof TransferCancelledError ? 'cancelled' : 'failed'
         item.snapshot.error = error instanceof Error ? error.message : String(error)
+        if (error instanceof FileOperationError) item.snapshot.proxySource = error.proxySource
         if (error instanceof TransferOrphanError) item.snapshot.orphanPath = error.orphanPath
         item.reject(error)
       }).finally(() => {

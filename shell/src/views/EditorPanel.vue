@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProxyErrorAction from '../components/ProxyErrorAction.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { EditorState } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
@@ -84,6 +85,7 @@ onBeforeUnmount(() => { view?.destroy(); view = undefined })
       <button type="button" title="保存" :disabled="!tab.editor.dirty" @click="save"><IconDeviceFloppy :size="15" /></button>
       <button type="button" title="关闭" @click="commandService.execute('tab.close', { area: 'tab', tabId })"><IconX :size="15" /></button>
     </header>
+    <div v-if="tab.error" class="connection-error">{{ tab.error }} <ProxyErrorAction :source="tab.proxySource" :message="tab.error" /></div>
     <div ref="editorEl" class="editor-host" />
   </div>
 </template>

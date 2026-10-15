@@ -244,6 +244,7 @@ export function reconnectTab(tab: Tab, host: HostProfile, password: string, opti
   reactiveTab.state = 'connecting'
   reactiveTab.error = ''
   reactiveTab.telemetry = null
+  reactiveTab.telemetryError = ''
   reactiveTab.sessionId = randomId()
   void startTab(reactiveTab, host, password, options)
   return reactiveTab

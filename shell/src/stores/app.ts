@@ -133,6 +133,7 @@ export interface Tab {
   sessionId: string
   terminalId: string
   telemetry: Telemetry | null
+  telemetryError?: string
   encoding: string
   cwd?: string
   afterTabId?: string

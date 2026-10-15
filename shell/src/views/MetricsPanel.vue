@@ -4,6 +4,7 @@ import { IconX } from '@tabler/icons-vue'
 import { commandService } from '../services/commands'
 import { store } from '../stores/app'
 import MetricGauge from '../components/MetricGauge.vue'
+import ProxyErrorAction from '../components/ProxyErrorAction.vue'
 
 type MetricStatus = 'normal' | 'warning' | 'critical' | 'unavailable'
 type MetricKind = 'gauge' | 'stat'
@@ -152,6 +153,7 @@ function statusText(metric: MetricCard): string {
         <strong>{{ connectionLabel }}</strong>
         <span>终端连接后显示实时系统状态</span>
       </div>
+      <div v-else-if="activeTab.telemetryError" class="panel-empty"><strong>监控连接失败</strong><span>{{ activeTab.telemetryError }}</span><ProxyErrorAction :source="activeTab.proxySource" :message="activeTab.telemetryError" /><small v-if="activeTab.proxySource">更新代理后请重新连接终端。</small></div>
       <div v-else class="dashboard">
         <article
           v-for="metric in metrics"

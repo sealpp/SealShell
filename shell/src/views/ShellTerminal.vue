@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProxyErrorAction from '../components/ProxyErrorAction.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -287,6 +288,7 @@ onBeforeUnmount(() => {
     :can-open="isTerminalScreenTarget"
   >
     <div class="shell-terminal">
+      <div v-if="tab.state === 'error' && tab.proxySource" class="connection-error"><span>{{ tab.error }}</span><ProxyErrorAction :source="tab.proxySource" :message="tab.error" /></div>
       <div ref="termEl" class="shell-terminal-content" />
     </div>
   </CommandContextMenu>
@@ -294,6 +296,8 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .shell-terminal {
+  display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100%;
   overflow: hidden;
@@ -301,6 +305,8 @@ onBeforeUnmount(() => {
 }
 
 .shell-terminal-content {
+  min-height: 0;
+  flex: 1;
   width: 100%;
   height: 100%;
 }

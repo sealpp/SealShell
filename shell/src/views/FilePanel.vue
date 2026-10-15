@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProxyErrorAction from '../components/ProxyErrorAction.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { IconArrowBackUp, IconArrowForwardUp, IconArrowUp, IconEye, IconRefresh } from '@tabler/icons-vue'
 import CommandContextMenu from '../components/CommandContextMenu.vue'
@@ -185,7 +186,7 @@ onBeforeUnmount(onDragLeave)
           <option value="size:desc">大小 大-小</option><option value="size:asc">大小 小-大</option>
         </select>
       </header>
-      <div v-if="tab.file.error" class="file-error">{{ tab.file.error }}</div>
+      <div v-if="tab.file.error" class="file-error">{{ tab.file.error }} <ProxyErrorAction :source="tab.proxySource" :message="tab.file.error" /></div>
       <div ref="listEl" class="file-list" @scroll="onListScroll">
         <div class="file-list-head"><span>名称</span><span>大小</span><span>修改时间</span><span>类型</span></div>
         <div

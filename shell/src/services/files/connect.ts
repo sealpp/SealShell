@@ -4,7 +4,7 @@ import { copyConnection, type RemoteConnection } from '../proxy/types'
 import { resolveHostConnection } from '../proxy/profiles'
 import { SftpWorkerClient } from '../sftp/worker-client'
 import { NodeFileBackend } from './node-backend'
-import type { FileBackend, FileEndpoint } from './types'
+import { FileOperationError, type FileBackend, type FileEndpoint } from './types'
 
 export async function connectFileEndpoint(endpoint: FileEndpoint, source?: RemoteConnection): Promise<FileBackend> {
   if (endpoint.kind === 'local') {
@@ -32,7 +32,11 @@ export async function connectFileEndpoint(endpoint: FileEndpoint, source?: Remot
     const backend = new SftpWorkerClient()
     backend.fork = open
     try { await backend.connect({ ...options, sessionId: crypto.randomUUID() }) }
-    catch (error) { await backend.disconnect().catch(() => undefined); throw error }
+    catch (error) {
+      await backend.disconnect().catch(() => undefined)
+      if (error instanceof FileOperationError && error.code === 'PROXY_ERROR') throw new FileOperationError(error.code, error.message, options.proxySource)
+      throw error
+    }
     return backend
   }
   return open()

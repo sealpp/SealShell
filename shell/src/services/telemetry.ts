@@ -197,12 +197,16 @@ async function poll(sessionId: string, currentGeneration: number): Promise<void>
     const telemetry = await session.provider.sample(sessionId)
     if (currentGeneration !== generation || !canPoll(sessionId)) return
     const tab = activeTab()
-    if (tab) tab.telemetry = telemetry
+    if (tab) { tab.telemetry = telemetry; tab.telemetryError = '' }
     store.telemetry = telemetry
   } catch (error) {
-    console.error('[telemetry] poll failed', sessionId, error)
     telemetrySessions.delete(sessionId)
-    if (currentGeneration === generation) clearActiveTelemetry()
+    if (currentGeneration === generation) {
+      clearActiveTelemetry()
+      const tab = activeTab()
+      if (tab) tab.telemetryError = error instanceof Error ? error.message : String(error)
+    }
+    if (error instanceof Error && error.message.includes('PROXY_ERROR')) return
   }
 
   if (currentGeneration === generation && canPoll(sessionId)) {
@@ -215,6 +219,7 @@ function reconcile(): void {
   pruneTelemetrySessions()
   const tab = activeTab()
   if (!tab || !canPoll(tab.sessionId)) return
+  tab.telemetryError = ''
 
   const currentGeneration = generation
   void poll(tab.sessionId, currentGeneration)
