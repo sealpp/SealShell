@@ -401,7 +401,6 @@ watch(
   align-items: stretch;
   flex: 0 0 35px;
   min-height: 35px;
-  padding-left: 8px;
   background: #252526;
   border-bottom: 1px solid #333;
 }
