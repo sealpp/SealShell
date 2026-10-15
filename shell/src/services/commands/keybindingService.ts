@@ -2,7 +2,7 @@ import type { CommandContext } from '../context'
 import { commandService, type CommandService } from './commandRegistry'
 import { contextKeyService, type ContextKeyService } from './contextKeys'
 import { keybindingRegistry, type KeybindingRegistry } from './keybindingRegistry'
-import type { KeybindingOverrideRule, ResolvedKeybinding } from './types'
+import type { ResolvedKeybinding } from './types'
 
 function isTextInputTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false
@@ -37,14 +37,6 @@ export class KeybindingService {
     const detach = () => target.removeEventListener('keydown', listener, true)
     this.detach = detach
     return detach
-  }
-
-  setOverrides(rules: KeybindingOverrideRule[]): void {
-    this.registry.setOverrides(rules)
-  }
-
-  resetOverrides(): void {
-    this.registry.resetOverrides()
   }
 
   getBindings(commandId: string, context?: CommandContext): ResolvedKeybinding[] {

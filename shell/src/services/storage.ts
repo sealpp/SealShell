@@ -32,13 +32,6 @@ export interface KnownHostRecord {
   fingerprint: string
 }
 
-export interface KeybindingPreferences {
-  key: 'keybindingPreferences'
-  version: 1
-  overrides: Array<{ commandId: string; key: string | null }>
-  disabled: string[]
-}
-
 export type StoredTerminalPreferences = TerminalPreferences
 
 let database: Promise<IDBDatabase> | undefined

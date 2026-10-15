@@ -27,10 +27,6 @@
       })
 
       keybindingService.attach(window, () => ({ area: 'global', tabId: 'test-tab' }))
-      window.setTestOverride = () => keybindingService.setOverrides([
-        { commandId: 'test.keybinding', key: 'Mod+L' },
-      ])
-      window.resetTestOverride = () => keybindingService.resetOverrides()
       window.getTestLabel = () => keybindingService.getLabel('test.keybinding') || ''
 
       createApp({

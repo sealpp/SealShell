@@ -20,14 +20,6 @@ export interface KeybindingRule {
   args?: unknown
 }
 
-export interface KeybindingOverrideRule {
-  commandId: string
-  key: string | KeyStroke | null
-  when?: WhenClause
-  weight?: number
-  args?: unknown
-}
-
 export interface MenuContribution {
   menuId: string
   commandId?: string
@@ -123,7 +115,6 @@ export interface ResolvedKeybinding {
   args?: unknown
   when?: WhenClause
   weight: number
-  source: 'default' | 'override'
 }
 
 export interface KeybindingMatch {

@@ -229,7 +229,6 @@ export interface AppState {
   settingsModalOpen: boolean
   settingsSection: 'appearance' | 'proxies'
   editingProxyId: string
-  keyboardShortcutsModalOpen: boolean
   aboutModalOpen: boolean
   dirtyCloseConfirm: {
     tabId: string
@@ -312,7 +311,6 @@ export const store = reactive<AppState>({
   settingsModalOpen: false,
   settingsSection: 'appearance',
   editingProxyId: '',
-  keyboardShortcutsModalOpen: false,
   aboutModalOpen: false,
   dirtyCloseConfirm: null,
   interactionDialog: null,

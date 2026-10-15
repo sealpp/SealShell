@@ -22,7 +22,6 @@
       import '/src/services/actions'
       import WorkbenchMenu from '/src/components/WorkbenchMenu.vue'
       import SettingsDialog from '/src/components/SettingsDialog.vue'
-      import KeyboardShortcutsDialog from '/src/components/KeyboardShortcutsDialog.vue'
       import AboutDialog from '/src/components/AboutDialog.vue'
       import { store } from '/src/stores/app'
       import { loadTerminalPreferences } from '/src/services/terminalPreferences'
@@ -30,7 +29,6 @@
       await loadTerminalPreferences()
 
       store.settingsModalOpen = false
-      store.keyboardShortcutsModalOpen = false
       store.aboutModalOpen = false
 
       createApp({
@@ -46,7 +44,6 @@
               h('span', { class: 'statusbar-left' }, 'Node'),
             ]),
             store.settingsModalOpen ? h(SettingsDialog) : null,
-            store.keyboardShortcutsModalOpen ? h(KeyboardShortcutsDialog) : null,
             store.aboutModalOpen ? h(AboutDialog) : null,
           ])
         },

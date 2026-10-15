@@ -5,7 +5,6 @@ import { connect, initializePwa, setNodeDisconnectedHandler } from './services/w
 import { commandService, keybindingService, syncAppContext, ContextKeys } from './services/commands'
 import { startTelemetryService, stopTelemetryService } from './services/telemetry'
 import { startWorkbenchCloseProtection } from './services/workbench-close-protection'
-import { loadKeybindingPreferences } from './services/keybindingPreferences'
 import PairingView from './views/PairingView.vue'
 import HostFormView from './views/HostFormView.vue'
 import LoginDialog from './components/LoginDialog.vue'
@@ -22,7 +21,6 @@ import { IconList } from '@tabler/icons-vue'
 import NodeStatusMenu from './components/NodeStatusMenu.vue'
 import WorkbenchMenu from './components/WorkbenchMenu.vue'
 import SettingsDialog from './components/SettingsDialog.vue'
-import KeyboardShortcutsDialog from './components/KeyboardShortcutsDialog.vue'
 import AboutDialog from './components/AboutDialog.vue'
 import DirtyCloseDialog from './components/DirtyCloseDialog.vue'
 import InteractionDialog from './components/InteractionDialog.vue'
@@ -226,7 +224,6 @@ const stopContextSync = watch(
     store.connectionModalOpen,
     store.loginDialogOpen,
     store.settingsModalOpen,
-    store.keyboardShortcutsModalOpen,
     store.aboutModalOpen,
     store.dirtyCloseConfirm,
     store.interactionDialog,
@@ -244,7 +241,7 @@ const stopContextSync = watch(
       [ContextKeys.panelOpen]: store.panelOpen,
       [ContextKeys.isPaired]: store.paired,
       [ContextKeys.nodeConnected]: store.nodeConnected,
-      [ContextKeys.modalOpen]: store.pairingModalOpen || store.connectionModalOpen || store.loginDialogOpen || store.settingsModalOpen || store.keyboardShortcutsModalOpen || store.aboutModalOpen || !!store.dirtyCloseConfirm || !!store.interactionDialog || !!store.encodingPicker,
+      [ContextKeys.modalOpen]: store.pairingModalOpen || store.connectionModalOpen || store.loginDialogOpen || store.settingsModalOpen || store.aboutModalOpen || !!store.dirtyCloseConfirm || !!store.interactionDialog || !!store.encodingPicker,
     })
   },
   { immediate: true },
@@ -276,7 +273,6 @@ onMounted(async () => {
   try {
     await initializePwa()
     await loadTransferConcurrency()
-    await loadKeybindingPreferences()
     await loadTerminalPreferences()
     if (!store.paired) {
       store.pairingModalOpen = true
@@ -409,7 +405,6 @@ onBeforeUnmount(() => {
     <ConnectionsDeleteConfirm v-if="store.deleteNodeConfirmOpen" />
     <FolderDialog v-if="store.folderModalOpen" />
     <SettingsDialog v-if="store.settingsModalOpen" />
-    <KeyboardShortcutsDialog v-if="store.keyboardShortcutsModalOpen" />
     <AboutDialog v-if="store.aboutModalOpen" />
     <DirtyCloseDialog />
     <InteractionDialog />

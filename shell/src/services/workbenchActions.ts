@@ -3,19 +3,6 @@ import { menuRegistry, registerAction } from './commands'
 import { MenuId } from './actions/menuIds'
 
 registerAction({
-  id: 'workbench.openKeyboardShortcuts',
-  title: '键盘快捷键',
-  description: '查看和配置键盘快捷键',
-  category: 'workbench',
-  run: () => {
-    store.aboutModalOpen = false
-    store.settingsModalOpen = false
-    store.keyboardShortcutsModalOpen = true
-  },
-  menus: [{ menuId: MenuId.Workbench, group: '1_settings', order: 5 }],
-})
-
-registerAction({
   id: 'workbench.openSettings',
   title: '设置',
   description: '打开设置',
