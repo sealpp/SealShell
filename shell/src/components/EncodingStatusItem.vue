@@ -13,7 +13,7 @@ const tab = computed(() => {
 })
 
 const editorTab = computed(() => (tab.value?.kind === 'editor' ? (tab.value as EditorTab) : undefined))
-const visible = computed(() => !!tab.value && tab.value.kind !== 'file')
+const visible = computed(() => tab.value?.kind === 'terminal' || tab.value?.kind === 'editor')
 
 const encodingText = computed(() => {
   const target = tab.value

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { IconDeviceDesktopPlus, IconFile, IconFolder, IconMaximize, IconMaximizeOff, IconX } from '@tabler/icons-vue'
-import { store, type BottomPanelCategory } from '../stores/app'
+import { IconDeviceDesktopPlus, IconFile, IconFolder, IconChartLine, IconMaximize, IconMaximizeOff, IconX } from '@tabler/icons-vue'
+import { getActiveBottomPanelTabId, setBottomPanelActiveTab, store, type BottomPanelCategory } from '../stores/app'
 import {
   BOTTOM_PANEL_DEFAULT_HEIGHT_RATIO,
   BOTTOM_PANEL_MIN_HEIGHT,
@@ -120,8 +120,7 @@ function closePanel(): void {
 }
 
 function selectCategory(category: BottomPanelCategory): void {
-  store.bottomPanelCategory = category
-  store.focusedDock = 'bottomPanel'
+  setBottomPanelActiveTab(getActiveBottomPanelTabId(category), category)
 }
 
 function startResize(event: PointerEvent): void {
@@ -299,7 +298,12 @@ watch(
         @click="selectCategory('editors')"
       >
         <IconFile :size="14" aria-hidden="true" />
-        <span>文件</span>
+        <span>文件编辑</span>
+      </button>
+      <button type="button" role="tab" class="workspace-category"
+        :class="{ active: store.bottomPanelCategory === 'monitors' }"
+        :aria-selected="store.bottomPanelCategory === 'monitors'" @click="selectCategory('monitors')">
+        <IconChartLine :size="14" aria-hidden="true" /><span>性能监测</span>
       </button>
       <div class="workspace-actions">
         <button v-if="store.bottomPanelCategory === 'files'" type="button" class="workspace-action" :disabled="!store.paired"
@@ -332,6 +336,9 @@ watch(
       </div>
       <div class="workspace-category-view" :class="{ active: store.bottomPanelCategory === 'editors' }">
         <BottomPanelDock category="editors" />
+      </div>
+      <div class="workspace-category-view" :class="{ active: store.bottomPanelCategory === 'monitors' }">
+        <BottomPanelDock category="monitors" />
       </div>
     </div>
     <div

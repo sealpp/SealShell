@@ -143,6 +143,15 @@ it('stops on a Node disconnection and retries with the same snapshot', async () 
   expect(tab.state).toBe('online')
 })
 
+it('keeps proxy authentication failures separate from SSH password entry', async () => {
+  fake.connect.mockRejectedValueOnce(new Error('PROXY_ERROR: proxy authentication failed'))
+  const tab = openMonitor('a')!
+  await settle()
+  expect(tab.state).toBe('error')
+  expect(tab.monitor.needsPassword).toBe(false)
+  expect(tab.error).toContain('PROXY_ERROR')
+})
+
 it('releases an unsupported target and never samples it', async () => {
   const exec = vi.fn(async () => result('Darwin\n'))
   const close = vi.fn(async () => undefined)

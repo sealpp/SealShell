@@ -19,7 +19,6 @@ export const ContextKeys = {
   isPaired: 'isPaired',
   nodeConnected: 'nodeConnected',
   sidebarOpen: 'sidebarOpen',
-  panelOpen: 'panelOpen',
   bottomPanelOpen: 'bottomPanelOpen',
   bottomPanelCategory: 'bottomPanelCategory',
   focusedDock: 'focusedDock',

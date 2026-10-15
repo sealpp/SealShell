@@ -3,15 +3,13 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getFocusedTabId, store } from './stores/app'
 import { connect, initializePwa, setNodeDisconnectedHandler } from './services/ws'
 import { commandService, keybindingService, syncAppContext, ContextKeys } from './services/commands'
-import { startTelemetryService, stopTelemetryService } from './services/telemetry'
+import { startMonitoringService, stopMonitoringService } from './services/monitoring/runtime'
 import { startWorkbenchCloseProtection } from './services/workbench-close-protection'
 import PairingView from './views/PairingView.vue'
 import HostFormView from './views/HostFormView.vue'
 import LoginDialog from './components/LoginDialog.vue'
 import MainDock from './views/MainDock.vue'
-import ActionsToolbar from './views/ActionsToolbar.vue'
 import PrimarySidebar from './views/PrimarySidebar.vue'
-import SecondarySidebar from './views/SecondarySidebar.vue'
 import ConnectionsDeleteConfirm from './components/ConnectionsDeleteConfirm.vue'
 import FolderDialog from './components/FolderDialog.vue'
 import TerminalSessionInfo from './components/TerminalSessionInfo.vue'
@@ -32,18 +30,14 @@ import EncodingPickerDialog from './components/EncodingPickerDialog.vue'
 import { loadTransferConcurrency } from './services/sftp/transfer-runtime'
 import { loadTerminalPreferences } from './services/terminalPreferences'
 
-type ResizeSide = 'left' | 'right'
-
 const ACTIVITY_BAR_WIDTH = 48
 const MIN_SIDEBAR_WIDTH = 160
-const MIN_PANEL_WIDTH = 200
 const MIN_TERMINAL_WIDTH = 320
 
 const mainEl = ref<HTMLElement | null>(null)
 const activityEl = ref<HTMLElement | null>(null)
 const sidebarEl = ref<HTMLElement | null>(null)
-const panelEl = ref<HTMLElement | null>(null)
-const resizingSide = ref<ResizeSide | null>(null)
+const resizingSidebar = ref(false)
 let activePointerId: number | null = null
 let lastPointerX = 0
 let resizerEl: HTMLElement | null = null
@@ -51,10 +45,8 @@ let resizeFrame: number | null = null
 let pendingResizeDelta = 0
 
 const sidebarVisible = computed(() => store.sidebarOpen && store.sidebarView === 'connections')
-const panelVisible = computed(() => store.view === 'shell' && store.panelOpen)
 const layoutStyle = computed(() => ({
   '--sidebar-width': `${store.sidebarWidth}px`,
-  '--panel-width': `${store.panelWidth}px`,
 }))
 
 function toggleConnections() {
@@ -67,78 +59,21 @@ function getTerminalWidth(): number {
   const sidebarWidth = sidebarVisible.value
     ? sidebarEl.value?.offsetWidth ?? store.sidebarWidth
     : 0
-  const panelWidth = panelVisible.value
-    ? panelEl.value?.offsetWidth ?? store.panelWidth
-    : 0
-
-  return Math.max(0, mainWidth - activityWidth - sidebarWidth - panelWidth)
+  return Math.max(0, mainWidth - activityWidth - sidebarWidth)
 }
 
-function resizeLeft(deltaX: number) {
-  if (deltaX < 0) {
-    store.sidebarWidth = Math.max(MIN_SIDEBAR_WIDTH, store.sidebarWidth + deltaX)
-    return
-  }
-
-  let remaining = deltaX
-  const centerCapacity = Math.max(0, getTerminalWidth() - MIN_TERMINAL_WIDTH)
-  const centerShrink = Math.min(remaining, centerCapacity)
-  remaining -= centerShrink
-
-  const panelCapacity = panelVisible.value
-    ? Math.max(0, store.panelWidth - MIN_PANEL_WIDTH)
-    : 0
-  const panelShrink = Math.min(remaining, panelCapacity)
-  remaining -= panelShrink
-
-  const applied = deltaX - remaining
-  if (applied <= 0) return
-
-  store.sidebarWidth += applied
-  store.panelWidth -= panelShrink
-}
-
-function resizeRight(deltaX: number) {
-  const panelDelta = -deltaX
-
-  if (panelDelta < 0) {
-    store.panelWidth = Math.max(MIN_PANEL_WIDTH, store.panelWidth + panelDelta)
-    return
-  }
-
-  let remaining = panelDelta
-  const centerCapacity = Math.max(0, getTerminalWidth() - MIN_TERMINAL_WIDTH)
-  const centerShrink = Math.min(remaining, centerCapacity)
-  remaining -= centerShrink
-
-  const sidebarCapacity = sidebarVisible.value
-    ? Math.max(0, store.sidebarWidth - MIN_SIDEBAR_WIDTH)
-    : 0
-  const sidebarShrink = Math.min(remaining, sidebarCapacity)
-  remaining -= sidebarShrink
-
-  const applied = panelDelta - remaining
-  if (applied <= 0) return
-
-  store.panelWidth += applied
-  store.sidebarWidth -= sidebarShrink
-}
-
-function resize(side: ResizeSide, deltaX: number) {
-  if (side === 'left') {
-    resizeLeft(deltaX)
-  } else {
-    resizeRight(deltaX)
-  }
+function resizeSidebar(deltaX: number) {
+  const available = deltaX > 0 ? Math.max(0, getTerminalWidth() - MIN_TERMINAL_WIDTH) : deltaX
+  store.sidebarWidth = Math.max(MIN_SIDEBAR_WIDTH, store.sidebarWidth + Math.min(deltaX, available))
 }
 
 function applyPendingResize() {
   resizeFrame = null
-  if (!resizingSide.value || pendingResizeDelta === 0) return
+  if (!resizingSidebar.value || pendingResizeDelta === 0) return
 
   const deltaX = pendingResizeDelta
   pendingResizeDelta = 0
-  resize(resizingSide.value, deltaX)
+  resizeSidebar(deltaX)
 }
 
 function queueResize(deltaX: number) {
@@ -154,22 +89,22 @@ function flushPendingResize() {
     resizeFrame = null
   }
 
-  if (!resizingSide.value || pendingResizeDelta === 0) return
+  if (!resizingSidebar.value || pendingResizeDelta === 0) return
 
   const deltaX = pendingResizeDelta
   pendingResizeDelta = 0
-  resize(resizingSide.value, deltaX)
+  resizeSidebar(deltaX)
 }
 
-function startResize(side: ResizeSide, event: PointerEvent) {
-  if (event.button !== 0 || resizingSide.value) return
+function startResize(event: PointerEvent) {
+  if (event.button !== 0 || resizingSidebar.value) return
 
   const target = event.currentTarget
   if (!(target instanceof HTMLElement)) return
 
   event.preventDefault()
   pendingResizeDelta = 0
-  resizingSide.value = side
+  resizingSidebar.value = true
   activePointerId = event.pointerId
   lastPointerX = event.clientX
   resizerEl = target
@@ -177,7 +112,7 @@ function startResize(side: ResizeSide, event: PointerEvent) {
 }
 
 function moveResize(event: PointerEvent) {
-  if (activePointerId !== event.pointerId || !resizingSide.value) return
+  if (activePointerId !== event.pointerId || !resizingSidebar.value) return
 
   event.preventDefault()
   const deltaX = event.clientX - lastPointerX
@@ -194,7 +129,7 @@ function endResize(event?: PointerEvent) {
   flushPendingResize()
   const pointerId = activePointerId
   const target = resizerEl
-  resizingSide.value = null
+  resizingSidebar.value = false
   activePointerId = null
   lastPointerX = 0
   resizerEl = null
@@ -212,12 +147,12 @@ const stopContextSync = watch(
     store.activeTerminalTabId,
     store.activeFileTabId,
     store.activeEditorTabId,
+    store.activeMonitorTabId,
     store.bottomPanelCategory,
     store.focusedDock,
     store.bottomPanelOpen,
     store.tabs.map((tab) => `${tab.id}:${tab.state}`).join(','),
     store.sidebarOpen,
-    store.panelOpen,
     store.paired,
     store.nodeConnected,
     store.pairingModalOpen,
@@ -238,7 +173,6 @@ const stopContextSync = watch(
       [ContextKeys.bottomPanelCategory]: store.bottomPanelCategory,
       [ContextKeys.bottomPanelOpen]: store.bottomPanelOpen,
       [ContextKeys.sidebarOpen]: store.sidebarOpen,
-      [ContextKeys.panelOpen]: store.panelOpen,
       [ContextKeys.isPaired]: store.paired,
       [ContextKeys.nodeConnected]: store.nodeConnected,
       [ContextKeys.modalOpen]: store.pairingModalOpen || store.connectionModalOpen || store.loginDialogOpen || store.settingsModalOpen || store.aboutModalOpen || !!store.dirtyCloseConfirm || !!store.interactionDialog || !!store.encodingPicker,
@@ -283,7 +217,7 @@ onMounted(async () => {
     store.error = error instanceof Error ? error.message : String(error)
   }
   if (disposed) return
-  startTelemetryService()
+  startMonitoringService()
   keybindingService.attach(window, () => {
     const tabId = getFocusedTabId()
     const tab = store.tabs.find((item) => item.id === tabId)
@@ -303,7 +237,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   disposed = true
   stopCloseProtection()
-  stopTelemetryService()
+  stopMonitoringService()
   endResize()
   setNodeDisconnectedHandler(undefined)
   keybindingService.dispose()
@@ -321,7 +255,7 @@ onBeforeUnmount(() => {
     <div
       ref="mainEl"
       class="main"
-      :class="{ resizing: resizingSide !== null }"
+      :class="{ resizing: resizingSidebar }"
       :style="layoutStyle"
     >
       <div ref="activityEl" class="activity">
@@ -346,9 +280,9 @@ onBeforeUnmount(() => {
       <div
         v-if="sidebarVisible"
         class="panel-resizer"
-        :class="{ dragging: resizingSide === 'left' }"
+        :class="{ dragging: resizingSidebar }"
         aria-hidden="true"
-        @pointerdown="startResize('left', $event)"
+        @pointerdown="startResize($event)"
         @pointermove="moveResize"
         @pointerup="endResize"
         @pointercancel="endResize"
@@ -358,7 +292,6 @@ onBeforeUnmount(() => {
         <div v-if="store.view === 'shell'" class="shell-workspace" :class="{ 'bottom-panel-maximized': store.bottomPanelMaximized }">
           <div class="main-dock-container">
             <MainDock />
-            <ActionsToolbar />
           </div>
           <BottomPanel />
         </div>
@@ -372,20 +305,6 @@ onBeforeUnmount(() => {
           <p v-else>选择左侧主机（支持 Ctrl/Shift 多选），或右键批量操作。</p>
         </div>
       </div>
-      <div
-        v-if="panelVisible"
-        class="panel-resizer"
-        :class="{ dragging: resizingSide === 'right' }"
-        aria-hidden="true"
-        @pointerdown="startResize('right', $event)"
-        @pointermove="moveResize"
-        @pointerup="endResize"
-        @pointercancel="endResize"
-        @lostpointercapture="endResize"
-      ></div>
-      <aside ref="panelEl" class="panel secondary-sidebar" :class="{ collapsed: !panelVisible }">
-        <SecondarySidebar />
-      </aside>
     </div>
     <div class="statusbar">
       <NodeStatusMenu />
@@ -613,7 +532,6 @@ button, input {
 }
 
 .main-dock-container {
-  --actions-toolbar-width: 44px;
   position: relative;
   flex: 1;
   min-width: 0;
@@ -659,29 +577,6 @@ button, input {
   font-size: 13px;
   text-align: center;
   max-width: 320px;
-}
-
-.panel {
-  box-sizing: border-box;
-  flex: 0 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  background: #252526;
-  border-left: 1px solid #1f1f1f;
-  overflow: hidden;
-}
-
-.panel.secondary-sidebar {
-  width: var(--panel-width, 280px);
-  min-width: 200px;
-}
-
-.panel.collapsed {
-  width: 0;
-  min-width: 0;
-  flex-basis: 0;
-  border-left: none;
 }
 
 .statusbar {

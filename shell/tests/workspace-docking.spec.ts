@@ -41,12 +41,12 @@ async function visibleWorkspaceGroups(page: Page) {
 }
 
 test('keeps fixed categories and shows only the selected category instances', async ({ page }) => {
-  await expect(page.getByRole('tab')).toHaveCount(2)
+  await expect(page.getByRole('tab')).toHaveCount(3)
   await expect(page.locator('.workspace-category-view.active .workspace-instance')).toHaveCount(3)
   const dockBox = await page.locator('.workspace-category-view.active .workspace-dockview').boundingBox()
   expect(dockBox?.height ?? 0).toBeGreaterThan(0)
 
-  await page.getByRole('tab', { name: '文件', exact: true }).click()
+  await page.getByRole('tab', { name: '文件编辑', exact: true }).click()
   await expect(page.locator('.workspace-category-view.active .workspace-instance')).toHaveCount(1)
   await expect(page.locator('.workspace-category-view.active .workspace-instance-label')).toContainText('README.md')
 })
@@ -268,7 +268,7 @@ test('selects an instance without changing the other category layout', async ({ 
   const first = page.locator('.workspace-category-view.active .workspace-instance').nth(1)
   await first.click()
   await expect(first).toHaveClass(/active/)
-  await page.getByRole('tab', { name: '文件', exact: true }).click()
+  await page.getByRole('tab', { name: '文件编辑', exact: true }).click()
   await expect(page.locator('.workspace-category-view.active .workspace-instance')).toHaveCount(1)
   await page.getByRole('tab', { name: '文件列表' }).click()
   await expect(page.locator('.workspace-category-view.active .workspace-instance').nth(1)).toHaveClass(/active/)

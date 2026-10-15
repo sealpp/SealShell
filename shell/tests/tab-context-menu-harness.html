@@ -44,7 +44,7 @@
           streamId: 0,
           sessionId: `session-${id}`,
           terminalId: `terminal-${id}`,
-          telemetry: null,
+
           encoding: 'utf-8',
         }
       }
@@ -56,7 +56,6 @@
       store.paired = true
       store.deviceId = 'test-device'
       store.hosts = []
-      store.telemetry = null
 
       function panelParams(tab) {
         const groupName = tabDefinitions[tab.id].group

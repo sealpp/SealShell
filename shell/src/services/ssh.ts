@@ -1,9 +1,7 @@
-import { randomId } from '../utils/id'
 import { readKnownHost } from './storage'
 import { SshWorkerClient } from './ssh/ssh-worker-client'
 import { copyConnection, type RemoteConnection } from './proxy/types'
 import { initialDirectoryCommand } from './terminalDirectory'
-import { closeProtection } from './close-protection'
 
 export interface SshConnectionInfo extends RemoteConnection {
   sessionId: string
@@ -18,14 +16,12 @@ interface ActiveSession {
 }
 
 const sessions = new Map<string, ActiveSession>()
-const execLocks = new Map<string, Promise<void>>()
 
 async function connectWorker(info: SshConnectionInfo, onState: StateHandler, onOutput: OutputHandler, integrateShell = false): Promise<ActiveSession> {
   const known = await readKnownHost(info.host, info.port)
   const knownHostKey = known ? base64ToBytes(known.publicKey) : undefined
   const worker = new SshWorkerClient()
   // Publish online only after connectSsh has registered the usable session.
-  // Telemetry watches this state and may immediately request an exec channel.
   worker.onState = (state, error) => { if (state !== 'online') onState(state, error) }
   worker.onOutput = onOutput
   try {
@@ -72,37 +68,6 @@ async function releaseSession(sessionId: string): Promise<void> {
 
 export async function closeSsh(sessionId: string): Promise<void> {
   await releaseSession(sessionId)
-  await closeExec(sessionId)
-}
-
-export async function closeExec(sessionId: string): Promise<void> {
-  for (const key of Array.from(sessions.keys())) {
-    if (key.startsWith(`exec-${sessionId}-`)) await releaseSession(key)
-  }
-  execLocks.delete(sessionId)
-}
-
-export async function exec(info: SshConnectionInfo, command: string): Promise<{ stdout: Uint8Array; stderr: Uint8Array; exitCode: number }> {
-  // Background commands can outlive their visible terminal or inspector.
-  const releaseProtection = closeProtection.acquire('remote-command')
-  const previous = execLocks.get(info.sessionId) ?? Promise.resolve()
-  const task = previous.then(async () => {
-    const sessionId = `exec-${info.sessionId}-${randomId()}`
-    const active = await connectWorker({ ...info, sessionId }, () => undefined, () => undefined)
-    try {
-      return await active.worker.exec(command)
-    } finally {
-      await releaseSession(sessionId)
-    }
-  })
-  const lock = task.then(() => undefined, () => undefined)
-  execLocks.set(info.sessionId, lock)
-  try {
-    return await task
-  } finally {
-    if (execLocks.get(info.sessionId) === lock) execLocks.delete(info.sessionId)
-    releaseProtection()
-  }
 }
 
 export function getSshSession(sessionId: string): SshConnectionInfo | undefined {

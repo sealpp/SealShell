@@ -86,11 +86,11 @@ E2E 必须解析实际六位码，不要写死。测试必须将 `SEAL_TRUST_PAT
 - `uname -s`；
 - telemetry direct `channel_exec` 采样命令；
 - `printf exec-ok` 和简单终端命令。
-- direct exec 的探测/采样计数，验证连续采样、收起停止采样、再打开不重复 OS 探测。
+- direct exec 的探测/采样及连接计数，验证独立连接连续采样、隐藏仍采样、重复打开不新增连接、关闭释放连接。
 - SFTP v3 subsystem，覆盖目录、读写、rename、递归删除和符号链接；`MOCK_SFTP_ROOT` 是服务端 chroot，文件操作仅发生在测试目录。
 
-交互式 shell 必须保持存活。PWA telemetry 使用独立 libssh2 Worker 的 direct `channel_exec`，
-不依赖 shell marker，也不复用控制连接。
+交互式 shell 必须保持存活。PWA 监测每实例使用独立 libssh2 Worker 的 direct `channel_exec`；不申请交互 shell，
+不依赖终端、shell marker 或控制连接。
 
 终端连接会先在已认证会话探测 Bash/zsh；mock 默认返回空版本，继续走普通交互 shell。
 `run-e2e.js` 启用 OSC 7 目录报告并固定测试密码，覆盖双击、右键新建、Ctrl+反引号、补输密码、
@@ -151,16 +151,17 @@ loopback 后用 SSH 隧道访问。容器 sshd 设置 `LANG=C.UTF-8`，并为测
 
 ## 遥测验收
 
-监控默认收起，测试须先点击“系统监控”再等待采样，不能依赖旧版的默认展开行为。
-当前 exec 每次创建独立 Worker 连接，测试不得断言旧后台 shell 的固定复用数量。成功采样时：
+从会话条目或终端右键「打开性能监测」创建实例；状态栏「性能监测 N」只切换显示。
+每实例拥有独立、持续的 SSH 连接，采集不申请 PTY/shell，不与终端共享连接。
+`run-e2e.js` 验证无终端启动、双入口去重、同地址不同配置独立、隐藏继续采样、
+配置编辑/删除不影响旧实例、关闭重开采用最新配置、关闭/刷新后连接归零。
 
-- 有 4 个 `[data-metric-value]` 且不包含 `--`；
-- 有 3 个 `[data-metric-kind="gauge"] .metric-gauge-chart`；
-- 有 `[data-metric-id="process.count"][data-metric-kind="stat"]`。
+成功采样有四个 `[data-metric-value]`（不含 `--`）、三个 gauge 及一个进程数量 stat。
+宽面板四卡同行，窄面板按容器宽度换行。关闭实例才停止采样；隐藏、换类别和换终端均不停止。
+`run-proxy-e2e.js` 还验证监测在代理配置修改及终端关闭后继续使用原代理连接。
 
-当前仪表盘使用 CSS gauge，不依赖 canvas。面板关闭、标签切换或 session 断开时必须停止
-polling；刷新后 host profile、凭据和设备身份保留，但活动 tab/session 不恢复；刷新后重新连接
-应自动读取已保存凭据且不打开密码对话框。
+使用同步 `waitForFunction` 检查页面已有状态；当前 Playwright 会把 async 谓词返回的 Promise
+直接当成成功。需要动态导入时，在测试侧轮询 `page.evaluate` 的已解析结果。
 
 ## PWA WASM 资源
 

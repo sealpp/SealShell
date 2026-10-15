@@ -13,6 +13,15 @@ import asyncssh
 
 
 class MockSSHServer(asyncssh.SSHServer):
+    def connection_made(self, conn):
+        call_count["connections"] += 1
+        call_count["active_connections"] += 1
+        write_state()
+
+    def connection_lost(self, exc):
+        call_count["active_connections"] -= 1
+        write_state()
+
     def begin_auth(self, username: str) -> bool:
         return True
 
@@ -24,7 +33,7 @@ class MockSSHServer(asyncssh.SSHServer):
         return expected is None or password == expected
 
 
-call_count = {"shell": 0, "exec": 0, "probe": 0, "stat": 0}
+call_count = {"shell": 0, "exec": 0, "probe": 0, "stat": 0, "connections": 0, "active_connections": 0}
 state_path = os.environ.get("MOCK_SSH_STATE_PATH")
 bash_path = os.environ.get("MOCK_SSH_BASH")
 zsh_path = os.environ.get("MOCK_SSH_ZSH")

@@ -171,7 +171,7 @@ function state() { try { return JSON.parse(fs.readFileSync(statePath, 'utf8')); 
           backends.push(backend);
           registerFileSession(id, backend);
           const entries = id.endsWith('source') ? [await backend.stat(kind === 'local' ? input : '/large.bin')] : [];
-          store.tabs.push({ id,kind:'file',endpoint,hostId:'stress-host',label:id,state:'online',error:'',sessionId:id,terminalId:'',telemetry:null,encoding:'utf-8',cwd,
+          store.tabs.push({ id,kind:'file',endpoint,hostId:'stress-host',label:id,state:'online',error:'',sessionId:id,terminalId:'',encoding:'utf-8',cwd,
             file:{cwd,defaultPath:cwd,history:[cwd],historyIndex:0,entries,selectedPaths:[],sortKey:'name',sortDirection:'asc',showHidden:false,loading:false,error:''} });
         }
         window.transferStress = {

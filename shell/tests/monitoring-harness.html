@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>Monitoring workspace</title>
+<style>html,body,#app{margin:0;height:100%;background:#1e1e1e;color:#ccc;font:13px system-ui}.harness{height:100%;display:flex;flex-direction:column}.shell-workspace{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}.terminal-placeholder{flex:1;padding:20px}.test-host,.test-terminal{padding:12px;border:1px solid #555;margin:10px;width:200px}.statusbar{height:24px;display:flex;border-top:1px solid #333}</style></head>
+<body><div id="app"></div><script type="module">
+import { createApp, h } from 'vue'
+import '/src/styles/workbench.css'
+import 'dockview-vue/dist/styles/dockview.css'
+import '/src/services/actions'
+import { store } from '/src/stores/app'
+import { initializeVault, saveCredentialRecord } from '/src/services/vault'
+import { closeTabs } from '/src/services/ws'
+import BottomPanel from '/src/views/BottomPanel.vue'
+import BottomPanelStatusButton from '/src/components/BottomPanelStatusButton.vue'
+import CommandContextMenu from '/src/components/CommandContextMenu.vue'
+import { MenuId } from '/src/services/actions/menuIds'
+await initializeVault()
+await saveCredentialRecord('a', { password: 'fixture' })
+store.hosts = [{ id:'a', name:'测试服务器', address:'old-host', port:22, username:'user', folderId:null }]
+store.tabs = [{ id:'terminal-a', kind:'terminal', hostId:'a', label:'旧终端', state:'idle', error:'', sessionId:'terminal-a', terminalId:'terminal-a', encoding:'utf-8' }]
+store.view = 'shell'
+store.activeTerminalTabId = 'terminal-a'
+window.monitorFixture = { store, closeTabs }
+createApp({ render: () => h('div', { class:'harness' }, [
+  h('div', { class:'shell-workspace' }, [
+    h('div', { class:'terminal-placeholder' }, [
+      h(CommandContextMenu, { 'menu-id':MenuId.HostContext, context:{ area:'host', selectedIds:['a'], selectedCount:1 } }, { default:() => h('div', { class:'test-host' }, '会话列表入口') }),
+      h(CommandContextMenu, { 'menu-id':MenuId.TerminalContext, context:{ area:'terminal', tabId:'terminal-a' } }, { default:() => h('div', { class:'test-terminal' }, '终端入口') }),
+    ]), h(BottomPanel),
+  ]),
+  h('div', { class:'statusbar' }, [h(BottomPanelStatusButton)]),
+]) }).mount('#app')
+</script></body></html>

@@ -181,7 +181,7 @@ async function until(predicate, message, timeout = 45000) {
     assert(restoredWidths.every((width, index) => Math.abs(width - closedWidths[index]) < 3), 'independent tabs must preserve existing pane widths');
     await page.screenshot({ path: path.join(artifacts, 'split.png') });
     await confirmReload(page);
-    await until(async () => await page.locator('.node-status').count() > 0 || await page.getByRole('button', { name: '面板', exact: true }).count() > 0, 'app reload failed');
+    await until(async () => await page.locator('.node-status').count() > 0 || await page.getByRole('button', { name: '文件管理', exact: true }).count() > 0, 'app reload failed');
     await until(async () => await page.evaluate(async () => (await import('/src/stores/app.ts')).store.nodeConnected), 'automatic Node authentication failed');
     assert.equal(await page.locator('.file-panel').count(), 0);
     await page.keyboard.press('Alt+l');

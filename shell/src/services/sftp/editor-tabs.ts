@@ -75,7 +75,7 @@ export async function openEditorTab(fileTabId: string, entry: FileEntry): Promis
     error: '',
     sessionId: randomId(),
     terminalId: randomId(),
-    telemetry: null,
+
     encoding: 'utf-8',
     cwd: source.file.cwd,
     editor: {

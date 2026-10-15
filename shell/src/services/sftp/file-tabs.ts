@@ -30,7 +30,7 @@ function newFileTab(endpoint: FileEndpoint, initialPath: string, splitBeside?: s
     ...(endpoint.kind === 'sftp' ? { hostId: endpoint.hostId } : {}),
     fileSplitBeside: splitBeside,
     label: endpoint.kind === 'local' ? '本地' : 'SFTP',
-    state: 'connecting', error: '', sessionId: randomId(), terminalId: '', telemetry: null, encoding: 'utf-8', cwd: initialPath,
+    state: 'connecting', error: '', sessionId: randomId(), terminalId: '', encoding: 'utf-8', cwd: initialPath,
     file: { cwd: initialPath, defaultPath: initialPath, history: [initialPath], historyIndex: 0, entries: [], selectedPaths: [], sortKey: 'name', sortDirection: 'asc', showHidden: false, loading: true, error: '' },
   }
   store.tabs.push(tab)

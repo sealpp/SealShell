@@ -14,26 +14,18 @@ import {
   loadCredentialRecord,
 } from './vault'
 import {
-  closeExec as closeSshExec,
   closeSsh,
   connectSsh,
-  exec as runExec,
-  getSshSession,
   resize as resizeSsh,
   sendInput,
 } from './ssh'
+import { disposeMonitor } from './monitoring/runtime'
 import { nodeClient, type NodeCallbacks } from './nodeClient'
 import { closeFileTabSession } from './sftp/file-tabs'
 import { hostProxySource, loadProxyProfiles, resolveHostConnection } from './proxy/profiles'
 
 const outputHandlers = new Map<string, (data: Uint8Array) => void>()
 const pendingOutput = new Map<string, Uint8Array[]>()
-
-export interface ExecResult {
-  stdout: Uint8Array
-  stderr: Uint8Array
-  exitCode: number
-}
 
 export async function initializePwa(): Promise<void> {
   await nodeClient.initializeIdentity()
@@ -216,7 +208,6 @@ export function addTab(host: HostProfile, password: string, insertAfterTabId?: s
     error: '',
     sessionId,
     terminalId,
-    telemetry: null,
     encoding: host.encoding ?? 'utf-8',
     initialCwd: options?.initialCwd,
   }
@@ -245,8 +236,6 @@ export function reconnectTab(tab: Tab, host: HostProfile, password: string, opti
   void closeSsh(reactiveTab.sessionId)
   reactiveTab.state = 'connecting'
   reactiveTab.error = ''
-  reactiveTab.telemetry = null
-  reactiveTab.telemetryError = ''
   reactiveTab.cwd = undefined
   reactiveTab.sessionId = randomId()
   void startTab(reactiveTab, host, password, options)
@@ -289,7 +278,6 @@ export async function connectHost(host: HostProfile, insertAfterTabId?: string, 
     store.error = error instanceof Error ? error.message : String(error)
   }
 }
-
 
 async function startTab(tab: Tab, host: HostProfile, password: string, options?: AddTabOptions): Promise<void> {
   const { allowLoginDialog = true } = options ?? {}
@@ -339,10 +327,6 @@ function updateTabState(sessionId: string, state: ShellState, error = ''): void 
   if (!tab) return
   tab.state = state
   tab.error = error
-  if (state === 'idle' || state === 'error') {
-    tab.telemetry = null
-    if (tab.id === store.activeTerminalTabId) store.telemetry = null
-  }
 }
 
 export function closeTab(tabId: string): void {
@@ -380,21 +364,17 @@ export function closeTabs(tabIds: string[], skipDirtyPrompt = false): void {
   for (const tab of tabsToClose) {
     outputHandlers.delete(tab.sessionId)
     pendingOutput.delete(tab.sessionId)
-    void closeSsh(tab.sessionId)
+    if (tab.kind === 'monitor') disposeMonitor(tab.id)
+    else void closeSsh(tab.sessionId)
     if (tab.kind === 'file' || tab.kind === 'editor') void closeFileTabSession(tab.id)
   }
 
   store.activeTerminalTabId = nextActiveId('terminal', store.activeTerminalTabId)
   store.activeFileTabId = nextActiveId('file', store.activeFileTabId)
   store.activeEditorTabId = nextActiveId('editor', store.activeEditorTabId)
-  if (!store.tabs.some((tab) => tab.kind === 'file' || tab.kind === 'editor')) {
-    store.bottomPanelOpen = false
-  }
-  const activeTerminal = store.tabs.find((tab) => tab.id === store.activeTerminalTabId)
-  store.telemetry = activeTerminal?.telemetry ?? null
+  store.activeMonitorTabId = nextActiveId('monitor', store.activeMonitorTabId)
   if (!store.tabs.length) {
-    store.view = 'welcome'
-    store.telemetry = null
+    store.view = store.bottomPanelOpen ? 'shell' : 'welcome'
   } else {
     store.view = 'shell'
   }
@@ -410,14 +390,4 @@ export function sendTerminalInput(sessionId: string, payload: Uint8Array): void 
 export function resizeTerminal(terminalId: string, columns: number, rows: number): void {
   const tab = store.tabs.find((item) => item.terminalId === terminalId)
   if (tab) void resizeSsh(tab.sessionId, columns, rows)
-}
-
-export async function exec(sessionId: string, command: string): Promise<ExecResult> {
-  const session = getSshSession(sessionId)
-  if (!session) throw new Error('SSH session is unavailable')
-  return runExec(session, command)
-}
-
-export function closeExec(sessionId: string): Promise<void> {
-  return closeSshExec(sessionId)
 }

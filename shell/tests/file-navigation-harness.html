@@ -25,7 +25,7 @@
       ]
       const tab = ({ id, endpoint, cwd }) => ({
         id, kind: 'file', endpoint, label: id, state: 'connecting', error: '',
-        sessionId: id, terminalId: '', telemetry: null, encoding: 'utf-8', cwd,
+        sessionId: id, terminalId: '', encoding: 'utf-8', cwd,
         file: { cwd, defaultPath: cwd, history: [cwd], historyIndex: 0, entries: [], selectedPaths: [], sortKey: 'name', sortDirection: 'asc', showHidden: false, loading: true, error: '' },
       })
       store.tabs.splice(0, store.tabs.length, ...definitions.map(tab))

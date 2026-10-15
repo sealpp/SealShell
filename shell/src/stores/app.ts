@@ -132,8 +132,6 @@ export interface Tab {
   error: string
   sessionId: string
   terminalId: string
-  telemetry: Telemetry | null
-  telemetryError?: string
   encoding: string
   cwd?: string
   initialCwd?: string
@@ -232,12 +230,9 @@ export interface AppState {
   selectedNodeIds: Set<string>
   selectionAnchorNodeId: string
   expandedFolderIds: Set<string>
-  telemetry: Telemetry | null
   sidebarOpen: boolean
   sidebarView: 'connections'
   sidebarWidth: number
-  panelOpen: boolean
-  panelWidth: number
   pairingModalOpen: boolean
   connectionModalOpen: boolean
   loginDialogOpen: boolean
@@ -316,12 +311,9 @@ export const store = reactive<AppState>({
   selectedNodeIds: new Set(),
   selectionAnchorNodeId: '',
   expandedFolderIds: new Set(),
-  telemetry: null,
   sidebarOpen: true,
   sidebarView: 'connections',
   sidebarWidth: 220,
-  panelOpen: false,
-  panelWidth: 280,
   pairingModalOpen: false,
   connectionModalOpen: false,
   loginDialogOpen: false,

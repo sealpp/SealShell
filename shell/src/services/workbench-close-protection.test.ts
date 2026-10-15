@@ -6,7 +6,7 @@ import { closeProtection } from './close-protection'
 import { startWorkbenchCloseProtection } from './workbench-close-protection'
 
 function tab(kind: TabKind, state: ShellState): Tab {
-  return { id: 'tab', kind, state, label: 'test', error: '', sessionId: 'session', terminalId: '', telemetry: null, encoding: 'utf-8' }
+  return { id: 'tab', kind, state, label: 'test', error: '', sessionId: 'session', terminalId: '', encoding: 'utf-8' }
 }
 
 let target: EventTarget
@@ -31,10 +31,9 @@ afterEach(() => {
 })
 
 describe('workbench exit policy', () => {
-  it.each<TabKind>(['terminal', 'file', 'editor'])('protects %s sessions while connecting and online even with panels hidden', kind => {
+  it.each<TabKind>(['terminal', 'file', 'editor', 'monitor'])('protects %s sessions while connecting and online even with panels hidden', kind => {
     store.tabs = [tab(kind, 'idle')]
     store.bottomPanelOpen = false
-    store.panelOpen = false
     expect(blocked()).toBe(false)
     store.tabs[0].state = 'connecting'
     expect(blocked()).toBe(true)
@@ -65,9 +64,8 @@ describe('workbench exit policy', () => {
     expect(blocked()).toBe(expected)
   })
 
-  it('keeps transfers protected after the last tab closes and ignores idle Node and inspector state', () => {
+  it('keeps transfers protected after the last tab closes and ignores idle Node state', () => {
     store.nodeConnected = true
-    store.panelOpen = true
     expect(blocked()).toBe(false)
     store.tabs = [tab('terminal', 'online')]
     transferRuntime.tasks = [{ id: 'transfer', label: 'test', state: 'running', progress: 0 }]

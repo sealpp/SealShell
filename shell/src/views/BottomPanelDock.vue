@@ -2,11 +2,12 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { DockviewVue, themeAbyss } from 'dockview-vue'
 import type { DockviewApi, DockviewPanelApi, DockviewReadyEvent } from 'dockview-vue'
-import { IconFile, IconFolder, IconX } from '@tabler/icons-vue'
-import { store, setBottomPanelActiveTab, type Tab, type BottomPanelCategory } from '../stores/app'
+import { IconFile, IconFolder, IconChartLine, IconX } from '@tabler/icons-vue'
+import { store, getActiveBottomPanelTabId, setBottomPanelActiveTab, type Tab, type BottomPanelCategory } from '../stores/app'
 import { commandService } from '../services/commands'
 import { arrangeWorkspaceInstances, canDropWorkspaceInstance } from '../services/workspace-docking'
 import FilePanel from './FilePanel.vue'
+import MetricsPanel from './MetricsPanel.vue'
 import EditorPanel from './EditorPanel.vue'
 import CommandContextMenu from '../components/CommandContextMenu.vue'
 import { MenuId } from '../services/actions/menuIds'
@@ -39,9 +40,10 @@ let pendingActivation: { tabId: string; token: number } | undefined
 const components = {
   file: FilePanel,
   editor: EditorPanel,
+  monitor: MetricsPanel,
 }
 
-const tabs = computed(() => store.tabs.filter((tab): tab is Tab & { kind: 'file' | 'editor' } => tab.kind === props.category.slice(0, -1)))
+const tabs = computed(() => store.tabs.filter((tab): tab is Tab & { kind: 'file' | 'editor' | 'monitor' } => tab.kind === props.category.slice(0, -1)))
 
 function newWorkspaceGroupId(tabId: string): string {
   return `${props.category}:${tabId}`
@@ -93,7 +95,8 @@ function workspaceGroupForPanel(panelId: string): string | undefined {
 
 function setCategoryActiveTab(tabId: string): void {
   if (props.category === 'files') store.activeFileTabId = tabId
-  else store.activeEditorTabId = tabId
+  else if (props.category === 'editors') store.activeEditorTabId = tabId
+  else store.activeMonitorTabId = tabId
 }
 
 function captureVisibleGroupSizes(currentApi: DockviewApi): Map<string, WorkspaceGroupSize> {
@@ -163,7 +166,7 @@ function applyWorkspaceGroupVisibility(
   if (!currentApi) return
   const sizeSnapshot = preservedSizes ?? captureVisibleGroupSizes(currentApi)
   syncDockWorkspaceGroups(currentApi)
-  const requestedId = props.category === 'files' ? store.activeFileTabId : store.activeEditorTabId
+  const requestedId = getActiveBottomPanelTabId(props.category)
   const preferred = preferredTabId ? currentApi.getPanel(preferredTabId) : undefined
   const preferredGroupId = preferred ? workspaceGroupForPanel(preferred.id) : undefined
   const activeGroupStillExists = activeWorkspaceGroupId.value.length > 0
@@ -237,11 +240,11 @@ function groupHeadersHidden(): void {
 }
 
 function panelTitle(tab: Tab): string {
-  return tab.label || (tab.kind === 'file' ? '文件列表' : '文件')
+  return tab.label || (tab.kind === 'file' ? '文件列表' : tab.kind === 'monitor' ? '性能监测' : '文件')
 }
 
 function restoreActivePanel(currentApi: ActivePanelApi): void {
-  const requestedId = props.category === 'files' ? store.activeFileTabId : store.activeEditorTabId
+  const requestedId = getActiveBottomPanelTabId(props.category)
   const panel = (requestedId ? currentApi.getPanel(requestedId) : undefined) ?? currentApi.activePanel
   if (!panel) return
   applyWorkspaceGroupVisibility(panel.id)
@@ -252,11 +255,11 @@ function restoreActivePanel(currentApi: ActivePanelApi): void {
 
 function addPanel(tab: Tab): void {
   const currentApi = api.value
-  if (!currentApi || (props.category === 'files' && tab.kind !== 'file') || (props.category === 'editors' && tab.kind !== 'editor')) return
+  if (!currentApi || tab.kind !== props.category.slice(0, -1)) return
   if (currentApi.getPanel(tab.id)) return
 
   const preservedSizes = captureVisibleGroupSizes(currentApi)
-  const shouldActivate = (props.category === 'files' ? store.activeFileTabId : store.activeEditorTabId) === tab.id
+  const shouldActivate = getActiveBottomPanelTabId(props.category) === tab.id
   const group = currentApi.activeGroup ?? currentApi.groups[0]
   const reference = tab.fileSplitBeside ? currentApi.getPanel(tab.fileSplitBeside) : undefined
   const referenceSize = reference ? preservedSizes.get(reference.group.id) : undefined
@@ -472,7 +475,7 @@ function readWorkspaceDrag(event: DragEvent | PointerEvent): { tabId: string; ca
   if (!raw) return undefined
   try {
     const data = JSON.parse(raw) as { tabId?: string; category?: BottomPanelCategory }
-    if (!data.tabId || (data.category !== 'files' && data.category !== 'editors')) return undefined
+    if (!data.tabId || (data.category !== 'files' && data.category !== 'editors' && data.category !== 'monitors')) return undefined
     return { tabId: data.tabId, category: data.category }
   } catch {
     return undefined
@@ -500,7 +503,7 @@ watch(
 )
 
 watch(
-  () => props.category === 'files' ? store.activeFileTabId : store.activeEditorTabId,
+  () => getActiveBottomPanelTabId(props.category),
   (tabId) => {
     // Selection updates before the post-flush tab watcher creates the panel.
     // Falling back here would overwrite the requested new tab with the old one.
@@ -530,8 +533,9 @@ onBeforeUnmount(() => {
       />
       <div v-if="!tabs.length" class="workspace-dock-empty">
         <IconFolder v-if="props.category === 'files'" :size="22" aria-hidden="true" />
+        <IconChartLine v-else-if="props.category === 'monitors'" :size="22" aria-hidden="true" />
         <IconFile v-else :size="22" aria-hidden="true" />
-        <span>{{ props.category === 'files' ? '暂无文件列表' : '暂无打开的文件' }}</span>
+        <span>{{ props.category === 'files' ? '暂无文件列表' : props.category === 'editors' ? '暂无打开的文件' : '从终端或会话列表右键打开性能监测' }}</span>
       </div>
     </div>
     <CommandContextMenu :menu-id="MenuId.FileInstances" :context="{ area: 'global' }" :can-open="() => props.category === 'files'">
@@ -545,7 +549,7 @@ onBeforeUnmount(() => {
         class="workspace-instance"
         :aria-label="panelTitle(tab)"
         :title="panelTitle(tab)"
-        :class="{ active: (props.category === 'files' ? store.activeFileTabId : store.activeEditorTabId) === tab.id, dragging: draggingId === tab.id }"
+        :class="{ active: getActiveBottomPanelTabId(props.category) === tab.id, dragging: draggingId === tab.id }"
         draggable="true"
         @click="selectInstance(tab)"
         @dragstart="onDragStart($event, tab)"
@@ -553,6 +557,7 @@ onBeforeUnmount(() => {
       >
         <span class="workspace-instance-marker" aria-hidden="true">{{ instanceMarker(tab.id) }}</span>
         <IconFolder v-if="tab.kind === 'file'" :size="14" aria-hidden="true" />
+        <IconChartLine v-else-if="tab.kind === 'monitor'" :size="14" aria-hidden="true" />
         <IconFile v-else :size="14" aria-hidden="true" />
         <span class="workspace-instance-label" :title="panelTitle(tab)">{{ panelTitle(tab) }}</span>
         <span class="workspace-instance-state" :class="tab.state" aria-hidden="true"></span>

@@ -1,10 +1,22 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { IconX } from '@tabler/icons-vue'
-import { commandService } from '../services/commands'
-import { store } from '../stores/app'
+import { computed, ref } from 'vue'
+import { IconRefresh } from '@tabler/icons-vue'
+import { retryMonitor } from '../services/monitoring/runtime'
+import { setBottomPanelActiveTab, store, type MonitorTab } from '../stores/app'
 import MetricGauge from '../components/MetricGauge.vue'
 import ProxyErrorAction from '../components/ProxyErrorAction.vue'
+
+const props = defineProps<{ params: { params: { tabId: string } } }>()
+const tab = computed(() => store.tabs.find((candidate): candidate is MonitorTab => candidate.id === props.params.params.tabId && candidate.kind === 'monitor'))
+const password = ref('')
+const telemetry = computed(() => tab.value?.monitor.telemetry)
+const connectionLabel = computed(() => tab.value?.state === 'online' ? '正在监测' : tab.value?.state === 'connecting' ? '连接中' : tab.value?.state === 'error' ? '连接失败' : '未连接')
+const hostLabel = computed(() => tab.value ? `${tab.value.monitor.username}@${tab.value.monitor.address}:${tab.value.monitor.port}` : '')
+function login() {
+  const value = password.value
+  password.value = ''
+  if (tab.value) void retryMonitor(tab.value.id, value)
+}
 
 type MetricStatus = 'normal' | 'warning' | 'critical' | 'unavailable'
 type MetricKind = 'gauge' | 'stat'
@@ -20,7 +32,7 @@ type MetricCard = {
 }
 
 function numericMetric(id: string): number | null {
-  const metric = store.telemetry?.metrics[id]
+  const metric = telemetry.value?.metrics[id]
   if (metric?.quality !== 'valid' || typeof metric.value !== 'number' || !Number.isFinite(metric.value)) {
     return null
   }
@@ -90,35 +102,12 @@ const metrics = computed<MetricCard[]>(() => {
   ]
 })
 
-const activeTab = computed(() => store.tabs.find((tab) => tab.id === store.activeTerminalTabId))
-const activeHost = computed(() => {
-  const tab = activeTab.value
-  return tab ? store.hosts.find((host) => host.id === tab.hostId) : undefined
-})
-const hostLabel = computed(() => {
-  const host = activeHost.value
-  if (!host) return '选择终端后显示'
-  return `${host.address}:${host.port}`
-})
-const connectionLabel = computed(() => {
-  const tab = activeTab.value
-  if (!tab) return '未选择终端'
-  if (tab.state === 'online') return '在线'
-  if (tab.state === 'connecting') return '连接中'
-  if (tab.state === 'error') return '连接失败'
-  return '未连接'
-})
-
-function closePanel() {
-  void commandService.execute('workbench.togglePanel', { area: 'global' })
-}
-
 function statusKey(metric: MetricCard): string {
-  return store.telemetry ? metric.status : 'waiting'
+  return telemetry.value ? metric.status : 'waiting'
 }
 
 function statusText(metric: MetricCard): string {
-  if (!store.telemetry) return '等待数据'
+  if (!telemetry.value) return '等待数据'
   if (metric.status === 'unavailable') return '数据不可用'
   if (metric.kind === 'stat') return '运行中'
   if (metric.status === 'critical') return '高负载'
@@ -128,32 +117,27 @@ function statusText(metric: MetricCard): string {
 </script>
 
 <template>
-  <div class="metrics-panel">
+  <div v-if="tab" class="metrics-panel" :data-monitor-id="tab.id" @pointerdown="setBottomPanelActiveTab(tab.id, 'monitors')">
     <div class="metrics-header">
       <div class="metrics-heading">
-        <span class="title">系统监控</span>
+        <span class="title">{{ tab.label }}</span>
         <span class="host-label" :title="hostLabel">{{ hostLabel }}</span>
       </div>
       <div class="metrics-actions">
-        <span class="connection-status" :data-state="activeTab?.state ?? 'idle'">
-          <span class="status-dot" aria-hidden="true"></span>
-          {{ connectionLabel }}
-        </span>
-        <button type="button" class="panel-close" aria-label="关闭系统监控" title="关闭系统监控" @click="closePanel">
-          <IconX :size="15" aria-hidden="true" />
-        </button>
+        <span class="connection-status" :data-state="tab.state"><span class="status-dot" aria-hidden="true"></span>{{ connectionLabel }}</span>
+        <button v-if="tab.state === 'error' && !tab.monitor.needsPassword" type="button" class="panel-action" aria-label="重试监测" title="使用原配置重试" @click="retryMonitor(tab.id)"><IconRefresh :size="15" /></button>
       </div>
     </div>
     <div class="metrics-content">
-      <div v-if="!activeTab" class="panel-empty">
-        <strong>选择一个终端</strong>
-        <span>连接后显示实时系统状态</span>
-      </div>
-      <div v-else-if="activeTab.state !== 'online'" class="panel-empty">
-        <strong>{{ connectionLabel }}</strong>
-        <span>终端连接后显示实时系统状态</span>
-      </div>
-      <div v-else-if="activeTab.telemetryError" class="panel-empty"><strong>监控连接失败</strong><span>{{ activeTab.telemetryError }}</span><ProxyErrorAction :source="activeTab.proxySource" :message="activeTab.telemetryError" /><small v-if="activeTab.proxySource">更新代理后请重新连接终端。</small></div>
+      <form v-if="tab.monitor.needsPassword" class="panel-empty monitor-login" @submit.prevent="login">
+        <strong>输入 SSH 密码</strong><span>密码仅用于本次监测</span>
+        <input v-model="password" type="password" aria-label="监测密码" autocomplete="off" autofocus />
+        <span v-if="tab.error" role="alert">{{ tab.error }}</span>
+        <button type="submit" class="workbench-dialog-button workbench-dialog-button--primary">连接监测</button>
+      </form>
+      <div v-else-if="tab.monitor.unsupported" class="panel-empty"><strong>暂不支持此系统</strong><span>当前性能监测仅支持 Linux</span></div>
+      <div v-else-if="tab.state === 'error'" class="panel-empty"><strong>监测连接失败</strong><span role="alert">{{ tab.error }}</span><ProxyErrorAction :source="tab.proxySource" :message="tab.error" /><small v-if="tab.proxySource">修改配置后，关闭此实例再重新打开。</small></div>
+      <div v-else-if="tab.state !== 'online'" class="panel-empty"><strong>{{ connectionLabel }}</strong><span>正在连接监测目标</span></div>
       <div v-else class="dashboard">
         <article
           v-for="metric in metrics"
@@ -195,12 +179,12 @@ function statusText(metric: MetricCard): string {
 }
 
 .metrics-header {
-  min-height: 48px;
+  min-height: 30px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.45rem 0.6rem 0.45rem 0.75rem;
+  padding: 3px 10px;
   background: var(--workbench-surface-raised, #2d2d2d);
   border-bottom: 1px solid var(--workbench-border-muted, #1f1f1f);
   white-space: nowrap;
@@ -216,12 +200,12 @@ function statusText(metric: MetricCard): string {
 .metrics-heading {
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
+  align-items: baseline;
+  gap: 8px;
 }
 
 .host-label {
-  max-width: 142px;
+  min-width: 0;
   overflow: hidden;
   color: var(--workbench-text-muted, #888);
   font-size: 10px;
@@ -259,7 +243,7 @@ function statusText(metric: MetricCard): string {
 .connection-status[data-state='error'] { color: #f14c4c; }
 .connection-status[data-state='error'] .status-dot { background: #f14c4c; }
 
-.panel-close {
+.panel-action {
   width: 24px;
   height: 24px;
   display: inline-flex;
@@ -273,7 +257,7 @@ function statusText(metric: MetricCard): string {
   cursor: pointer;
 }
 
-.panel-close:hover {
+.panel-action:hover {
   background: var(--workbench-surface, #252526);
   color: var(--workbench-text-strong, #fff);
 }
@@ -309,7 +293,7 @@ function statusText(metric: MetricCard): string {
 
 .dashboard {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
   gap: 0.5rem;
 }
 
@@ -349,9 +333,6 @@ function statusText(metric: MetricCard): string {
   border-radius: 4px;
 }
 
-.metric[data-metric-kind='stat'] {
-  grid-column: 1 / -1;
-}
 
 .metric[data-metric-kind='gauge'] .metric-gauge {
   --metric-gauge-size: 76px;
@@ -397,4 +378,5 @@ function statusText(metric: MetricCard): string {
 .metric[data-status='unavailable'] .metric-status {
   color: var(--workbench-text-disabled, #666);
 }
+.monitor-login input { width: min(240px, 100%); box-sizing: border-box; padding: 6px 8px; background: #1e1e1e; border: 1px solid #555; color: #ccc; }
 </style>

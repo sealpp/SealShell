@@ -96,7 +96,7 @@ class MonitorRuntime {
     this.stop()
     this.tab.monitor.telemetry = null
     this.tab.error = error instanceof Error ? error.message : String(error)
-    this.tab.monitor.needsPassword = /AUTHENTICATION_FAILED|authentication|permission denied/i.test(this.tab.error)
+    this.tab.monitor.needsPassword = !this.tab.error.includes('PROXY_ERROR') && /AUTHENTICATION_FAILED|authentication|permission denied/i.test(this.tab.error)
     this.tab.state = 'error'
   }
 }
@@ -113,7 +113,7 @@ export function openMonitor(hostId: string): MonitorTab | undefined {
   const tab: MonitorTab = {
     id: crypto.randomUUID(), kind: 'monitor', hostId, label: profile.name,
     proxySource: hostProxySource(profile), state: 'connecting', error: '',
-    sessionId: '', terminalId: '', encoding: 'utf-8', telemetry: null,
+    sessionId: '', terminalId: '', encoding: 'utf-8',
     monitor: { address: profile.address, port: profile.port, username: profile.username, telemetry: null, needsPassword: false, unsupported: false },
   }
   store.tabs.push(tab)

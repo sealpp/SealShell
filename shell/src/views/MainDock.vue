@@ -184,7 +184,6 @@ onBeforeUnmount(() => {
 
 .main-dock .dv-tabs-and-actions-container {
   box-sizing: border-box;
-  padding-right: var(--actions-toolbar-width, 0px);
 }
 
 .main-dock .dv-dockview {

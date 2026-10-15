@@ -108,10 +108,11 @@ const proxyState = () => JSON.parse(fs.readFileSync(statePath, 'utf8'));
       const { store } = await import('/src/stores/app.ts');
       return { hostId: store.hosts[0].id, tabId: store.activeTerminalTabId };
     });
-    await page.getByRole('button', { name: '系统监控', exact: true }).click();
+    await page.locator('.conn-item').first().click({ button: 'right' });
+    await page.getByRole('menuitem', { name: '打开性能监测', exact: true }).click();
     await until(async () => await page.locator('[data-metric-value]').evaluateAll(items => items.length === 4 && items.every(item => !item.getAttribute('data-metric-value').includes('--'))), 'proxied telemetry did not produce metrics');
-    await page.getByRole('button', { name: '系统监控', exact: true }).click();
-    assert(proxyState().connections.filter(item => item.protocol === 'http').length >= 4);
+    await page.getByRole('button', { name: '性能监测 1', exact: true }).click();
+    assert(proxyState().connections.filter(item => item.protocol === 'http').length >= 3);
     console.log('PASS SSH terminal and independent telemetry through HTTP');
 
     await page.evaluate(async ({ profileId }) => {
@@ -153,7 +154,15 @@ const proxyState = () => JSON.parse(fs.readFileSync(statePath, 'utf8'));
     }, { localId, directory: local, fileId });
     assert.deepEqual(fs.readFileSync(path.join(local, 'large.bin')), payload);
     assert.deepEqual(fs.readFileSync(path.join(remote, 'upload.bin')), payload);
-    console.log('PASS inherited SFTP/editor and multi-chunk bidirectional transfers after source terminal closes');
+    const monitoringContinues = await page.evaluate(async () => {
+      const { store } = await import('/src/stores/app.ts');
+      return store.tabs.find(tab => tab.kind === 'monitor').monitor.telemetry.sampledAt;
+    });
+    await until(async () => await page.evaluate(async previous => {
+      const { store } = await import('/src/stores/app.ts');
+      return store.tabs.find(tab => tab.kind === 'monitor').monitor.telemetry.sampledAt > previous;
+    }, monitoringContinues), 'monitor stopped after proxy edits or terminal closure');
+    console.log('PASS original monitor route and inherited file routes survive proxy edits and terminal closure');
 
     const count = proxyState().connections.length;
     const failedTab = await page.evaluate(async id => {

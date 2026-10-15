@@ -1,4 +1,4 @@
-import { store } from '../stores/app'
+import { getActiveBottomPanelTabId, setBottomPanelActiveTab, store, type BottomPanelCategory } from '../stores/app'
 import { menuRegistry, registerAction } from './commands'
 import { MenuId } from './actions/menuIds'
 
@@ -43,15 +43,23 @@ registerAction({
   },
 })
 
+function toggleCategory(category: BottomPanelCategory): void {
+  if (store.bottomPanelOpen && store.bottomPanelCategory === category) store.bottomPanelOpen = false
+  else {
+    setBottomPanelActiveTab(getActiveBottomPanelTabId(category), category)
+    store.bottomPanelOpen = true
+    store.view = 'shell'
+  }
+}
+
 registerAction({
-  id: 'workbench.togglePanel',
-  title: '系统监控',
-  description: '显示或隐藏系统监控面板',
-  category: 'workbench',
-  checked: 'panelOpen',
-  run: () => {
-    store.panelOpen = !store.panelOpen
-  },
+  id: 'workbench.toggleFileManager', title: '文件管理', description: '显示或隐藏最近使用的文件视图', category: 'workbench',
+  run: () => toggleCategory(store.lastFilePanelCategory),
+})
+
+registerAction({
+  id: 'workbench.toggleMonitoring', title: '性能监测', description: '显示或隐藏性能监测视图', category: 'workbench',
+  run: () => toggleCategory('monitors'),
 })
 
 registerAction({
@@ -63,6 +71,7 @@ registerAction({
   keybindings: [{ key: 'Mod+J' }],
   run: () => {
     store.bottomPanelOpen = !store.bottomPanelOpen
+    if (store.bottomPanelOpen) store.view = 'shell'
   },
 })
 

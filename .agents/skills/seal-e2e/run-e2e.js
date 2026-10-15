@@ -279,59 +279,81 @@ async function main() {
     await page.waitForSelector('[role="menu"]', { state: 'detached', timeout: 5000 });
     console.log('host and terminal context menus open and dismiss');
 
-    const monitorButton = page.getByRole('button', { name: '系统监控', exact: true });
+    const shellCount = readMockSshState().shell;
+    await page.locator('.conn-item').first().click({ button: 'right' });
+    await page.getByRole('menuitem', { name: '打开性能监测', exact: true }).click();
+    await waitForMetrics();
+    const firstTelemetryState = await waitForMockSshState(state => state.stat >= 1, 'the first sample');
+    const secondTelemetryState = await waitForMockSshState(state => state.stat > firstTelemetryState.stat, 'the second sample');
+    if (secondTelemetryState.probe !== 1 || secondTelemetryState.shell !== shellCount || secondTelemetryState.connections !== firstTelemetryState.connections) {
+      throw new Error(`monitor must retain one independent connection without opening a shell: ${JSON.stringify(secondTelemetryState)}`);
+    }
+    await page.locator('.xterm-screen').last().click({ button: 'right' });
+    await page.getByRole('menuitem', { name: '打开性能监测', exact: true }).click();
+    if (await page.locator('.workspace-category-view.active .workspace-instance').count() !== 1) throw new Error('duplicate monitor from the terminal menu');
+    const monitorButton = page.getByRole('button', { name: '性能监测 1', exact: true });
+    await monitorButton.click();
+    await page.locator('.workspace-panel').waitFor({ state: 'hidden' });
+    const hiddenSamples = readMockSshState().stat;
+    await waitForMockSshState(state => state.stat > hiddenSamples, 'continuous hidden sampling');
     await monitorButton.click();
     await waitForMetrics();
-    const firstTelemetryState = await waitForMockSshState(
-      (state) => state.stat >= 1,
-      'the first telemetry sample',
-    );
-    if (firstTelemetryState.exec < 2 || firstTelemetryState.probe !== 1) {
-      throw new Error(`expected direct exec probe and sample: ${JSON.stringify(firstTelemetryState)}`);
-    }
-    const secondTelemetryState = await waitForMockSshState(
-      (state) => state.stat > firstTelemetryState.stat,
-      'a second telemetry sample',
-    );
-    if (secondTelemetryState.probe !== 1 || secondTelemetryState.exec <= firstTelemetryState.exec) {
-      throw new Error(`expected another direct exec sample without repeating the probe: ${JSON.stringify(secondTelemetryState)}`);
-    }
-    const firstValues = await page.locator('[data-metric-value]').evaluateAll((elements) =>
-      elements.map((element) => element.getAttribute('data-metric-value')),
-    );
-    console.log('first tab values:', firstValues);
-
-    await monitorButton.click();
-    await page.waitForFunction(
-      () => document.querySelector('.secondary-sidebar')?.classList.contains('collapsed'),
-      null,
-      { timeout: 5000 },
-    );
-    // Allow an in-flight sample to finish, then verify polling stays stopped.
-    await page.waitForTimeout(1000);
-    const closedMonitorSamples = readMockSshState().stat;
-    await page.waitForTimeout(2500);
-    if (readMockSshState().stat !== closedMonitorSamples) throw new Error('telemetry kept polling while the monitor was closed');
-    await monitorButton.click();
-    await waitForMetrics();
-    const reopenedMonitorState = readMockSshState();
-    if (reopenedMonitorState.probe !== 1) {
-      throw new Error(`reopening the monitor repeated the OS probe: ${JSON.stringify(reopenedMonitorState)}`);
-    }
+    console.log('PASS dedicated SSH connection, no shell, both menu entries deduplicate, hidden sampling continues');
 
     await addHost('B');
-    const tabs = await page.locator('.terminal-tab').all();
-    if (tabs.length < 2) throw new Error('expected two tabs');
-    await tabs[0].click();
-    await waitForMetrics();
+    await page.locator('.conn-item').nth(1).click({ button: 'right' });
+    await page.getByRole('menuitem', { name: '打开性能监测', exact: true }).click();
+    await page.waitForFunction(() => {
+      const store = window.sealE2eStore;
+      return store.tabs.filter(tab => tab.kind === 'monitor').length === 2 && store.tabs.filter(tab => tab.kind === 'monitor').every(tab => tab.monitor.telemetry);
+    });
+    const savedHost = await page.evaluate(async () => {
+      const { store } = await import('/src/stores/app.ts');
+      return JSON.parse(JSON.stringify(store.hosts[0]));
+    });
+    const ids = await page.evaluate(async () => {
+      const { store } = await import('/src/stores/app.ts');
+      const { createHost, closeTabs, deleteHosts } = await import('/src/services/ws.ts');
+      const monitors = store.tabs.filter(tab => tab.kind === 'monitor');
+      closeTabs(store.tabs.filter(tab => tab.kind === 'terminal').map(tab => tab.id));
+      await createHost({ ...JSON.parse(JSON.stringify(store.hosts[0])), name: 'A edited', port: 1 });
+      await deleteHosts([store.hosts[1].id]);
+      return monitors.map(tab => ({ id: tab.id, sampledAt: tab.monitor.telemetry.sampledAt }));
+    });
+    await page.waitForFunction(previous => {
+      const store = window.sealE2eStore;
+      return previous.every(item => store.tabs.find(tab => tab.id === item.id)?.monitor.telemetry?.sampledAt > item.sampledAt);
+    }, ids);
+    await waitForMockSshState(state => state.active_connections === 2, 'only two independent monitors after terminals close');
+    console.log('PASS both same-address profiles continue after terminal closure, profile edits and deletion');
 
-    const finalValues = await page.locator('[data-metric-value]').evaluateAll((elements) =>
-      elements.map((element) => element.getAttribute('data-metric-value')),
-    );
-    console.log('values after tab switch:', finalValues);
-    if (finalValues.some((value) => value.includes('--'))) {
-      throw new Error('metrics still showing -- after tab switch');
-    }
+    await page.locator('.conn-item').first().click({ button: 'right' });
+    await page.getByRole('menuitem', { name: '打开性能监测', exact: true }).click();
+    const reusedId = await page.evaluate(async () => (await import('/src/stores/app.ts')).store.activeMonitorTabId);
+    if (reusedId !== ids[0].id) throw new Error('editing a profile replaced its existing monitor');
+    await page.evaluate(async ids => (await import('/src/services/ws.ts')).closeTabs(ids.map(item => item.id)), ids);
+    await waitForMockSshState(state => state.active_connections === 0, 'monitor connections released');
+    const closedSamples = readMockSshState().stat;
+    await page.waitForTimeout(2200);
+    if (readMockSshState().stat !== closedSamples) throw new Error('closed monitors continued sampling');
+    await page.locator('.conn-item').first().click({ button: 'right' });
+    await page.getByRole('menuitem', { name: '打开性能监测', exact: true }).click();
+    await page.waitForFunction(() => {
+      const store = window.sealE2eStore;
+      return store.tabs.some(tab => tab.kind === 'monitor' && tab.monitor.port === 1 && tab.state === 'error');
+    });
+    await page.evaluate(async original => {
+      const { store } = await import('/src/stores/app.ts');
+      const { closeTabs, createHost } = await import('/src/services/ws.ts');
+      closeTabs(store.tabs.map(tab => tab.id));
+      await createHost(original);
+    }, savedHost);
+    await page.locator('.conn-item').first().click({ button: 'right' });
+    await page.getByRole('menuitem', { name: '打开性能监测', exact: true }).click();
+    await waitForMetrics();
+    if (await page.locator('.terminal-tab').count()) throw new Error('standalone monitor opened a terminal');
+    await page.screenshot({ path: path.join(TMP_DIR, 'monitoring.png') });
+    console.log('PASS close releases connections, reopen uses latest config, monitor starts without terminals');
 
     // Dismissing the browser close prompt must leave live SSH and telemetry intact.
     const closeDialog = page.waitForEvent('dialog', { timeout: 10000 });
@@ -341,8 +363,8 @@ async function main() {
     await confirmation.dismiss();
     if (page.isClosed()) throw new Error('cancelling exit closed the page');
     const samplesBeforeExit = readMockSshState().stat;
-    await page.waitForFunction(async () => {
-      const { store } = await import('/src/stores/app.ts');
+    await page.waitForFunction(() => {
+      const store = window.sealE2eStore;
       return store.tabs.filter(tab => tab.kind === 'terminal').every(tab => tab.state === 'online');
     });
     const monitorDeadline = Date.now() + 15000;
@@ -350,14 +372,16 @@ async function main() {
       if (Date.now() > monitorDeadline) throw new Error('monitoring did not resume after cancelled exit');
       await page.waitForTimeout(100);
     }
-    console.log('PASS cancelled browser exit preserves live SSH and monitoring');
+    console.log('PASS cancelled browser exit preserves standalone monitoring');
 
     await confirmReload(page);
     await page.locator('.connections-header').getByText('会话', { exact: true }).waitFor();
-    if (await page.locator('.conn-item').count() !== 2) {
+    if (await page.locator('.conn-item').count() !== 1) {
       throw new Error('PWA host records did not survive a reload');
     }
 
+    await waitForMockSshState(state => state.active_connections === 0, 'refresh releases monitor connections');
+    if (await page.locator('.workspace-instance').count()) throw new Error('monitor survived a refresh');
     const expectedReloadTabCount = await page.locator('.terminal-tab').count() + 1;
     await page.locator('.conn-item').first().hover();
     await page.locator('.conn-item').first().locator('.conn-btn').click();
@@ -375,11 +399,11 @@ async function main() {
     console.log('saved SSH credential auto-loaded after reload');
     if (browserErrors.length) throw new Error(`browser errors: ${browserErrors.join('\n')}`);
 
-    console.log('E2E test passed: PWA protocol client and PWA-owned telemetry follow active-tab lifecycle');
+    console.log('E2E test passed: PWA terminals and independent monitoring lifecycles');
   } catch (error) {
     console.error('terminal state:', await page?.evaluate(async () => {
       const { store } = await import('/src/stores/app.ts');
-      return store.tabs.map(({ id, cwd, initialCwd, state }) => ({ id, cwd, initialCwd, state }));
+      return store.tabs.map(({ id, kind, hostId, cwd, initialCwd, state, error }) => ({ id, kind, hostId, cwd, initialCwd, state, error }));
     }).catch(() => undefined));
     await page?.screenshot({ path: path.join(TMP_DIR, 'failure.png') });
     console.error('Test failed:', error.stack);
