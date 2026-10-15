@@ -109,12 +109,29 @@ python scripts/test.py ssh
 真实 zsh 使用 `SEAL_E2E_ZSH`，Windows 可指向 MSYS2 的 `usr/bin/zsh.exe`；与 Bash 分开运行同一套
 SSH 验证。zsh 的用户配置目录和启动临时目录都放在 fixture 内，不读取开发者的 zsh 配置。
 该环境变量也启用原生 zsh 单元测试，验证配置加载顺序、ZDOTDIR 重定向、既有提示符/目录钩子、
-命令退出状态、历史记录和正常/提前退出后的引导文件清理。
+命令退出状态、历史记录和正常/提前退出后的引导文件清理。POSIX 平台另测整个 shell 进程组收到
+SIGHUP 时的清理；Windows 跳过该信号测试，需用真实 Linux 环境补验。
 
 真实 shell 的历史仅写入测试目录。Windows 收尾终止自启 mock SSH 的进程树，再删除 fixture，
 防止子 shell 仍占用工作目录；不终止其他开发实例。Bash 提示符钩子与退出状态另由单元测试验证。
 AsyncSSH 的 PTY resize 会在 stdin 读取时抛出 `TerminalSizeChanged`，mock 必须消费后继续读取，
 否则终端刚上线即断开，telemetry 也无法开始 exec；不要将其误判为 Node 转发故障。
+
+## 真实 OpenSSH 目录继承
+
+`python scripts/test.py ssh-real` 连接独立的真实 SSH 测试端点，自行启动和清理本机 Vite、SealNode
+及临时配对存储。通过环境变量提供 `SEAL_E2E_SSH_HOST`、`SEAL_E2E_SSH_PORT`（默认 22）、
+`SEAL_E2E_SSH_USER` 和 `SEAL_E2E_SSH_PASSWORD`；本机服务仍用 `SEAL_E2E_HOST` 指定回环地址。
+不要对生产主机执行；测试会在远端 `/tmp/sealshell-directory-随机值` 创建目录，成功后删除。
+失败时由独立 fixture 的所有者清理残留目录。
+
+推荐在授权的 Docker 主机创建带 `--init` 的独立容器，安装 OpenSSH 和 zsh，将端口发布到宿主
+loopback 后用 SSH 隧道访问。容器 sshd 设置 `LANG=C.UTF-8`，并为测试账号启用密码认证及对应
+登录 shell；未配置 UTF-8 时，真实 zsh 行编辑器会将中文输入变成问号，pipe mock 不一定暴露此差异。
+
+此套件实际点击双击、右键菜单和快捷键，覆盖缺少/错误凭据重试、源目录随后改变及未知目录回退。
+每个副本都执行 `pwd -P` 并核对终端输出，不能仅凭应用中的目录字段判定成功。额外核对 fixture
+配置文件校验和、关闭全部 SSH 连接后的临时引导目录；普通退出与 SSH PTY 挂断是不同的清理路径。
 
 ## 选择器
 
