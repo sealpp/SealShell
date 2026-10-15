@@ -4,7 +4,7 @@ import { NodeConnection } from '../node-connection'
 
 const MAX_CHUNK = 60 * 1024
 
-export class NodeSessionTransport {
+export class NodeTcpTransport {
   private readonly connection = new NodeConnection()
   private inputCredit = 0
   private inputSequence = 0n

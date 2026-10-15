@@ -1,6 +1,7 @@
 import { FileOperationError } from '../files/types'
 import createLibssh2Module, { type LIBSSH2_CHANNEL, type LIBSSH2_SESSION, type SSH2WASMModule } from '@verdigris/libssh2.js'
-import { NodeSessionTransport } from './node-session'
+import { RoutedTransport } from '../transport/routed-transport'
+import type { ProxyConnection } from '../transport/types'
 
 const EAGAIN = -37
 // Emscripten's WASI errno value for EAGAIN, returned by the custom socket callback.
@@ -62,11 +63,12 @@ export interface Libssh2SessionOptions {
   port: number
   username: string
   password: string
+  proxy?: ProxyConnection
   onHostKey?: (publicKey: Uint8Array) => Promise<boolean>
 }
 
 export class Libssh2Session {
-  readonly transport = new NodeSessionTransport()
+  readonly transport = new RoutedTransport()
   private module!: SSH2WASMModule
   private session: LIBSSH2_SESSION = 0
   private channel: LIBSSH2_CHANNEL = 0
@@ -111,7 +113,7 @@ export class Libssh2Session {
       this.incoming.push(payload)
       this.outputHandlers.forEach((handler) => handler(payload))
     })
-    await this.transport.connect(options.host, options.port)
+    await this.transport.connect(options.host, options.port, options.proxy)
     const handshake = await this.pump(() => this.module.ssh2_session_handshake_custom(this.session))
     if (handshake !== 0) throw errorFor(this.module, this.session, 'SSH handshake failed')
     if (options.onHostKey) {
