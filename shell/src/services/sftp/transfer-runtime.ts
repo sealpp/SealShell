@@ -30,7 +30,6 @@ export async function setTransferConcurrency(value: number): Promise<number> {
 }
 
 export function enqueueTransfer(label: string, run: (signal: AbortSignal, progress: (bytes: number, total: number) => void) => Promise<TransferResult>): { id: string; promise: Promise<TransferResult> } {
-  transferRuntime.panelOpen = true
   return transferQueue.enqueue(label, run)
 }
 

@@ -18,6 +18,17 @@ async function controlledTransfer() {
 }
 
 describe('transfer detail visibility', () => {
+  it('starts background transfers without opening details', async () => {
+    const transfer = await controlledTransfer()
+    try {
+      expect(transfer.transferRuntime.tasks[0].state).toBe('running')
+      expect(transfer.transferRuntime.panelOpen).toBe(false)
+    } finally {
+      transfer.finish(result)
+      await transfer.task.promise
+    }
+  })
+
   it('keeps dismissed details closed during progress updates', async () => {
     const transfer = await controlledTransfer()
     transfer.transferRuntime.panelOpen = false

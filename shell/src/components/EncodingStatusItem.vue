@@ -57,7 +57,6 @@ function openPicker(): void {
 
 <style scoped>
 .statusbar-right {
-  margin-left: auto;
   display: inline-flex;
   align-items: center;
   height: 100%;

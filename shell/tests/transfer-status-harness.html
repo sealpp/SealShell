@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Transfer Status Harness</title>
+    <style>
+      html, body, #app { width:100%; height:100%; margin:0; background:#1e1e1e; color:#ccc; font:13px system-ui; }
+      .statusbar { position:fixed; bottom:0; left:0; right:0; display:flex; align-items:center; height:24px; border-top:1px solid #333; }
+      .statusbar-end { margin-left:auto; display:flex; align-items:center; height:100%; min-width:0; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h } from 'vue'
+      import '/src/styles/workbench.css'
+      import TransferStatusItem from '/src/components/TransferStatusItem.vue'
+      import EncodingStatusItem from '/src/components/EncodingStatusItem.vue'
+      import { store } from '/src/stores/app'
+      import { enqueueTransfer } from '/src/services/sftp/transfer-runtime'
+      import { TransferCancelledError } from '/src/services/sftp/transfer'
+
+      const jobs = new Map()
+      window.transferHarness = {
+        start(label) {
+          const job = {}
+          jobs.set(label, job)
+          const task = enqueueTransfer(label, (signal, progress) => {
+            job.progress = progress
+            return new Promise((resolve, reject) => {
+              job.finish = resolve
+              job.fail = reject
+              signal.addEventListener('abort', () => reject(new TransferCancelledError()), { once: true })
+            })
+          })
+          void task.promise.catch(() => {})
+        },
+        progress(label, value) { jobs.get(label).progress(value, 100) },
+        finish(label, orphanPath) { jobs.get(label).finish({ sourcePath:'/source', targetPath:'/target', bytes:100, atomic:true, metadataApplied:true, orphanPath }) },
+        fail(label) { jobs.get(label).fail(new Error('连接中断')) },
+        showEncoding() {
+          store.tabs.push({ id:'terminal', kind:'terminal', encoding:'utf-8', state:'idle' })
+          store.activeTerminalTabId = 'terminal'
+        },
+      }
+      createApp({ render: () => h('main', [
+        h('button', { type:'button' }, '工作区'),
+        h('footer', { class:'statusbar' }, [
+          h('span', 'Node'),
+          h('div', { class:'statusbar-end' }, [h(EncodingStatusItem), h(TransferStatusItem)]),
+        ]),
+      ]) }).mount('#app')
+    </script>
+  </body>
+</html>

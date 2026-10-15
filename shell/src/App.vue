@@ -25,7 +25,7 @@ import KeyboardShortcutsDialog from './components/KeyboardShortcutsDialog.vue'
 import AboutDialog from './components/AboutDialog.vue'
 import DirtyCloseDialog from './components/DirtyCloseDialog.vue'
 import InteractionDialog from './components/InteractionDialog.vue'
-import TransferPanel from './views/TransferPanel.vue'
+import TransferStatusItem from './components/TransferStatusItem.vue'
 import BottomPanel from './views/BottomPanel.vue'
 import BottomPanelStatusButton from './components/BottomPanelStatusButton.vue'
 import EncodingStatusItem from './components/EncodingStatusItem.vue'
@@ -386,7 +386,10 @@ onBeforeUnmount(() => {
     <div class="statusbar">
       <NodeStatusMenu />
       <BottomPanelStatusButton />
-      <EncodingStatusItem />
+      <div class="statusbar-end">
+        <EncodingStatusItem />
+        <TransferStatusItem />
+      </div>
     </div>
     <PairingView v-if="store.pairingModalOpen" />
     <HostFormView v-if="store.connectionModalOpen" />
@@ -402,7 +405,6 @@ onBeforeUnmount(() => {
     <AboutDialog v-if="store.aboutModalOpen" />
     <DirtyCloseDialog />
     <InteractionDialog />
-    <TransferPanel />
   </div>
 </template>
 
@@ -688,6 +690,14 @@ button, input {
   color: #fff;
   font-size: 12px;
   flex-shrink: 0;
+}
+
+.statusbar-end {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  min-width: 0;
 }
 
 </style>

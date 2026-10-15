@@ -178,6 +178,8 @@ unshare --net -- bash -c 'ip link set lo up; node .agents/skills/seal-e2e/run-fi
 初始目录不变时上级操作立即可用、双击 `..`、上级按钮、Alt+Up、前进/后退历史、根目录禁用和会话移除后禁用。
 此回归不需要启动 SealNode，不使用开发实例的配对或文件数据。
 
+`shell/tests/transfer-status.spec.ts` 使用真实传输队列与可控完成/失败回调，验证状态栏预览、关闭详情后连续进度不重开、排队取消、失败重试、完成后的保留项警示、编码入口共存和减少动态效果。此 UI 回归不启动 Node，也不操作真实文件。
+
 ## 前置代理与回环隔离
 
 `python scripts/test.py proxy` 启动独立的 mock HTTP CONNECT / SOCKS5、mock SSH、SealNode 和 Vite。
