@@ -211,6 +211,17 @@ async function onDrop(event: DragEvent, entry?: FileEntry): Promise<void> {
 
 function isSelected(entry: FileEntry): boolean { return !!tab.value?.file.selectedPaths.includes(entry.path) }
 
+function formatFileSize(bytes: number): string {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB']
+  let value = bytes
+  let unit = 0
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024
+    unit += 1
+  }
+  return `${Number(value.toFixed(2))} ${units[unit]}`
+}
+
 watch(() => tab.value?.file.cwd, syncPath)
 onMounted(syncPath)
 onBeforeUnmount(onDragLeave)
@@ -288,7 +299,7 @@ onBeforeUnmount(onDragLeave)
           @contextmenu="!isSelected(entry) && select(entry, $event)"
         >
           <span class="file-name"><span class="file-kind">{{ entry.kind === 'directory' ? '▰' : entry.kind === 'symlink' ? '↗' : '•' }}</span><span>{{ entry.name }}</span></span>
-          <span>{{ entry.kind === 'directory' ? '—' : entry.size }}</span>
+          <span :title="entry.kind === 'directory' ? undefined : `${entry.size.toLocaleString()} 字节`">{{ entry.kind === 'directory' ? '—' : formatFileSize(entry.size) }}</span>
           <span>{{ entry.modifiedAt ? new Date(entry.modifiedAt).toLocaleString() : '—' }}</span>
           <span>{{ entry.kind }}</span>
         </div>
