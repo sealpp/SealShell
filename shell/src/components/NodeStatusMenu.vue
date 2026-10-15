@@ -5,18 +5,12 @@ import CommandDropdownMenu from './CommandDropdownMenu.vue'
 import { store } from '../stores/app'
 import { MenuId } from '../services/actions/menuIds'
 import type { CommandContext } from '../services/context'
-import { wsUrl } from '../services/ws'
 
-const nodeHost = computed(() => {
-  try {
-    const url = new URL(wsUrl())
-    const port = url.port
-    if (port === '80' || port === '443' || !port) return url.hostname
-    return `${url.hostname}:${port}`
-  } catch {
-    return wsUrl().replace(/^wss?:\/\//, '')
-  }
-})
+const nodeStatusLabels = {
+  unpaired: '未配对',
+  connected: '已连接',
+  disconnected: '未连接',
+}
 
 const nodeStatus = computed(() => {
   if (!store.paired) return 'unpaired'
@@ -43,16 +37,14 @@ const nodeContext = computed<CommandContext>(() => ({
         type="button"
         class="node-status"
         :class="nodeStatus"
-        :title="store.paired ? `Node: ${nodeHost} (${nodeStatus === 'connected' ? '已连接' : '未连接'})` : 'Node: 未配对，点击配对'"
+        :title="`本地 Node：${nodeStatusLabels[nodeStatus]}`"
       >
         <i class="codicon codicon-remote" />
-        <span v-if="store.paired" class="node-label">WS: {{ nodeHost }}</span>
-        <span v-else class="node-label">未配对</span>
+        <span class="node-label">Node: {{ nodeStatusLabels[nodeStatus] }}</span>
       </button>
     </template>
 
     <template #before><DropdownMenuLabel class="menu-header">Node 操作</DropdownMenuLabel></template>
-    <template #after><DropdownMenuLabel class="menu-footer">{{ wsUrl() }}</DropdownMenuLabel></template>
   </CommandDropdownMenu>
 </template>
 

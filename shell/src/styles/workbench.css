@@ -674,23 +674,12 @@
   z-index: var(--workbench-layer-dropdown);
 }
 
-.node-menu .menu-header,
-.node-menu .menu-footer {
+.node-menu .menu-header {
   display: block;
   padding: var(--workbench-space-2) var(--workbench-space-3);
-  color: var(--workbench-text-muted);
-  font-size: 11px;
-}
-
-.node-menu .menu-header {
   color: var(--workbench-text-strong);
   font-size: 12px;
   font-weight: 600;
-}
-
-.node-menu .menu-footer {
-  border-top: 1px solid var(--workbench-border-muted);
-  word-break: break-all;
 }
 
 .node-menu .menu-item {

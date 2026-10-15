@@ -1,7 +1,6 @@
-import { IconCopy, IconLinkOff, IconPlug } from '@tabler/icons-vue'
+import { IconLinkOff, IconPlug } from '@tabler/icons-vue'
 import { store } from '../stores/app'
-import { disconnectNode, wsUrl } from './ws'
-import { writeToClipboard } from '../utils/clipboard'
+import { disconnectNode } from './ws'
 import { registerAction } from './commands'
 import { MenuId } from './actions/menuIds'
 
@@ -26,18 +25,6 @@ registerAction({
   when: 'isPaired == true',
   run: () => disconnectNode(),
   menus: [{ menuId: MenuId.NodeStatus, order: 20 }],
-})
-
-registerAction({
-  id: 'node.copyAddress',
-  title: '复制 Node 地址',
-  description: '复制当前 SealNode 地址',
-  category: 'workbench',
-  icon: IconCopy,
-  run: async () => {
-    await writeToClipboard(wsUrl())
-  },
-  menus: [{ menuId: MenuId.NodeStatus, order: 30 }],
 })
 
 export { NODE_MENU_ID } from './actions/menuIds'
