@@ -3,7 +3,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getFocusedTabId, store } from './stores/app'
 import { connect, initializePwa, setNodeDisconnectedHandler } from './services/ws'
 import { commandService, keybindingService, syncAppContext, ContextKeys } from './services/commands'
-import { startTelemetryService } from './services/telemetry'
+import { startTelemetryService, stopTelemetryService } from './services/telemetry'
+import { startWorkbenchCloseProtection } from './services/workbench-close-protection'
 import { loadKeybindingPreferences } from './services/keybindingPreferences'
 import PairingView from './views/PairingView.vue'
 import HostFormView from './views/HostFormView.vue'
@@ -267,6 +268,9 @@ async function connectNode() {
   }
 }
 
+const stopCloseProtection = startWorkbenchCloseProtection(window)
+let disposed = false
+
 onMounted(async () => {
   setNodeDisconnectedHandler(scheduleReconnect)
   try {
@@ -282,6 +286,7 @@ onMounted(async () => {
   } catch (error) {
     store.error = error instanceof Error ? error.message : String(error)
   }
+  if (disposed) return
   startTelemetryService()
   keybindingService.attach(window, () => {
     const tabId = getFocusedTabId()
@@ -300,6 +305,9 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  disposed = true
+  stopCloseProtection()
+  stopTelemetryService()
   endResize()
   setNodeDisconnectedHandler(undefined)
   keybindingService.dispose()

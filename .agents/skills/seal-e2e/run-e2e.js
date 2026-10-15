@@ -3,6 +3,7 @@ const readline = require('readline');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
+const { confirmReload } = require('./close-protection');
 
 const REPO = path.resolve(__dirname, '../../..');
 const SHELL_NODE_MODULES = path.join(REPO, 'shell/node_modules');
@@ -330,7 +331,26 @@ async function main() {
       throw new Error('metrics still showing -- after tab switch');
     }
 
-    await page.reload();
+    // Dismissing the browser close prompt must leave live SSH and telemetry intact.
+    const closeDialog = page.waitForEvent('dialog', { timeout: 10000 });
+    await page.close({ runBeforeUnload: true });
+    const confirmation = await closeDialog;
+    if (confirmation.type() !== 'beforeunload') throw new Error('expected a browser exit confirmation');
+    await confirmation.dismiss();
+    if (page.isClosed()) throw new Error('cancelling exit closed the page');
+    const samplesBeforeExit = readMockSshState().stat;
+    await page.waitForFunction(async () => {
+      const { store } = await import('/src/stores/app.ts');
+      return store.tabs.filter(tab => tab.kind === 'terminal').every(tab => tab.state === 'online');
+    });
+    const monitorDeadline = Date.now() + 15000;
+    while (readMockSshState().stat <= samplesBeforeExit) {
+      if (Date.now() > monitorDeadline) throw new Error('monitoring did not resume after cancelled exit');
+      await page.waitForTimeout(100);
+    }
+    console.log('PASS cancelled browser exit preserves live SSH and monitoring');
+
+    await confirmReload(page);
     await page.locator('.connections-header').getByText('会话', { exact: true }).waitFor();
     if (await page.locator('.conn-item').count() !== 2) {
       throw new Error('PWA host records did not survive a reload');

@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const assert = require('assert/strict');
+const { confirmReload } = require('./close-protection');
 const crypto = require('crypto');
 const REPO = path.resolve(__dirname, '../../..');
 const TEST_HOST = process.env.SEAL_E2E_HOST || '127.0.0.1';
@@ -249,7 +250,7 @@ const proxyState = () => JSON.parse(fs.readFileSync(statePath, 'utf8'));
     }, inlineId);
     console.log('PASS inline encrypted credentials and proxy-authentication editing without SSH login prompts');
 
-    await page.reload();
+    await confirmReload(page);
     await until(async () => await page.evaluate(async () => (await import('/src/stores/app.ts')).store.nodeConnected), 'Node automatic authentication after reload failed');
     assert.equal(await page.locator('.terminal-tab').count(), 0);
     await page.evaluate(async id => {

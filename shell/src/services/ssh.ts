@@ -3,6 +3,7 @@ import { readKnownHost } from './storage'
 import { SshWorkerClient } from './ssh/ssh-worker-client'
 import { copyConnection, type RemoteConnection } from './proxy/types'
 import { initialDirectoryCommand } from './terminalDirectory'
+import { closeProtection } from './close-protection'
 
 export interface SshConnectionInfo extends RemoteConnection {
   sessionId: string
@@ -82,6 +83,8 @@ export async function closeExec(sessionId: string): Promise<void> {
 }
 
 export async function exec(info: SshConnectionInfo, command: string): Promise<{ stdout: Uint8Array; stderr: Uint8Array; exitCode: number }> {
+  // Background commands can outlive their visible terminal or inspector.
+  const releaseProtection = closeProtection.acquire('remote-command')
   const previous = execLocks.get(info.sessionId) ?? Promise.resolve()
   const task = previous.then(async () => {
     const sessionId = `exec-${info.sessionId}-${randomId()}`
@@ -98,6 +101,7 @@ export async function exec(info: SshConnectionInfo, command: string): Promise<{ 
     return await task
   } finally {
     if (execLocks.get(info.sessionId) === lock) execLocks.delete(info.sessionId)
+    releaseProtection()
   }
 }
 

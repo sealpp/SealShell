@@ -4,6 +4,7 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 const assert = require('assert/strict');
+const { confirmReload } = require('./close-protection');
 const REPO = path.resolve(__dirname, '../../..');
 const TEST_HOST = process.env.SEAL_E2E_HOST || '127.0.0.1';
 const { chromium } = require(path.join(REPO, 'shell/node_modules/playwright'));
@@ -179,7 +180,7 @@ async function until(predicate, message, timeout = 45000) {
     const restoredWidths = await paneWidths();
     assert(restoredWidths.every((width, index) => Math.abs(width - closedWidths[index]) < 3), 'independent tabs must preserve existing pane widths');
     await page.screenshot({ path: path.join(artifacts, 'split.png') });
-    await page.reload();
+    await confirmReload(page);
     await until(async () => await page.locator('.node-status').count() > 0 || await page.getByRole('button', { name: '面板', exact: true }).count() > 0, 'app reload failed');
     await until(async () => await page.evaluate(async () => (await import('/src/stores/app.ts')).store.nodeConnected), 'automatic Node authentication failed');
     assert.equal(await page.locator('.file-panel').count(), 0);
