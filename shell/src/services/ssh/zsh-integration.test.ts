@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
@@ -70,6 +70,31 @@ it.skipIf(!existsSync(zsh))('cleans up the bootstrap when a user startup file ex
     })).toThrow()
     expect(readdirSync(test.temporary)).toEqual([])
   } finally {
+    rmSync(test.root, { recursive: true, force: true })
+  }
+})
+
+it.skipIf(!existsSync(zsh) || process.platform === 'win32')('cleans up the bootstrap when SSH hangs up the shell process group', async () => {
+  const test = fixture()
+  const child = spawn(zsh, ['-f', '-c', ZSH_STARTUP_COMMAND], { env: test.env, detached: true, stdio: ['pipe', 'pipe', 'pipe'] })
+  try {
+    let output = ''
+    let signalled = false
+    child.stdout.on('data', data => {
+      output += data.toString()
+      if (!signalled && output.includes('\x1b]1337;CurrentDir=')) {
+        signalled = true
+        process.kill(-child.pid!, 'SIGHUP')
+      }
+    })
+    await new Promise<void>((resolve, reject) => {
+      child.once('error', reject)
+      child.once('close', () => resolve())
+    })
+    expect(signalled).toBe(true)
+    expect(readdirSync(test.temporary)).toEqual([])
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) process.kill(-child.pid!, 'SIGKILL')
     rmSync(test.root, { recursive: true, force: true })
   }
 })

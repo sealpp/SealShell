@@ -23,16 +23,16 @@ ZDOTDIR=$__SEAL_INIT_DIR`}`
   return `builtin printf '%s' ${quote(script)} > "$__seal_dir/${name}" || return`
 }).join('\n')
 
-// The parent owns only these four temporary files and removes them even when a
-// startup file exits early. No initialization code enters terminal input/history.
+const cleanup = `command rm -f -- ${startupFiles.map(name => `"$__seal_dir/${name}"`).join(' ')}
+command rmdir -- "$__seal_dir"`
+
+// An EXIT trap also runs on SSH hangup; zsh's try/always skips cleanup on SIGHUP.
+// The parent owns only these four files. No setup enters terminal input/history.
+// Keep the directory in parent scope: EXIT may run after function locals expire.
 export const ZSH_STARTUP_COMMAND = `() {
-  builtin local __seal_dir
+  builtin typeset -g __seal_dir
   __seal_dir=$(command mktemp -d "\${TMPDIR:-/tmp}/sealshell-zsh.XXXXXXXX") || return
-  {
-    ${writeStartupFiles}
-    __SEAL_ZDOTDIR_SET=\${+ZDOTDIR} __SEAL_ZDOTDIR=\${ZDOTDIR-} __SEAL_INIT_DIR=$__seal_dir ZDOTDIR=$__seal_dir command zsh -il
-  } always {
-    command rm -f -- ${startupFiles.map(name => `"$__seal_dir/${name}"`).join(' ')}
-    command rmdir -- "$__seal_dir"
-  }
+  trap ${quote(cleanup)} EXIT
+  ${writeStartupFiles}
+  __SEAL_ZDOTDIR_SET=\${+ZDOTDIR} __SEAL_ZDOTDIR=\${ZDOTDIR-} __SEAL_INIT_DIR=$__seal_dir ZDOTDIR=$__seal_dir command zsh -il
 }`
