@@ -316,7 +316,12 @@ class ClientConnection:
             raise ProtocolError("message_too_large", "Response exceeds the message limit")
         async with self._send_lock:
             if not self.closed:
-                await self.websocket.send(payload)
+                try:
+                    await self.websocket.send(payload)
+                except websockets.ConnectionClosed:
+                    # The peer may finish closing between the state check and
+                    # send. Let run() release streams and file handles normally.
+                    self.closed = True
 
     async def send_error(self, request_id: str, code: str, message: str, stream_id: int = 0) -> None:
         msg = self.message()
@@ -356,6 +361,8 @@ class ClientConnection:
                     await self.send_error(msg.request_id, exc.code, exc.message)
                 except Exception as exc:
                     await self.send_error(msg.request_id, "internal", str(exc))
+        except websockets.ConnectionClosed:
+            pass
         finally:
             self.closed = True
             for task in list(self._tasks):
