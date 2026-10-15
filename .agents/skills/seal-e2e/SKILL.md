@@ -92,7 +92,7 @@ E2E 必须解析实际六位码，不要写死。测试必须将 `SEAL_TRUST_PAT
 交互式 shell 必须保持存活。PWA telemetry 使用独立 libssh2 Worker 的 direct `channel_exec`，
 不依赖 shell marker，也不复用控制连接。
 
-终端连接会先在已认证会话探测 Bash；mock 默认返回空版本，继续走普通交互 shell。
+终端连接会先在已认证会话探测 Bash/zsh；mock 默认返回空版本，继续走普通交互 shell。
 `run-e2e.js` 启用 OSC 7 目录报告并固定测试密码，覆盖双击、右键新建、Ctrl+反引号、补输密码、
 认证重试与未知目录回退；目录包含中文、空格、单引号、百分号和命令替换符。必须同时验证 shell
 实际目录和 PWA 报告目录，不能只断言复制了状态字段。
@@ -106,8 +106,13 @@ $env:SEAL_E2E_BASH = 'C:\path\to\Git\bin\bash.exe'
 python scripts/test.py ssh
 ```
 
-真实 Bash 的历史仅写入测试目录。Windows 收尾终止自启 mock SSH 的进程树，再删除 fixture，
-防止子 Bash 仍占用工作目录；不终止其他开发实例。Bash 提示符钩子与退出状态另由单元测试验证。
+真实 zsh 使用 `SEAL_E2E_ZSH`，Windows 可指向 MSYS2 的 `usr/bin/zsh.exe`；与 Bash 分开运行同一套
+SSH 验证。zsh 的用户配置目录和启动临时目录都放在 fixture 内，不读取开发者的 zsh 配置。
+该环境变量也启用原生 zsh 单元测试，验证配置加载顺序、ZDOTDIR 重定向、既有提示符/目录钩子、
+命令退出状态、历史记录和正常/提前退出后的引导文件清理。
+
+真实 shell 的历史仅写入测试目录。Windows 收尾终止自启 mock SSH 的进程树，再删除 fixture，
+防止子 shell 仍占用工作目录；不终止其他开发实例。Bash 提示符钩子与退出状态另由单元测试验证。
 AsyncSSH 的 PTY resize 会在 stdin 读取时抛出 `TerminalSizeChanged`，mock 必须消费后继续读取，
 否则终端刚上线即断开，telemetry 也无法开始 exec；不要将其误判为 Node 转发故障。
 

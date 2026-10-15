@@ -18,6 +18,7 @@ const MOCK_SSH_SCRIPT = path.join(__dirname, 'mock-ssh-server.py');
 const TMP_DIR = path.join(os.tmpdir(), 'seal-e2e');
 const MOCK_SSH_STATE_PATH = path.join(TMP_DIR, 'mock-ssh-state.json');
 const PWA_URL = process.env.PWA_URL || 'http://127.0.0.1:8081';
+const NATIVE_SHELL = process.env.SEAL_E2E_ZSH || process.env.SEAL_E2E_BASH;
 
 function waitForLine(proc, regex) {
   return new Promise((resolve, reject) => {
@@ -89,6 +90,7 @@ async function main() {
       MOCK_SSH_REPORT_CWD: '1',
       MOCK_SSH_PASSWORD: 'test',
       ...(process.env.SEAL_E2E_BASH ? { MOCK_SSH_BASH: process.env.SEAL_E2E_BASH } : {}),
+      ...(process.env.SEAL_E2E_ZSH ? { MOCK_SSH_ZSH: process.env.SEAL_E2E_ZSH } : {}),
     });
     const sshPort = await waitForLine(sshProc, /MOCK_SSH_PORT=(\d+)/);
     console.log('mock SSH port:', sshPort);
@@ -173,10 +175,10 @@ async function main() {
     await addHost('A');
     if (!hostKeyPromptSeen) throw new Error('first SSH connection did not request host-key confirmation');
 
-    const sourceDirectory = process.env.SEAL_E2E_BASH
+    const sourceDirectory = NATIVE_SHELL
       ? path.join(trustDirectory, 'remote', "中文 path", "a'b;$(touch sentinel) #%=back").replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, drive) => `/${drive.toLowerCase()}`)
       : "/workspace/中文 path/a'b;$(touch sentinel) #%=back";
-    if (process.env.SEAL_E2E_BASH) fs.mkdirSync(path.join(trustDirectory, 'remote', "中文 path", "a'b;$(touch sentinel) #%=back"), { recursive: true });
+    if (NATIVE_SHELL) fs.mkdirSync(path.join(trustDirectory, 'remote', "中文 path", "a'b;$(touch sentinel) #%=back"), { recursive: true });
     await page.evaluate(async () => {
       const { store } = await import('/src/stores/app.ts');
       window.sealE2eStore = store;
@@ -387,7 +389,7 @@ async function main() {
     await browser?.close();
     const children = [sshProc, nodeProc].filter(proc => proc?.pid);
     for (const proc of children) if (proc.exitCode === null) {
-      if (process.platform === 'win32' && proc === sshProc && process.env.SEAL_E2E_BASH) {
+      if (process.platform === 'win32' && proc === sshProc && NATIVE_SHELL) {
         spawnSync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
       } else proc.kill();
     }

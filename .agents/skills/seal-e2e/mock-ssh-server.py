@@ -27,6 +27,8 @@ class MockSSHServer(asyncssh.SSHServer):
 call_count = {"shell": 0, "exec": 0, "probe": 0, "stat": 0}
 state_path = os.environ.get("MOCK_SSH_STATE_PATH")
 bash_path = os.environ.get("MOCK_SSH_BASH")
+zsh_path = os.environ.get("MOCK_SSH_ZSH")
+shell_path = zsh_path or bash_path
 mock_sftp_root = Path(os.environ.get("MOCK_SFTP_ROOT", str(Path(tempfile.gettempdir()) / "seal-mock-sftp")))
 mock_sftp_root.mkdir(parents=True, exist_ok=True)
 (mock_sftp_root / "README.md").write_text("SealShell SFTP mock\n", encoding="utf-8")
@@ -96,11 +98,12 @@ class MeasuredSFTPServer(asyncssh.SFTPServer):
 
 
 def command_output(command: str) -> tuple[str, int]:
-    if command == "printf 'SEAL_BASH_VERSION=%s\\n' \"$BASH_VERSION\"":
-        if bash_path:
-            result = subprocess.run([bash_path, "--noprofile", "--norc", "-c", command], capture_output=True, text=True)
+    if command == "printf 'SEAL_BASH_VERSION=%s\\nSEAL_ZSH_VERSION=%s\\n' \"${BASH_VERSION-}\" \"${ZSH_VERSION-}\"":
+        if shell_path:
+            args = ["-f"] if zsh_path else ["--noprofile", "--norc"]
+            result = subprocess.run([shell_path, *args, "-c", command], capture_output=True, text=True)
             return result.stdout, result.returncode
-        return "SEAL_BASH_VERSION=\n", 0
+        return "SEAL_BASH_VERSION=\nSEAL_ZSH_VERSION=\n", 0
     if command == "uname -s":
         call_count["probe"] += 1
         write_state()
@@ -114,14 +117,25 @@ def command_output(command: str) -> tuple[str, int]:
     return f"unknown command: {command}\n", 1
 
 
-async def handle_bash(process: asyncssh.SSHServerProcess, startup_command: str | None = None) -> None:
+async def handle_native_shell(process: asyncssh.SSHServerProcess, startup_command: str | None = None) -> None:
     call_count["shell"] += 1
     shell_id = str(call_count["shell"])
     write_state()
-    args = ["--noprofile", "--norc", "-c", startup_command] if startup_command else ["--noprofile", "--norc", "-i"]
-    bash = await asyncio.create_subprocess_exec(
-        bash_path, *args, cwd=mock_sftp_root,
-        env={**os.environ, "HISTFILE": str(mock_sftp_root / "bash-history"), "CHERE_INVOKING": "1"},
+    args = ["-f"] if zsh_path else ["--noprofile", "--norc"]
+    args += ["-c", startup_command] if startup_command else ["-i"]
+    shell_env = {**os.environ, "HISTFILE": str(mock_sftp_root / "shell-history"), "CHERE_INVOKING": "1"}
+    if zsh_path:
+        # Keep user profiles and all bootstrap files inside the test fixture.
+        config = mock_sftp_root / "zsh-config"
+        config.mkdir(exist_ok=True)
+        temporary = mock_sftp_root / "zsh-tmp"
+        temporary.mkdir(exist_ok=True)
+        posix = lambda path: re.sub(r"^([A-Za-z]):", lambda match: "/" + match[1].lower(), path.as_posix())
+        shell_env.update(ZDOTDIR=posix(config), TMPDIR=posix(temporary))
+        shell_env["PATH"] = str(Path(zsh_path).parent) + os.pathsep + os.environ["PATH"]
+    shell = await asyncio.create_subprocess_exec(
+        shell_path, *args, cwd=mock_sftp_root,
+        env=shell_env,
         stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
     )
 
@@ -132,15 +146,15 @@ async def handle_bash(process: asyncssh.SSHServerProcess, startup_command: str |
             except asyncssh.TerminalSizeChanged:
                 continue
             if not data:
-                bash.stdin.close()
+                shell.stdin.close()
                 return
-            bash.stdin.write(data.encode())
-            await bash.stdin.drain()
+            shell.stdin.write(data.encode())
+            await shell.stdin.drain()
 
     async def forward_output() -> None:
         pending = ""
         decoder = codecs.getincrementaldecoder("utf-8")()
-        while data := await bash.stdout.read(4096):
+        while data := await shell.stdout.read(4096):
             text = decoder.decode(data)
             process.stdout.write(text)
             pending += text
@@ -152,20 +166,20 @@ async def handle_bash(process: asyncssh.SSHServerProcess, startup_command: str |
 
     tasks = [asyncio.create_task(forward_input()), asyncio.create_task(forward_output())]
     try:
-        await bash.wait()
+        await shell.wait()
         await tasks[1]
     finally:
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-        if bash.returncode is None:
-            bash.terminate()
-            await bash.wait()
+        if shell.returncode is None:
+            shell.terminate()
+            await shell.wait()
 
 
 async def handle_shell(process: asyncssh.SSHServerProcess) -> None:
-    if bash_path:
-        await handle_bash(process)
+    if shell_path:
+        await handle_native_shell(process)
         return
     call_count["shell"] += 1
     shell_id = str(call_count["shell"])
@@ -226,8 +240,8 @@ async def handle_shell(process: asyncssh.SSHServerProcess) -> None:
 
 async def handle_process(process: asyncssh.SSHServerProcess) -> None:
     command = (process.command or "").strip()
-    if bash_path and command.startswith('exec "$BASH" --init-file '):
-        await handle_bash(process, command)
+    if (bash_path and command.startswith('exec "$BASH" --init-file ')) or (zsh_path and command.startswith('() {')):
+        await handle_native_shell(process, command)
         return
     if command:
         call_count["exec"] += 1

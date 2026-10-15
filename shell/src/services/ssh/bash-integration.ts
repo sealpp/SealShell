@@ -1,7 +1,5 @@
 import integration from './bash-integration.sh?raw'
 
-export const BASH_VERSION_PROBE = `printf 'SEAL_BASH_VERSION=%s\\n' "$BASH_VERSION"`
-
 // Match an interactive SSH login's profiles. Bash ignores --init-file with -l,
 // so load the login profiles here, as VS Code's Bash integration does.
 const initScript = `if [ -r /etc/profile ]; then . /etc/profile; fi

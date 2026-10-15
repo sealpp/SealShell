@@ -2,7 +2,7 @@ import { FileOperationError, type FileReader, type FileWriter } from '../files/t
 import createLibssh2Module, { type LIBSSH2_CHANNEL, type LIBSSH2_SESSION, type SSH2WASMModule } from '@verdigris/libssh2.js'
 import { RoutedTransport } from '../transport/routed-transport'
 import type { ProxyConnection } from '../transport/types'
-import { BASH_STARTUP_COMMAND, BASH_VERSION_PROBE } from './bash-integration'
+import { SHELL_VERSION_PROBE, shellStartupCommand } from './shell-integration'
 
 const EAGAIN = -37
 // Emscripten's WASI errno value for EAGAIN, returned by the custom socket callback.
@@ -140,10 +140,8 @@ export class Libssh2Session {
     let startupCommand: string | undefined
     if (integrateShell) {
       try {
-        const probe = await this.exec(BASH_VERSION_PROBE)
-        if (probe.exitCode === 0 && /^SEAL_BASH_VERSION=\d+\./m.test(textDecoder.decode(probe.stdout))) {
-          startupCommand = BASH_STARTUP_COMMAND
-        }
+        const probe = await this.exec(SHELL_VERSION_PROBE)
+        if (probe.exitCode === 0) startupCommand = shellStartupCommand(textDecoder.decode(probe.stdout))
       } catch (error) {
         // SSH servers may allow interactive shells while denying exec requests.
         if (!(error instanceof Libssh2Error && error.code === -22)) throw error
