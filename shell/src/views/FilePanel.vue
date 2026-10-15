@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import ProxyErrorAction from '../components/ProxyErrorAction.vue'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { IconArrowBackUp, IconArrowForwardUp, IconArrowUp, IconEye, IconRefresh } from '@tabler/icons-vue'
 import CommandContextMenu from '../components/CommandContextMenu.vue'
 import { FILE_MENU_ID } from '../services/actions/menuIds'
@@ -22,6 +22,56 @@ const scrollTop = ref(0)
 const viewportHeight = ref(600)
 const ROW_HEIGHT = 32
 let activateTimer: number | undefined
+
+const columns = [
+  { label: '名称', minWidth: 80 },
+  { label: '大小', minWidth: 64 },
+  { label: '修改时间', minWidth: 110 },
+  { label: '类型', minWidth: 64 },
+]
+const columnWidths = ref<number[]>([])
+const columnResize = shallowRef<{ index: number; pointerId: number; startX: number; startWidth: number } | null>(null)
+const columnStyle = computed(() => columnWidths.value.length ? {
+  '--file-columns': columnWidths.value.map((width) => `${width}px`).join(' '),
+  '--file-list-width': `${columnWidths.value.reduce((sum, width) => sum + width, 0) + 54}px`,
+} : undefined)
+
+function measureColumns(handle: HTMLElement): void {
+  const header = handle.parentElement!.parentElement!
+  columnWidths.value = Array.from(header.children, (cell) => cell.getBoundingClientRect().width)
+}
+
+function startColumnResize(event: PointerEvent, index: number): void {
+  if (event.button !== 0 || columnResize.value) return
+  event.preventDefault()
+  const handle = event.currentTarget as HTMLElement
+  measureColumns(handle)
+  columnResize.value = { index, pointerId: event.pointerId, startX: event.clientX, startWidth: columnWidths.value[index] }
+  handle.setPointerCapture(event.pointerId)
+}
+
+function moveColumnResize(event: PointerEvent): void {
+  const resize = columnResize.value
+  if (!resize || resize.pointerId !== event.pointerId) return
+  columnWidths.value[resize.index] = Math.max(columns[resize.index].minWidth, Math.round(resize.startWidth + event.clientX - resize.startX))
+}
+
+function endColumnResize(event: PointerEvent): void {
+  if (columnResize.value?.pointerId !== event.pointerId) return
+  columnResize.value = null
+  const handle = event.currentTarget as HTMLElement
+  if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId)
+}
+
+function resizeColumnWithKeyboard(event: KeyboardEvent, index: number): void {
+  if (!['ArrowLeft', 'ArrowRight', 'Home'].includes(event.key)) return
+  event.preventDefault()
+  event.stopPropagation()
+  measureColumns(event.currentTarget as HTMLElement)
+  columnWidths.value[index] = event.key === 'Home'
+    ? columns[index].minWidth
+    : Math.max(columns[index].minWidth, columnWidths.value[index] + (event.key === 'ArrowLeft' ? -10 : 10))
+}
 
 const sortedEntries = computed(() => tab.value?.file.entries ?? [])
 const canNavigateParent = computed(() => {
@@ -187,8 +237,29 @@ onBeforeUnmount(onDragLeave)
         </select>
       </header>
       <div v-if="tab.file.error" class="file-error">{{ tab.file.error }} <ProxyErrorAction :source="tab.proxySource" :message="tab.file.error" /></div>
-      <div ref="listEl" class="file-list" @scroll="onListScroll">
-        <div class="file-list-head"><span>名称</span><span>大小</span><span>修改时间</span><span>类型</span></div>
+      <div ref="listEl" class="file-list" :style="columnStyle" @scroll="onListScroll">
+        <div class="file-list-head">
+          <span v-for="(column, index) in columns" :key="column.label" class="file-column-header">
+            <span>{{ column.label }}</span>
+            <span
+              class="file-column-resizer"
+              :class="{ dragging: columnResize?.index === index }"
+              role="separator"
+              tabindex="0"
+              aria-orientation="vertical"
+              :aria-label="`调整${column.label}列宽`"
+              :aria-valuemin="column.minWidth"
+              :aria-valuenow="columnWidths[index]"
+              :title="`拖动调整${column.label}列宽`"
+              @pointerdown="startColumnResize($event, index)"
+              @pointermove="moveColumnResize"
+              @pointerup="endColumnResize"
+              @pointercancel="endColumnResize"
+              @lostpointercapture="endColumnResize"
+              @keydown="resizeColumnWithKeyboard($event, index)"
+            />
+          </span>
+        </div>
         <div
           class="file-row file-parent"
           :class="{ disabled: !canNavigateParent }"
@@ -231,5 +302,6 @@ onBeforeUnmount(onDragLeave)
 
 <style scoped>
 .file-parent{color:#ddd;cursor:pointer}.file-parent.disabled{color:#777;cursor:default}
-.file-panel{min-width:0;overflow:hidden;width:100%;height:100%;display:flex;flex-direction:column;background:#1e1e1e;color:#ccc;outline:none}.file-toolbar{min-height:40px;flex-wrap:wrap;display:flex;align-items:center;gap:5px;padding:5px 8px;background:#252526;border-bottom:1px solid #333}.file-toolbar button{width:27px;height:27px;display:inline-flex;align-items:center;justify-content:center;background:#333;border:1px solid #444;color:#ccc;cursor:pointer}.file-toolbar button:hover,.file-toolbar button.active{background:#0e639c;color:#fff}.file-toolbar button:disabled{opacity:.4;cursor:default}.file-toolbar input{min-width:100px;flex:1;height:27px;background:#1e1e1e;border:1px solid #555;color:#eee;padding:0 8px}.file-toolbar select{height:27px;max-width:120px;background:#1e1e1e;border:1px solid #555;color:#ddd}.file-error{padding:8px 12px;color:#f48771;background:#3a1d1d;border-bottom:1px solid #633}.file-list{min-height:0;flex:1;overflow:auto}.file-list-head,.file-row{box-sizing:border-box;display:grid;grid-template-columns:minmax(140px,2fr) 80px 155px 80px;gap:10px;align-items:center;padding:0 12px;min-width:max(100%,510px);min-height:32px;height:32px;border-bottom:1px solid #2a2a2a}.virtual-spacer{pointer-events:none}.file-list-head{position:sticky;top:0;background:#2d2d2d;color:#aaa;font-size:12px;z-index:1}.file-row{cursor:default}.file-row:hover{background:#2a2d2e}.file-row.selected{background:#37373d;color:#ccc}.file-panel.focused .file-row.selected{background:#094771;color:#fff}.file-row.drop{outline:1px solid #3794ff}.file-row>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.file-name{display:flex;align-items:center;gap:8px;min-width:0}.file-name span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-kind{color:#dcdcaa}.file-empty{padding:28px;color:#777;text-align:center}
+.file-panel{min-width:0;overflow:hidden;width:100%;height:100%;display:flex;flex-direction:column;background:#1e1e1e;color:#ccc;outline:none}.file-toolbar{min-height:40px;flex-wrap:wrap;display:flex;align-items:center;gap:5px;padding:5px 8px;background:#252526;border-bottom:1px solid #333}.file-toolbar button{width:27px;height:27px;display:inline-flex;align-items:center;justify-content:center;background:#333;border:1px solid #444;color:#ccc;cursor:pointer}.file-toolbar button:hover,.file-toolbar button.active{background:#0e639c;color:#fff}.file-toolbar button:disabled{opacity:.4;cursor:default}.file-toolbar input{min-width:100px;flex:1;height:27px;background:#1e1e1e;border:1px solid #555;color:#eee;padding:0 8px}.file-toolbar select{height:27px;max-width:120px;background:#1e1e1e;border:1px solid #555;color:#ddd}.file-error{padding:8px 12px;color:#f48771;background:#3a1d1d;border-bottom:1px solid #633}.file-list{min-height:0;flex:1;overflow:auto}.file-list-head,.file-row{box-sizing:border-box;display:grid;grid-template-columns:var(--file-columns,minmax(140px,1fr) 80px 155px 80px);gap:10px;align-items:center;padding:0 12px;min-width:max(100%,var(--file-list-width,510px));min-height:32px;height:32px;border-bottom:1px solid #2a2a2a}.virtual-spacer{pointer-events:none}.file-list-head{position:sticky;top:0;background:#2d2d2d;color:#aaa;font-size:12px;z-index:1}.file-row{cursor:default}.file-row:hover{background:#2a2d2e}.file-row.selected{background:#37373d;color:#ccc}.file-panel.focused .file-row.selected{background:#094771;color:#fff}.file-row.drop{outline:1px solid #3794ff}.file-row>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.file-name{display:flex;align-items:center;gap:8px;min-width:0}.file-name span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-kind{color:#dcdcaa}.file-empty{padding:28px;color:#777;text-align:center}
+.file-column-header{position:relative;min-width:0;height:100%;display:flex;align-items:center}.file-column-header>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-column-resizer{position:absolute;top:0;right:-9px;bottom:0;width:8px;cursor:col-resize;touch-action:none;user-select:none;outline:none}.file-column-resizer::after{content:"";position:absolute;top:6px;bottom:6px;left:3px;width:1px;background:#444}.file-column-resizer:hover::after,.file-column-resizer:focus-visible::after,.file-column-resizer.dragging::after{top:0;bottom:0;width:2px;background:#3794ff}
 </style>
