@@ -21,6 +21,8 @@ export class SshWorkerClient {
   private readonly worker: Worker
   private readonly execPending = new Map<string, { resolve: (value: { stdout: Uint8Array; stderr: Uint8Array; exitCode: number }) => void; reject: (error: Error) => void }>()
   private closed = false
+  private closing?: Promise<void>
+  private closeDone?: () => void
   private host = ''
   private port = 0
   onState: ((state: WorkerState, error?: string) => void) | undefined
@@ -52,8 +54,8 @@ export class SshWorkerClient {
       const previous = this.onState
       this.onState = (state, error) => {
         previous?.(state, error)
-        if (state === 'online') resolve()
-        if (state === 'error') reject(new Error(error || 'SSH connection failed'))
+        if (state === 'online' && !this.closed) resolve()
+        if (state === 'error' || state === 'idle' || this.closed) reject(new Error(error || 'SSH connection closed'))
       }
     })
   }
@@ -74,10 +76,11 @@ export class SshWorkerClient {
   }
 
   async close(): Promise<void> {
-    if (this.closed) return
+    if (this.closed) return this.closing
     this.closed = true
-    this.post({ type: 'close' })
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    this.closing = new Promise(resolve => { this.closeDone = resolve })
+    this.worker.postMessage({ type: 'close' })
+    await this.closing
     this.worker.terminate()
     for (const pending of this.execPending.values()) pending.reject(new Error('SSH worker closed'))
     this.execPending.clear()
@@ -85,6 +88,11 @@ export class SshWorkerClient {
 
   private handle(event: any): void {
     if (!event || typeof event.type !== 'string') return
+    if (event.type === 'closed') {
+      this.onState?.('idle')
+      this.closeDone?.()
+      return
+    }
     if (event.type === 'state') {
       this.onState?.(event.state as WorkerState, event.error)
       return
@@ -108,6 +116,7 @@ export class SshWorkerClient {
       this.onState?.('error', `${event.code}: ${event.message}`)
       for (const pending of this.execPending.values()) pending.reject(new Error(`${event.code}: ${event.message}`))
       this.execPending.clear()
+      this.closeDone?.()
     }
   }
 
@@ -138,6 +147,9 @@ export class SshWorkerClient {
     this.onState?.('error', error.message)
     for (const pending of this.execPending.values()) pending.reject(error)
     this.execPending.clear()
+    this.closed = true
+    this.worker.terminate()
+    this.closeDone?.()
   }
 }
 

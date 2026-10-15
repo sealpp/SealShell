@@ -64,12 +64,14 @@ export class NodeConnection {
   private socket?: WebSocket
   private readonly pending = new Map<string, { resolve: (value: SealMessage) => void; reject: (error: Error) => void }>()
   private closed = false
+  private closing?: Promise<void>
   private openedReject?: (error: Error) => void
   onEvent?: (message: SealMessage) => void
   onClosed?: (error: Error) => void
 
   async connect(): Promise<string> {
     const identity = await readIdentity()
+    if (this.closed) throw new Error('Node connection is closed')
     if (!identity?.nodeId || !identity.nodePublicKey) throw new Error('PWA device is not paired with SealNode')
     this.socket = new WebSocket(nodeUrl())
     this.socket.binaryType = 'arraybuffer'
@@ -127,14 +129,18 @@ export class NodeConnection {
     this.socket.send(payload)
   }
 
-  close(error = new Error('Node connection closed')): void {
-    if (this.closed) return
+  close(error = new Error('Node connection closed')): Promise<void> {
+    if (this.closed) return this.closing ?? Promise.resolve()
     this.closed = true
+    const socket = this.socket
+    this.closing = !socket || socket.readyState === WebSocket.CLOSED ? Promise.resolve()
+      : new Promise(resolve => socket.addEventListener('close', () => resolve(), { once: true }))
     this.openedReject?.(error)
     this.openedReject = undefined
     for (const request of this.pending.values()) request.reject(error)
     this.pending.clear()
-    this.socket?.close()
+    socket?.close(1000)
     this.onClosed?.(error)
+    return this.closing
   }
 }

@@ -70,9 +70,9 @@ export class NodeTcpTransport {
   }
 
   async close(reason = 'session_closed'): Promise<void> {
-    if (this.closed) return
+    if (this.closed) { await this.connection.close(); return }
     try { this.connection.send({ case: 'transportCloseRequest', value: create(TransportCloseRequestSchema, { streamId: 1, reason }) }) }
-    finally { this.connection.close() }
+    finally { await this.connection.close() }
   }
 
   private wake(): void { this.waiters.splice(0).forEach((done) => done()) }
