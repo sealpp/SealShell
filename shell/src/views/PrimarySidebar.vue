@@ -20,7 +20,7 @@ function onReady(event: DockviewReadyEvent) {
     } as any)
     event.api.addPanel({
       id: 'connections',
-      title: '当前连接',
+      title: '会话',
       component: 'connections',
       position: { referenceGroup: group, direction: 'within' },
     })

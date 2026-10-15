@@ -96,12 +96,13 @@ AsyncSSH 的 PTY resize 会在 stdin 读取时抛出 `TerminalSizeChanged`，moc
 
 ## 选择器
 
-`配对`、`登录`、`新建连接` 文字可能同时出现在侧边栏和弹窗中，必须限定作用域：
+`配对`、`登录`、`新建连接` 文字可能出现在菜单和弹窗中，必须限定作用域：
 
 - Dialog 内容：`.workbench-dialog-content`
 - 主操作按钮：`.workbench-dialog-content .workbench-dialog-button--primary`
 - 取消按钮：`.workbench-dialog-button--default`
-- 新建连接：`.new-btn`
+- 新建连接：在「会话」列表 `.conn-list` 空白处右键，再点击 `page.getByRole('menuitem', { name: '新建连接', exact: true })`；标题栏不提供新建按钮。测试列表内容较少时可直接右键列表中心，否则定位到底部空白处。
+- 配对完成：等待 `page.getByRole('dialog', { name: '配对 Node', exact: true })` 隐藏。
 - 登录按钮：`page.getByRole('button', { name: '登录' })`
 - 确认按钮（新建/编辑主机弹窗）：`page.getByRole('button', { name: '确认' })`
 - 记住密码勾选框：`input[type="checkbox"]`

@@ -61,7 +61,8 @@ async function until(predicate, message, timeout = 45000) {
     await page.goto(`http://${TEST_HOST}:8081`);
     await page.getByPlaceholder('000000').fill(pin);
     await page.locator('.workbench-dialog-content .workbench-dialog-button--primary').click();
-    await page.locator('.new-btn').click();
+    await page.locator('.conn-list').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: '新建连接', exact: true }).click();
     await page.locator('#host-name').fill('files-host');
     await page.locator('#host-address').fill('127.0.0.1');
     await page.getByPlaceholder('port').fill(sshPort);

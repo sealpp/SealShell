@@ -43,8 +43,8 @@ menuRegistry.appendSeparator(MenuId.Workbench, 'workbench.settings-separator', '
 
 registerAction({
   id: 'workbench.toggleConnections',
-  title: '当前连接',
-  description: '显示或隐藏当前连接侧栏',
+  title: '会话',
+  description: '显示或隐藏会话侧栏',
   category: 'workbench',
   checked: 'sidebarOpen',
   run: () => {

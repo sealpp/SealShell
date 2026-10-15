@@ -60,7 +60,7 @@ const proxyState = () => JSON.parse(fs.readFileSync(statePath, 'utf8'));
     await page.goto(`http://${TEST_HOST}:8081`);
     await page.getByPlaceholder('000000').fill(pin);
     await page.locator('.workbench-dialog-content .workbench-dialog-button--primary').click();
-    await page.locator('.new-btn').waitFor();
+    await page.getByRole('dialog', { name: '配对 Node', exact: true }).waitFor({ state: 'hidden' });
 
     await page.locator('.workbench-menu-trigger').click();
     await page.getByRole('menuitem', { name: '设置', exact: true }).click();
@@ -88,7 +88,8 @@ const proxyState = () => JSON.parse(fs.readFileSync(statePath, 'utf8'));
     assert.equal(proxyState().connections[0].host, 'internal.proxy.test');
     console.log('PASS authenticated HTTP test and proxy-side DNS');
 
-    await page.locator('.new-btn').click();
+    await page.locator('.conn-list').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: '新建连接', exact: true }).click();
     const hostDialog = page.getByRole('dialog', { name: '新建连接', exact: true });
     await page.locator('#host-name').fill('Proxied server');
     await page.locator('#host-address').fill('internal.proxy.test');
@@ -206,7 +207,8 @@ const proxyState = () => JSON.parse(fs.readFileSync(statePath, 'utf8'));
     assert.equal(proxyState().target_failures, 2);
     console.log('PASS both protocols without authentication, rejected credentials, and denied targets');
 
-    await page.locator('.new-btn').click();
+    await page.locator('.conn-list').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: '新建连接', exact: true }).click();
     await page.locator('#host-name').fill('Inline proxy server');
     await page.locator('#host-address').fill('internal.proxy.test');
     await page.locator('#host-port').fill(String(sshPort));

@@ -112,13 +112,14 @@ async function main() {
 
     await page.getByPlaceholder('000000').fill(pin);
     await page.locator('.workbench-dialog-content .workbench-dialog-button--primary').click();
-    await page.waitForSelector('text=新建连接', { timeout: 10000 });
+    await page.getByRole('dialog', { name: '配对 Node', exact: true }).waitFor({ state: 'hidden' });
 
     let hostKeyPromptSeen = false;
 
     async function addHost(label) {
       const expectedTabCount = await page.locator('.terminal-tab').count() + 1;
-      await page.locator('.new-btn').click();
+      await page.locator('.conn-list').click({ button: 'right' });
+      await page.getByRole('menuitem', { name: '新建连接', exact: true }).click();
       await page.locator('#host-name').fill(label);
       await page.locator('#host-address').fill('127.0.0.1');
       await page.getByPlaceholder('port').fill(sshPort);
@@ -247,7 +248,7 @@ async function main() {
     }
 
     await page.reload();
-    await page.waitForSelector('text=新建连接', { timeout: 10000 });
+    await page.locator('.connections-header').getByText('会话', { exact: true }).waitFor();
     if (await page.locator('.conn-item').count() !== 2) {
       throw new Error('PWA host records did not survive a reload');
     }

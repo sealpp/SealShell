@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
-import { IconChevronDown, IconChevronRight, IconFolder, IconFolderOpen, IconPlus, IconPlug } from '@tabler/icons-vue'
+import { IconChevronDown, IconChevronRight, IconFolder, IconFolderOpen, IconPlug } from '@tabler/icons-vue'
 import { store } from '../stores/app'
 import CommandContextMenu from '../components/CommandContextMenu.vue'
 import type { CommandContext } from '../services/context'
@@ -98,10 +98,6 @@ function rootContext(): CommandContext {
   return { area: 'host', selectedIds: [], selectedCount: 0, nodeKind: 'root', targetFolderId: null }
 }
 
-function openNewConnection() {
-  void commandService.execute('host.new', { area: 'host', targetFolderId: null })
-}
-
 function openConnect(hostId: string) {
   void commandService.execute('host.connect', {
     area: 'host',
@@ -175,11 +171,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="connections-panel">
     <div class="connections-header">
-      <span>当前连接</span>
-      <button type="button" class="new-btn" title="新建连接" @click="openNewConnection">
-        <IconPlus :size="12" />
-        新建连接
-      </button>
+      <span>会话</span>
     </div>
     <CommandContextMenu
       :menu-id="ROOT_MENU_ID"
@@ -257,28 +249,11 @@ onBeforeUnmount(() => {
   height: 32px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 0 0.75rem;
   background: #2d2d2d;
   border-bottom: 1px solid #1f1f1f;
   font-size: 12px;
   font-weight: 600;
-  color: #fff;
-}
-
-.new-btn {
-  background: transparent;
-  border: none;
-  color: #4aaaff;
-  cursor: pointer;
-  font-size: 12px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.new-btn:hover {
   color: #fff;
 }
 
