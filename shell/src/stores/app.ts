@@ -1,6 +1,7 @@
 import { reactive } from 'vue'
 import type { CommandContext } from '../services/context'
 import type { FileEndpoint } from '../services/files/types'
+import type { HostProxySettings, ProxyProfile, ProxySource } from '../services/proxy/types'
 
 export type View = 'welcome' | 'shell'
 export type ShellState = 'idle' | 'connecting' | 'online' | 'error'
@@ -97,6 +98,7 @@ export interface HostProfile {
   username: string
   encoding?: string
   folderId: string | null
+  proxy?: HostProxySettings
 }
 
 export interface FolderProfile {
@@ -122,6 +124,7 @@ export interface Tab {
   id: string
   kind: TabKind
   hostId?: string
+  proxySource?: ProxySource
   endpoint?: FileEndpoint
   fileSplitBeside?: string
   label: string
@@ -193,6 +196,7 @@ export interface AppState {
   deviceName: string
   error: string
   hosts: HostProfile[]
+  proxies: ProxyProfile[]
   folders: FolderProfile[]
   tabs: Tab[]
   activeTerminalTabId: string
@@ -221,6 +225,8 @@ export interface AppState {
   connectionModalOpen: boolean
   loginDialogOpen: boolean
   settingsModalOpen: boolean
+  settingsSection: 'appearance' | 'proxies'
+  editingProxyId: string
   keyboardShortcutsModalOpen: boolean
   aboutModalOpen: boolean
   dirtyCloseConfirm: {
@@ -272,6 +278,7 @@ export const store = reactive<AppState>({
   deviceName: 'SealShell PWA',
   error: '',
   hosts: [],
+  proxies: [],
   folders: [],
   tabs: [],
   activeTerminalTabId: '',
@@ -300,6 +307,8 @@ export const store = reactive<AppState>({
   connectionModalOpen: false,
   loginDialogOpen: false,
   settingsModalOpen: false,
+  settingsSection: 'appearance',
+  editingProxyId: '',
   keyboardShortcutsModalOpen: false,
   aboutModalOpen: false,
   dirtyCloseConfirm: null,

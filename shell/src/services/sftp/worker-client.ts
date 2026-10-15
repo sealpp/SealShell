@@ -47,6 +47,7 @@ export class SftpWorkerClient implements SftpBackend {
 
   async connect(options: SftpConnectionOptions): Promise<void> {
     this.namespace = `sftp:${options.host}:${options.port}:${options.username}`
+    if (options.proxy) this.namespace += `:via:${options.proxy.type}:${options.proxy.host}:${options.proxy.port}:${options.proxy.username}`
     this.host = options.host
     this.port = options.port
     const known = await readKnownHost(options.host, options.port)

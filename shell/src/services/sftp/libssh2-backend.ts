@@ -15,6 +15,7 @@ export function createLibssh2SftpBackend(onHostKey: (publicKey: Uint8Array) => P
         port: next.port,
         username: next.username,
         password: next.password ?? '',
+        proxy: next.proxy,
         onHostKey: async (key) => {
           if (next.knownHostKey) {
             const known = new Uint8Array(next.knownHostKey)

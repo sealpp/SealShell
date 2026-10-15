@@ -1,6 +1,7 @@
 import { randomId } from '../../utils/id'
 import { requestHostKeyApproval } from '../hostKey'
 import { saveKnownHost } from '../storage'
+import type { ProxyConnection } from '../transport/types'
 
 export interface WorkerSshOptions {
   sessionId: string
@@ -8,6 +9,7 @@ export interface WorkerSshOptions {
   port: number
   username: string
   password: string
+  proxy?: ProxyConnection
   knownHostKey?: Uint8Array
   columns?: number
   rows?: number
@@ -40,6 +42,7 @@ export class SshWorkerClient {
         port: options.port,
         username: options.username,
         password: options.password,
+        proxy: options.proxy,
         columns: options.columns,
         rows: options.rows,
         knownHostKey: options.knownHostKey?.slice().buffer,

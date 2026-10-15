@@ -1,4 +1,5 @@
 import type { FolderProfile, HostProfile, TerminalPreferences } from '../stores/app'
+import type { ProxyProfile } from './proxy/types'
 
 const DB_NAME = 'seal-shell'
 const DB_VERSION = 3
@@ -231,6 +232,19 @@ export async function saveCredential(credential: EncryptedCredential): Promise<v
 
 export async function clearCredential(id: string): Promise<void> {
   await deleteFromStore('credentials', id)
+}
+
+export async function saveProxyCatalog(items: ProxyProfile[], credentialId: string, credential?: EncryptedCredential | null): Promise<void> {
+  const db = await openDatabase()
+  const transaction = db.transaction(['meta', 'credentials'], 'readwrite')
+  transaction.objectStore('meta').put({ key: 'proxyServers', items })
+  if (credential === null) transaction.objectStore('credentials').delete(credentialId)
+  else if (credential) transaction.objectStore('credentials').put(credential)
+  await new Promise<void>((resolve, reject) => {
+    transaction.oncomplete = () => resolve()
+    transaction.onabort = () => reject(transaction.error ?? new Error('代理配置保存失败'))
+    transaction.onerror = () => reject(transaction.error ?? new Error('代理配置保存失败'))
+  })
 }
 
 function knownHostId(host: string, port: number): string {

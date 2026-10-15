@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { store, type HostProfile } from '../stores/app'
 import { addTab, createHost } from '../services/ws'
 import { DEFAULT_ENCODING, ENCODINGS } from '../services/encodings'
-import { saveCredentialRecord } from '../services/vault'
+import { loadCredentialRecord, saveCredentialRecord } from '../services/vault'
 import { randomId } from '../utils/id'
 import UiDialog from '../components/UiDialog.vue'
 
@@ -86,6 +86,7 @@ function hostFromForm(): HostProfile {
     port: port.value,
     username: username.value,
     encoding: encoding.value,
+    proxy: store.hosts.find(item => item.id === id)?.proxy,
     folderId: store.editingHostId
       ? (store.hosts.find((item) => item.id === store.editingHostId)?.folderId ?? null)
       : store.newHostFolderId,
@@ -106,7 +107,7 @@ function isValid(): boolean {
 
 async function saveCredential(id: string) {
   if (!password.value) return
-  await saveCredentialRecord(id, { password: password.value })
+  await saveCredentialRecord(id, { ...await loadCredentialRecord(id), password: password.value })
 }
 
 async function saveHost(): Promise<HostProfile | undefined> {

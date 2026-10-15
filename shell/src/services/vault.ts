@@ -23,6 +23,7 @@ interface VaultMeta {
 
 export interface CredentialPayload {
   password?: string
+  inlineProxyPassword?: string
 }
 
 let activeVaultKey!: CryptoKey
@@ -115,7 +116,7 @@ export async function initializeVault(): Promise<void> {
   activeVaultKey = await unwrapVaultKey(meta.profileWrappedVaultKey, meta.profileKey)
 }
 
-export async function saveCredentialRecord(id: string, value: CredentialPayload): Promise<void> {
+export async function encryptCredentialRecord(id: string, value: CredentialPayload): Promise<EncryptedCredential> {
   const nonce = randomBytes(NONCE_BYTES)
   const plaintext = textEncoder.encode(JSON.stringify(value))
   const ciphertext = await requireWebCrypto().subtle.encrypt(
@@ -133,7 +134,11 @@ export async function saveCredentialRecord(id: string, value: CredentialPayload)
     nonce: bytesToBase64(nonce),
     ciphertext: bytesToBase64(new Uint8Array(ciphertext)),
   }
-  await saveCredential(record)
+  return record
+}
+
+export async function saveCredentialRecord(id: string, value: CredentialPayload): Promise<void> {
+  await saveCredential(await encryptCredentialRecord(id, value))
 }
 
 export async function loadCredentialRecord(id: string): Promise<CredentialPayload | undefined> {

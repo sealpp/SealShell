@@ -1,13 +1,10 @@
 import { randomId } from '../utils/id'
 import { readKnownHost } from './storage'
 import { SshWorkerClient } from './ssh/ssh-worker-client'
+import { copyConnection, type RemoteConnection } from './proxy/types'
 
-export interface SshConnectionInfo {
+export interface SshConnectionInfo extends RemoteConnection {
   sessionId: string
-  host: string
-  port: number
-  username: string
-  password: string
 }
 
 type OutputHandler = (payload: Uint8Array) => void
@@ -20,7 +17,6 @@ interface ActiveSession {
 
 const sessions = new Map<string, ActiveSession>()
 const execLocks = new Map<string, Promise<void>>()
-const hostPasswords = new Map<string, { password: string; sessions: number }>()
 
 async function connectWorker(info: SshConnectionInfo, onState: StateHandler, onOutput: OutputHandler): Promise<ActiveSession> {
   const known = await readKnownHost(info.host, info.port)
@@ -32,13 +28,10 @@ async function connectWorker(info: SshConnectionInfo, onState: StateHandler, onO
   worker.onOutput = onOutput
   try {
     await worker.connect({ ...info, knownHostKey })
-    const active = { info, worker }
+    const active = { info: { ...copyConnection(info), sessionId: info.sessionId }, worker }
     sessions.set(info.sessionId, active)
-    const cached = hostPasswords.get(info.host)
-    hostPasswords.set(info.host, { password: info.password, sessions: (cached?.sessions ?? 0) + 1 })
     return active
   } catch (error) {
-    hostPasswords.delete(info.host)
     await worker.close()
     throw error
   }
@@ -71,11 +64,6 @@ async function releaseSession(sessionId: string): Promise<void> {
   if (!active) return
   sessions.delete(sessionId)
   await active.worker.close()
-  const cached = hostPasswords.get(active.info.host)
-  if (cached) {
-    cached.sessions -= 1
-    if (cached.sessions <= 0) hostPasswords.delete(active.info.host)
-  }
 }
 
 export async function closeSsh(sessionId: string): Promise<void> {
@@ -112,10 +100,6 @@ export async function exec(info: SshConnectionInfo, command: string): Promise<{ 
 
 export function getSshSession(sessionId: string): SshConnectionInfo | undefined {
   return sessions.get(sessionId)?.info
-}
-
-export function getRuntimePassword(host: string): string | undefined {
-  return hostPasswords.get(host)?.password
 }
 
 function base64ToBytes(value: string): Uint8Array {

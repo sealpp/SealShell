@@ -9,6 +9,8 @@ import { posixPaths } from '../files/path'
 import type { FileBackend, FileEndpoint } from '../files/types'
 import { readMeta, saveMeta } from '../storage'
 import { transferFileEntries } from '../files/transfers'
+import { getSshSession } from '../ssh'
+import { copyConnection, type RemoteConnection } from '../proxy/types'
 
 const sessions = shallowReactive(new Map<string, FileBackend>())
 const listings = new Map<string, number>()
@@ -21,9 +23,10 @@ export function fileTabLabel(tab: FileTab): string {
   return `${owner}: ${tab.file.cwd}`
 }
 
-function newFileTab(endpoint: FileEndpoint, initialPath: string, splitBeside?: string): FileTab {
+function newFileTab(endpoint: FileEndpoint, initialPath: string, splitBeside?: string, source?: RemoteConnection): FileTab {
   const tab: FileTab = {
     id: randomId(), kind: 'file', endpoint,
+    proxySource: source?.proxySource,
     ...(endpoint.kind === 'sftp' ? { hostId: endpoint.hostId } : {}),
     fileSplitBeside: splitBeside,
     label: endpoint.kind === 'local' ? '本地' : 'SFTP',
@@ -34,23 +37,25 @@ function newFileTab(endpoint: FileEndpoint, initialPath: string, splitBeside?: s
   setBottomPanelActiveTab(tab.id, 'files')
   store.bottomPanelOpen = true
   store.view = 'shell'
-  void startFileTab(tab.id)
+  void startFileTab(tab.id, source)
   return tab
 }
 
-export function createFileTab(host: HostProfile, _sourceTabId: string, initialPath = '/'): FileTab {
-  return newFileTab({ kind: 'sftp', hostId: host.id }, posixPaths.normalize(initialPath))
+export function createFileTab(host: HostProfile, sourceTabId: string, initialPath = '/'): FileTab {
+  const tab = store.tabs.find(item => item.id === sourceTabId)
+  const source = tab ? getSshSession(tab.sessionId) : undefined
+  return newFileTab({ kind: 'sftp', hostId: host.id }, posixPaths.normalize(initialPath), undefined, source ? copyConnection(source) : undefined)
 }
 export function createLocalFileTab(split = false): FileTab {
   return newFileTab({ kind: 'local', nodeId: '' }, '', split ? store.activeFileTabId || undefined : undefined)
 }
 
-async function startFileTab(tabId: string): Promise<void> {
+async function startFileTab(tabId: string, source?: RemoteConnection): Promise<void> {
   const tab = store.tabs.find((item) => item.id === tabId) as FileTab | undefined
   if (!tab) return
   let backend: FileBackend | undefined
   try {
-    backend = await connectFileEndpoint(tab.endpoint)
+    backend = await connectFileEndpoint(tab.endpoint, source)
     if (!store.tabs.some((item) => item.id === tabId)) { await backend.disconnect(); return }
     sessions.set(tabId, backend)
     let initialPath = tab.file.cwd

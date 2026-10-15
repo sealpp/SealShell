@@ -24,6 +24,7 @@ import {
 } from './ssh'
 import { nodeClient, type NodeCallbacks } from './nodeClient'
 import { closeFileTabSession } from './sftp/file-tabs'
+import { hostProxySource, loadProxyProfiles, resolveHostConnection } from './proxy/profiles'
 
 const outputHandlers = new Map<string, (data: Uint8Array) => void>()
 const pendingOutput = new Map<string, Uint8Array[]>()
@@ -39,6 +40,7 @@ export async function initializePwa(): Promise<void> {
   await initializeVault()
   store.hosts = await listStoredHosts()
   store.folders = await listStoredFolders()
+  await loadProxyProfiles()
 }
 
 export function wsUrl(): string {
@@ -267,8 +269,7 @@ function openLoginDialog(host: HostProfile, error: string, tabId = '', insertAft
 
 async function getSavedCredential(hostId: string): Promise<string | undefined> {
   const saved = await loadCredentialRecord(hostId)
-  if (!saved) return undefined
-  return saved.password ?? ''
+  return saved?.password
 }
 
 export async function connectHost(host: HostProfile, insertAfterTabId?: string): Promise<void> {
@@ -297,14 +298,13 @@ async function startTab(tab: Tab, host: HostProfile, password: string, options?:
     }
     const reactiveTab = store.tabs.find((item) => item.id === tab.id)
     if (!reactiveTab) throw new Error('tab not found in reactive store')
+    reactiveTab.proxySource = hostProxySource(host)
+    const connection = await resolveHostConnection(host, credential)
 
     await connectSsh(
       {
         sessionId: reactiveTab.sessionId,
-        host: host.address,
-        port: host.port,
-        username: host.username,
-        password: credential,
+        ...connection,
       },
       (state, error) => updateTabState(reactiveTab.sessionId, state, error),
       (data) => {
@@ -319,7 +319,7 @@ async function startTab(tab: Tab, host: HostProfile, password: string, options?:
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     updateTabState(tab.sessionId, 'error', message)
-    if (allowLoginDialog && isSavedHost(host) && isAuthError(message)) {
+    if (allowLoginDialog && isSavedHost(host) && !message.includes('PROXY_ERROR') && isAuthError(message)) {
       openLoginDialog(host, message, tab.id)
     } else if (store.loginDialogOpen && store.loginDialogHostId === host.id) {
       store.loginDialogError = message

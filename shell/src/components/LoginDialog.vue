@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import { store } from '../stores/app'
-import { saveCredentialRecord } from '../services/vault'
+import { loadCredentialRecord, saveCredentialRecord } from '../services/vault'
 import { addTab, reconnectTab } from '../services/ws'
 import UiDialog from './UiDialog.vue'
 
@@ -44,7 +44,7 @@ async function login() {
 
   try {
     if (rememberPassword.value) {
-      await saveCredentialRecord(h.id, { password: password.value })
+      await saveCredentialRecord(h.id, { ...await loadCredentialRecord(h.id), password: password.value })
     }
     saving.value = false
   } catch (reason) {

@@ -1,8 +1,9 @@
 import { Libssh2Error, Libssh2Session } from './libssh2-runtime'
+import type { ProxyConnection } from '../transport/types'
 
 type ConnectRequest = {
   type: 'connect'
-  options: { host: string; port: number; username: string; password: string; columns?: number; rows?: number; knownHostKey?: ArrayBuffer }
+  options: { host: string; port: number; username: string; password: string; proxy?: ProxyConnection; columns?: number; rows?: number; knownHostKey?: ArrayBuffer }
 }
 
 type Request = ConnectRequest | { type: 'hostKeyDecision'; accepted: boolean } | { type: 'input'; payload: ArrayBuffer } | { type: 'resize'; columns: number; rows: number } | { type: 'exec'; id: string; command: string } | { type: 'close' }
@@ -54,6 +55,7 @@ scope.onmessage = (event) => {
           port: request.options.port,
           username: request.options.username,
           password: request.options.password,
+          proxy: request.options.proxy,
           onHostKey: async (key) => {
             if (known && !equal(known, key)) {
               post({ type: 'error', code: 'HOST_KEY_MISMATCH', message: 'remote host key does not match the saved fingerprint' })

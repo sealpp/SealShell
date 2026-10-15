@@ -1,5 +1,6 @@
 import type { FileBackend } from '../files/types'
 import type { FileEntry } from '../../stores/app'
+import type { ProxyConnection } from '../transport/types'
 
 export const SFTP_RPC_VERSION = 1 as const
 export type SftpRpcVersion = typeof SFTP_RPC_VERSION
@@ -10,6 +11,7 @@ export interface SftpConnectionOptions {
   port: number
   username: string
   password: string
+  proxy?: ProxyConnection
   defaultPath?: string
   knownHostKey?: ArrayBuffer
 }
