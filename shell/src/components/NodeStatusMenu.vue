@@ -38,9 +38,9 @@ const nodeContext = computed<CommandContext>(() => ({
         class="node-status"
         :class="nodeStatus"
         :title="`本地 Node：${nodeStatusLabels[nodeStatus]}`"
+        :aria-label="`本地 Node：${nodeStatusLabels[nodeStatus]}`"
       >
-        <i class="codicon codicon-remote" />
-        <span class="node-label">Node: {{ nodeStatusLabels[nodeStatus] }}</span>
+        <i class="codicon codicon-remote" aria-hidden="true" />
       </button>
     </template>
 
@@ -53,7 +53,6 @@ const nodeContext = computed<CommandContext>(() => ({
   height: 100%;
   display: flex;
   align-items: center;
-  gap: var(--workbench-space-1);
   padding: 0 var(--workbench-space-3);
   border: 0;
   background: #3c3c3c;
@@ -79,10 +78,6 @@ const nodeContext = computed<CommandContext>(() => ({
 
 .node-status .codicon {
   font-size: 14px;
-}
-
-.node-label {
-  font-size: 12px;
 }
 
 </style>
