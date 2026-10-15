@@ -92,6 +92,7 @@ async function main() {
     nodeProc = startProcess(PYTHON, ['-m', 'seal.main'], {
       SEAL_TRUST_PATH: path.join(trustDirectory, 'trust.json'),
       SEAL_PORT: '17373',
+      SEAL_HOST: new URL(PWA_URL).hostname,
     });
     const pin = await waitForLine(nodeProc, /pairing code: (\d{6})/);
     console.log('node pairing pin:', pin);

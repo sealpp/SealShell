@@ -28,6 +28,7 @@ python scripts/test.py unit
 python scripts/test.py ui
 python scripts/test.py files
 python scripts/test.py ssh
+python scripts/test.py proxy
 ```
 
 `python scripts/test.py` 按顺序执行上述全部验证及生产构建。Python 环境由 uv 管理并锁定；
@@ -158,6 +159,27 @@ unshare --net -- bash -c 'ip link set lo up; node .agents/skills/seal-e2e/run-fi
 `shell/tests/file-navigation.spec.ts` 属于 `python scripts/test.py ui`：用延后连接的文件会话验证本地/远端
 初始目录不变时上级操作立即可用、双击 `..`、上级按钮、Alt+Up、前进/后退历史、根目录禁用和会话移除后禁用。
 此回归不需要启动 SealNode，不使用开发实例的配对或文件数据。
+
+## 前置代理与回环隔离
+
+`python scripts/test.py proxy` 启动独立的 mock HTTP CONNECT / SOCKS5、mock SSH、SealNode 和 Vite。
+覆盖无认证/用户名密码、代理侧域名解析、分片响应与 SSH banner 粘连、拒绝认证与目标、禁止回退直连、
+公共引用及直接填写凭据、终端/监控/SFTP/编辑器和跨块双向传输、旧会话快照及刷新持久化。
+代理 fixture 只允许连接本次 mock SSH，状态文件不记录密码；临时配对文件和所有自启进程在结束时清理。
+
+Windows 若已有开发实例占用 `127.0.0.1:17373`，可以使用独立回环地址，不必停止该实例：
+
+```powershell
+$env:SEAL_E2E_HOST = '127.0.0.2'
+python scripts/test.py
+```
+
+仅 `files`、`ssh`、`proxy` 的 PWA/Node 采用该地址；目标 fixture 仍在本机。入口会检查指定地址的端口。
+Vite 对 `127.0.0.2` 可能输出 `Network`，启动检测须同时接受 `Local` 和 `Network`。
+测试后确认自启地址的 8081/17373 均已释放，不终止原有 127.0.0.1 开发服务。
+
+自动保存的 UI 验收应等待状态提交或窗口实际关闭后刷新；验证遮罩关闭使用遮罩 locator 的点击，
+让 Playwright 等待元素稳定，不用绕过 actionability 的坐标点击冒充就绪状态。
 
 单独协议验证可运行 `python scripts/test.py node`，覆盖未认证拒绝、
 句柄隔离、目录分页、块大小与断开回收。Windows/macOS 的路径单元测试不替代相应 OS 实机验证。

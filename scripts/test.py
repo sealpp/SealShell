@@ -24,10 +24,11 @@ def run(command: list[str], cwd: Path = ROOT, overrides=None) -> None:
 
 
 def ssh_e2e() -> None:
-    url = "http://127.0.0.1:8081"
+    test_host = os.environ.get("SEAL_E2E_HOST", "127.0.0.1")
+    url = f"http://{test_host}:8081"
     with ExitStack() as cleanup:
         vite = subprocess.Popen([
-            "node", "node_modules/vite/bin/vite.js", "--host", "127.0.0.1",
+            "node", "node_modules/vite/bin/vite.js", "--host", test_host,
             "--port", "8081", "--strictPort",
         ], cwd=SHELL)
         cleanup.callback(vite.wait)
@@ -48,16 +49,17 @@ def ssh_e2e() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("suite", nargs="?", default="all", choices=("all", "node", "unit", "ui", "files", "ssh", "build"))
+    parser.add_argument("suite", nargs="?", default="all", choices=("all", "node", "unit", "ui", "files", "ssh", "proxy", "build"))
     options = parser.parse_args()
     npm = "npm.cmd" if os.name == "nt" else "npm"
-    suites = ("node", "unit", "ui", "files", "ssh", "build") if options.suite == "all" else (options.suite,)
+    suites = ("node", "unit", "ui", "files", "ssh", "proxy", "build") if options.suite == "all" else (options.suite,)
     for suite in suites:
-        ports = {"node": (17374,), "ui": (9324,), "files": (8081, 17373), "ssh": (8081, 17373)}.get(suite, ())
+        ports = {"node": (17374,), "ui": (9324,), "files": (8081, 17373), "ssh": (8081, 17373), "proxy": (8081, 17373)}.get(suite, ())
         for port in ports:
             with socket.socket() as listener:
                 try:
-                    listener.bind(("127.0.0.1", port))
+                    test_host = os.environ.get("SEAL_E2E_HOST", "127.0.0.1") if suite in ("files", "ssh", "proxy") else "127.0.0.1"
+                    listener.bind((test_host, port))
                 except OSError:
                     parser.error(f"Port {port} is occupied. Stop its service before running {suite} tests.")
         if suite == "node":
@@ -68,6 +70,8 @@ def main() -> None:
             run([npm, "run", script], SHELL)
         elif suite == "files":
             run(["node", str(E2E / "run-files-e2e.js")])
+        elif suite == "proxy":
+            run(["node", str(E2E / "run-proxy-e2e.js")])
         else:
             ssh_e2e()
 

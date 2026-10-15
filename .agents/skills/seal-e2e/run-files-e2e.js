@@ -5,6 +5,7 @@ const os = require('os');
 const crypto = require('crypto');
 const assert = require('assert/strict');
 const REPO = path.resolve(__dirname, '../../..');
+const TEST_HOST = process.env.SEAL_E2E_HOST || '127.0.0.1';
 const { chromium } = require(path.join(REPO, 'shell/node_modules/playwright'));
 const PYTHON = process.env.SEAL_PYTHON || path.join(REPO, 'node/.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
 const processes = [];
@@ -50,14 +51,14 @@ async function until(predicate, message, timeout = 45000) {
   try {
     const ssh = start(PYTHON, ['.agents/skills/seal-e2e/mock-ssh-server.py'], { MOCK_SFTP_ROOT: remote });
     const sshPort = await line(ssh, /MOCK_SSH_PORT=(\d+)/);
-    const node = start(PYTHON, ['-m', 'seal.main'], { SEAL_TRUST_PATH: path.join(fixture, 'trust.json') });
+    const node = start(PYTHON, ['-m', 'seal.main'], { SEAL_TRUST_PATH: path.join(fixture, 'trust.json'), SEAL_HOST: TEST_HOST });
     const pin = await line(node, /pairing code: (\d{6})/);
-    const vite = start(process.execPath, ['shell/node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '8081', '--strictPort', '--config', 'shell/vite.config.ts', 'shell']);
-    await line(vite, /Local:\s+(http:\/\/127.0.0.1:8081\/)/);
+    const vite = start(process.execPath, ['shell/node_modules/vite/bin/vite.js', '--host', TEST_HOST, '--port', '8081', '--strictPort', '--config', 'shell/vite.config.ts', 'shell']);
+    await line(vite, /(?:Local|Network):\s+(http:\/\/[^\s]+\/)/);
     browser = await chromium.launch({ headless: true, ...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}) });
     page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
     page.on('pageerror', error => { errors.push(error.message); console.error('PAGE ERROR', error.message); });
-    await page.goto('http://127.0.0.1:8081');
+    await page.goto(`http://${TEST_HOST}:8081`);
     await page.getByPlaceholder('000000').fill(pin);
     await page.locator('.workbench-dialog-content .workbench-dialog-button--primary').click();
     await page.locator('.new-btn').click();
