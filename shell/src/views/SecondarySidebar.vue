@@ -5,12 +5,20 @@ import type { DockviewApi, DockviewReadyEvent } from 'dockview-vue'
 import MetricsPanel from './MetricsPanel.vue'
 
 const api = ref<DockviewApi | null>(null)
+const dockEl = ref<HTMLElement | null>(null)
 let unsubs: (() => void)[] = []
 
 const components = { metrics: MetricsPanel }
 
 function onReady(event: DockviewReadyEvent) {
   api.value = event.api
+  // Fill the inspector before its first visible paint instead of waiting for
+  // Dockview's requestAnimationFrame-deferred resize handling.
+  const observer = new ResizeObserver(([entry]) => {
+    if (entry) event.api.layout(Math.round(entry.contentRect.width), Math.round(entry.contentRect.height))
+  })
+  observer.observe(dockEl.value!)
+  unsubs.push(() => observer.disconnect())
   if (!event.api.getPanel('metrics')) {
     const group = event.api.addGroup({
       id: 'metrics-group',
@@ -36,12 +44,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <DockviewVue
-    class="secondary-sidebar"
-    :theme="themeAbyss"
-    :components="(components as any)"
-    @ready="onReady"
-  />
+  <div ref="dockEl" class="secondary-sidebar">
+    <DockviewVue
+      :theme="themeAbyss"
+      :components="(components as any)"
+      @ready="onReady"
+    />
+  </div>
 </template>
 
 <style>
