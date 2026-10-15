@@ -64,7 +64,9 @@ test('opens the terminal appearance settings and supports standard dismissal', a
 
   await openMenu(page)
   await page.getByRole('menuitem', { name: '设置' }).click()
-  await page.mouse.click(4, 4)
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await expect(page.getByRole('dialog').getByRole('button', { name: '关闭', exact: true })).toBeFocused()
+  await page.locator('.workbench-dialog-overlay').click({ position: { x: 4, y: 4 } })
   await expect(page.getByRole('dialog')).toBeHidden()
 })
 
@@ -89,6 +91,27 @@ test('opens the minimal about dialog with the SealShell logo', async ({ page }) 
 
   await dialog.getByRole('button', { name: '关闭' }).click()
   await expect(dialog).toBeHidden()
+})
+
+test('autosaves valid appearance changes, flushes on close, and rejects invalid input', async ({ page }) => {
+  await openMenu(page)
+  await page.getByRole('menuitem', { name: '设置', exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByRole('button', { name: /^(保存|确认|取消)$/ })).toHaveCount(0)
+  await dialog.getByLabel('字号', { exact: true }).fill('19')
+  await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+  await expect(dialog).toBeHidden()
+  await page.reload()
+  await openMenu(page)
+  await page.getByRole('menuitem', { name: '设置', exact: true }).click()
+  await expect(dialog.getByLabel('字号', { exact: true })).toHaveValue('19')
+  await dialog.getByLabel('字号', { exact: true }).fill('2')
+  await expect(dialog.getByRole('alert')).toContainText('8–32')
+  await page.keyboard.press('Escape')
+  await page.reload()
+  await openMenu(page)
+  await page.getByRole('menuitem', { name: '设置', exact: true }).click()
+  await expect(dialog.getByLabel('字号', { exact: true })).toHaveValue('19')
 })
 
 test('keeps the dialogs within the viewport on a narrow screen', async ({ page }) => {

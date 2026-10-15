@@ -85,7 +85,13 @@ async function getFromStore<T>(storeName: string, key: IDBValidKey): Promise<T |
 
 async function putInStore<T>(storeName: string, value: T): Promise<void> {
   const db = await openDatabase()
-  await requestResult(db.transaction(storeName, 'readwrite').objectStore(storeName).put(value))
+  const transaction = db.transaction(storeName, 'readwrite')
+  transaction.objectStore(storeName).put(value)
+  await new Promise<void>((resolve, reject) => {
+    transaction.oncomplete = () => resolve()
+    transaction.onabort = () => reject(transaction.error ?? new Error('PWA database write aborted'))
+    transaction.onerror = () => reject(transaction.error ?? new Error('PWA database write failed'))
+  })
 }
 
 async function deleteFromStore(storeName: string, key: IDBValidKey): Promise<void> {

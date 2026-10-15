@@ -25,6 +25,9 @@
       import KeyboardShortcutsDialog from '/src/components/KeyboardShortcutsDialog.vue'
       import AboutDialog from '/src/components/AboutDialog.vue'
       import { store } from '/src/stores/app'
+      import { loadTerminalPreferences } from '/src/services/terminalPreferences'
+
+      await loadTerminalPreferences()
 
       store.settingsModalOpen = false
       store.keyboardShortcutsModalOpen = false

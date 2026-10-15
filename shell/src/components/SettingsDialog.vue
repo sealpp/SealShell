@@ -1,31 +1,36 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { IconRotate } from '@tabler/icons-vue'
 import '@xterm/xterm/css/xterm.css'
 import { store, type TerminalPreferences } from '../stores/app'
 import UiDialog from './UiDialog.vue'
-import { confirmDialog, alertDialog } from '../services/dialogs'
+import { confirmDialog } from '../services/dialogs'
+import { useAutosave } from '../services/autosave'
 import { DEFAULT_TERMINAL_PREFERENCES, defaultTerminalPreferences, getTerminalFontFamily, getTerminalTheme, saveTerminalPreferences, terminalFontOptions, terminalThemeNames, terminalWeightOptions } from '../services/terminalPreferences'
 
 const previewEl = ref<HTMLDivElement | null>(null)
 const draft = ref<TerminalPreferences>({ ...store.terminalPreferences })
-const saved = ref<TerminalPreferences>({ ...store.terminalPreferences })
 let preview: Terminal | null = null
 let fitAddon: FitAddon | null = null
 let resizeObserver: ResizeObserver | null = null
-const dirty = computed(() => JSON.stringify(draft.value) !== JSON.stringify(saved.value))
+function validate(value: TerminalPreferences): void {
+  if (!Number.isInteger(value.fontSize) || value.fontSize < 8 || value.fontSize > 32) throw new Error('字号必须为 8–32 的整数')
+  if (!Number.isFinite(value.lineHeight) || value.lineHeight < 1 || value.lineHeight > 2) throw new Error('行高必须为 1–2')
+}
+const autosave = useAutosave(() => ({ ...draft.value }), validate, saveTerminalPreferences)
 
 function resetField(field: keyof Pick<TerminalPreferences, 'theme' | 'fontFamily' | 'fontSize' | 'lineHeight' | 'fontWeight' | 'fontWeightBold'>): void {
   draft.value[field] = DEFAULT_TERMINAL_PREFERENCES[field] as never
 }
 async function resetAll(): Promise<void> {
-  if (await confirmDialog('恢复默认设置', '将恢复本页所有终端外观设置，保存后生效。')) draft.value = defaultTerminalPreferences()
+  if (await confirmDialog('恢复默认设置', '将立即恢复并保存本页所有终端外观设置。')) draft.value = defaultTerminalPreferences()
 }
 function applyPreview(): void {
   if (!preview) return
   const p = draft.value
+  try { validate(p) } catch { return }
   preview.options.fontFamily = getTerminalFontFamily(p.fontFamily)
   preview.options.fontSize = p.fontSize
   preview.options.lineHeight = p.lineHeight
@@ -35,17 +40,8 @@ function applyPreview(): void {
   previewEl.value?.style.setProperty('--terminal-background', getTerminalTheme(p.theme).background ?? '#0d0d0d')
   fitAddon?.fit()
 }
-async function save(): Promise<void> {
-  try {
-    await saveTerminalPreferences({ ...draft.value })
-    saved.value = { ...draft.value }
-    store.settingsModalOpen = false
-  } catch (error) {
-    await alertDialog('保存失败', error instanceof Error ? error.message : String(error))
-  }
-}
 async function close(): Promise<void> {
-  if (dirty.value && !await confirmDialog('放弃更改', '当前设置尚未保存，确定要放弃这些更改吗？', { confirmLabel: '放弃更改', danger: true })) return
+  if (!await autosave.flush()) return
   store.settingsModalOpen = false
 }
 
@@ -74,7 +70,9 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); preview?.dispose(); previe
     <div class="settings-layout">
       <nav class="settings-nav" aria-label="设置分类"><button type="button" class="settings-nav-item active">外观</button></nav>
       <main class="settings-main">
-        <div class="settings-heading"><div><h2>外观</h2><p>调整终端字体和配色方案。</p></div><button type="button" class="settings-reset-all" @click="resetAll">恢复默认</button></div>
+        <div class="settings-heading"><div><h2>外观</h2><p>调整终端字体和配色方案，修改后自动保存。</p></div><button type="button" class="settings-reset-all" @click="resetAll">恢复默认</button></div>
+        <p v-if="autosave.error.value" class="error" role="alert">{{ autosave.error.value }}</p>
+        <p v-else class="settings-save-status" role="status">{{ autosave.status.value }}</p>
         <div ref="previewEl" class="terminal-preview" aria-label="终端外观预览" />
         <h3 class="settings-section-title">文本</h3>
         <div class="settings-form">
@@ -87,6 +85,5 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); preview?.dispose(); previe
         </div>
       </main>
     </div>
-    <template #actions><button type="button" class="workbench-dialog-button workbench-dialog-button--default" @click="close">取消</button><button type="button" class="workbench-dialog-button workbench-dialog-button--primary" :disabled="!dirty" @click="save">保存</button></template>
   </UiDialog>
 </template>
