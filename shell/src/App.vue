@@ -535,7 +535,6 @@ button, input {
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
-  transition: width 0.15s ease;
 }
 
 .sidebar.primary-sidebar {
@@ -582,11 +581,6 @@ button, input {
 
 .main.resizing {
   user-select: none;
-}
-
-.main.resizing .sidebar,
-.main.resizing .panel {
-  transition: none;
 }
 
 .terminal-area {
@@ -670,7 +664,6 @@ button, input {
   flex-direction: column;
   background: #252526;
   border-left: 1px solid #1f1f1f;
-  transition: width 0.15s ease;
   overflow: hidden;
 }
 
