@@ -14,7 +14,6 @@ transferQueue.subscribe((snapshot) => {
   const index = transferRuntime.tasks.findIndex((task) => task.id === snapshot.id)
   if (index < 0) transferRuntime.tasks.push(snapshot)
   else transferRuntime.tasks[index] = snapshot
-  transferRuntime.panelOpen = transferRuntime.tasks.some((task) => task.state === 'running' || task.state === 'failed' || task.state === 'cancelled' || !!task.orphanPath)
 })
 
 export async function loadTransferConcurrency(): Promise<number> {
