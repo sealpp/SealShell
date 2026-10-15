@@ -2,6 +2,7 @@ import { FileOperationError } from '../files/types'
 import createLibssh2Module, { type LIBSSH2_CHANNEL, type LIBSSH2_SESSION, type SSH2WASMModule } from '@verdigris/libssh2.js'
 import { RoutedTransport } from '../transport/routed-transport'
 import type { ProxyConnection } from '../transport/types'
+import { BASH_STARTUP_COMMAND, BASH_VERSION_PROBE } from './bash-integration'
 
 const EAGAIN = -37
 // Emscripten's WASI errno value for EAGAIN, returned by the custom socket callback.
@@ -130,13 +131,27 @@ export class Libssh2Session {
     return () => this.outputHandlers.delete(handler)
   }
 
-  async openShell(columns: number, rows: number): Promise<void> {
+  async openShell(columns: number, rows: number, integrateShell = false): Promise<void> {
+    let startupCommand: string | undefined
+    if (integrateShell) {
+      try {
+        const probe = await this.exec(BASH_VERSION_PROBE)
+        if (probe.exitCode === 0 && /^SEAL_BASH_VERSION=\d+\./m.test(textDecoder.decode(probe.stdout))) {
+          startupCommand = BASH_STARTUP_COMMAND
+        }
+      } catch (error) {
+        // SSH servers may allow interactive shells while denying exec requests.
+        if (!(error instanceof Libssh2Error && error.code === -22)) throw error
+      }
+    }
     this.channel = await this.pumpHandle(() => this.module.ssh2_channel_open_session(this.session))
     if (!this.channel) throw errorFor(this.module, this.session, 'SSH channel open failed')
     await this.withStrings(['xterm-256color'], ([term]) => this.pump(() => (this.module as any).ssh2_channel_request_pty(this.channel, term)))
     const size = await this.pump(() => this.module.ssh2_channel_request_pty_size(this.channel, columns, rows))
     if (size !== 0) throw errorFor(this.module, this.session, 'SSH PTY resize failed')
-    const shell = await this.pump(() => this.module.ssh2_channel_shell(this.channel))
+    const shell = startupCommand
+      ? await this.withStrings([startupCommand], ([command]) => this.pump(() => (this.module as any).ssh2_channel_exec(this.channel, command)))
+      : await this.pump(() => this.module.ssh2_channel_shell(this.channel))
     if (shell !== 0) throw errorFor(this.module, this.session, 'SSH shell start failed')
   }
 

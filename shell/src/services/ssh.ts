@@ -2,6 +2,7 @@ import { randomId } from '../utils/id'
 import { readKnownHost } from './storage'
 import { SshWorkerClient } from './ssh/ssh-worker-client'
 import { copyConnection, type RemoteConnection } from './proxy/types'
+import { initialDirectoryCommand } from './terminalDirectory'
 
 export interface SshConnectionInfo extends RemoteConnection {
   sessionId: string
@@ -18,7 +19,7 @@ interface ActiveSession {
 const sessions = new Map<string, ActiveSession>()
 const execLocks = new Map<string, Promise<void>>()
 
-async function connectWorker(info: SshConnectionInfo, onState: StateHandler, onOutput: OutputHandler): Promise<ActiveSession> {
+async function connectWorker(info: SshConnectionInfo, onState: StateHandler, onOutput: OutputHandler, integrateShell = false): Promise<ActiveSession> {
   const known = await readKnownHost(info.host, info.port)
   const knownHostKey = known ? base64ToBytes(known.publicKey) : undefined
   const worker = new SshWorkerClient()
@@ -27,7 +28,7 @@ async function connectWorker(info: SshConnectionInfo, onState: StateHandler, onO
   worker.onState = (state, error) => { if (state !== 'online') onState(state, error) }
   worker.onOutput = onOutput
   try {
-    await worker.connect({ ...info, knownHostKey })
+    await worker.connect({ ...info, knownHostKey, integrateShell })
     const active = { info: { ...copyConnection(info), sessionId: info.sessionId }, worker }
     sessions.set(info.sessionId, active)
     return active
@@ -37,9 +38,11 @@ async function connectWorker(info: SshConnectionInfo, onState: StateHandler, onO
   }
 }
 
-export async function connectSsh(info: SshConnectionInfo, onState: StateHandler, onOutput: OutputHandler): Promise<SshConnectionInfo> {
+export async function connectSsh(info: SshConnectionInfo, onState: StateHandler, onOutput: OutputHandler, initialCwd?: string): Promise<SshConnectionInfo> {
   onState('connecting')
-  await connectWorker(info, onState, onOutput)
+  const active = await connectWorker(info, onState, onOutput, true)
+  const command = initialDirectoryCommand(initialCwd)
+  if (command) active.worker.send(new TextEncoder().encode(command))
   onState('online')
   return { ...info }
 }

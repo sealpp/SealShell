@@ -3,7 +3,7 @@ import type { ProxyConnection } from '../transport/types'
 
 type ConnectRequest = {
   type: 'connect'
-  options: { host: string; port: number; username: string; password: string; proxy?: ProxyConnection; columns?: number; rows?: number; knownHostKey?: ArrayBuffer }
+  options: { host: string; port: number; username: string; password: string; proxy?: ProxyConnection; columns?: number; rows?: number; knownHostKey?: ArrayBuffer; integrateShell?: boolean }
 }
 
 type Request = ConnectRequest | { type: 'hostKeyDecision'; accepted: boolean } | { type: 'input'; payload: ArrayBuffer } | { type: 'resize'; columns: number; rows: number } | { type: 'exec'; id: string; command: string } | { type: 'close' }
@@ -67,7 +67,7 @@ scope.onmessage = (event) => {
             return accepted
           },
         })
-        await session.openShell(request.options.columns ?? 80, request.options.rows ?? 24)
+        await session.openShell(request.options.columns ?? 80, request.options.rows ?? 24, request.options.integrateShell)
         outputTimer = setInterval(() => {
           const output = session?.pollShellOutput()
           if (output?.length) post({ type: 'output', payload: output.buffer }, [output.buffer])

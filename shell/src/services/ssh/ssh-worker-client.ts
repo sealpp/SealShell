@@ -13,6 +13,7 @@ export interface WorkerSshOptions {
   knownHostKey?: Uint8Array
   columns?: number
   rows?: number
+  integrateShell?: boolean
 }
 
 type WorkerState = 'connecting' | 'online' | 'error' | 'idle'
@@ -47,6 +48,7 @@ export class SshWorkerClient {
         proxy: options.proxy,
         columns: options.columns,
         rows: options.rows,
+        integrateShell: options.integrateShell,
         knownHostKey: options.knownHostKey?.slice().buffer,
       },
     }, options.knownHostKey ? [options.knownHostKey.slice().buffer] : [])
