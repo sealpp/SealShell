@@ -14,6 +14,7 @@ import { TERMINAL_MENU_ID } from '../services/actions/menuIds'
 import type { CommandContext } from '../services/context'
 import { getTerminalFontFamily, getTerminalTheme } from '../services/terminalPreferences'
 import { encodingDecoder } from '../services/encodings'
+import { registerTerminalDirectoryHandlers } from '../services/terminalDirectory'
 import '@xterm/xterm/css/xterm.css'
 
 const props = defineProps<{ tabId: string }>()
@@ -167,17 +168,9 @@ function initTerminal() {
   terminal.loadAddon(fitAddon)
   terminal.open(termEl.value)
 
-  terminal.parser.registerOscHandler(7, (value) => {
+  registerTerminalDirectoryHandlers(terminal, (directory) => {
     const currentTab = tab.value
-    if (!currentTab) return true
-    try {
-      const uri = value.includes('://') ? new URL(value) : undefined
-      const cwd = uri?.pathname || value
-      if (cwd.startsWith('/')) currentTab.cwd = cwd
-    } catch {
-      if (value.startsWith('/')) currentTab.cwd = value
-    }
-    return true
+    if (currentTab) currentTab.cwd = directory
   })
 
   terminal.onData((data: string) => {
