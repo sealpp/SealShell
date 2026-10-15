@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -54,6 +54,28 @@ class DiskBackend implements FileBackend {
 }
 
 describe('file and directory transfer preservation', () => {
+  it('does not write a completed read after cancellation and cleans through a fresh endpoint', async () => {
+    const root = await fixture()
+    const source = new DiskBackend()
+    const target: FileBackend = new DiskBackend()
+    const cleanup = new DiskBackend()
+    const controller = new AbortController()
+    await fs.writeFile(path.join(root, 'source'), 'payload')
+    await fs.writeFile(path.join(root, 'target'), 'original')
+    const read = source.read.bind(source)
+    source.read = async (...args) => { const data = await read(...args); controller.abort(); return data }
+    target.fork = vi.fn(async () => cleanup)
+    const write = vi.spyOn(target, 'write')
+    const disconnect = vi.spyOn(cleanup, 'disconnect').mockRejectedValue(new Error('cleanup connection closed'))
+    await expect(transferFile(source, target, path.join(root, 'source'), path.join(root, 'target'), { signal: controller.signal })).rejects.toBeInstanceOf(TransferCancelledError)
+    expect(write).toHaveBeenCalledTimes(1)
+    expect(write.mock.calls[0][1].byteLength).toBe(0)
+    expect(target.fork).toHaveBeenCalledOnce()
+    expect(disconnect).toHaveBeenCalledOnce()
+    expect(await fs.readFile(path.join(root, 'target'), 'utf8')).toBe('original')
+    expect((await fs.readdir(root)).sort()).toEqual(['source', 'target'])
+  })
+
   it('replaces the entire target tree and preserves the source including empty files', async () => {
     const root = await fixture()
     const source = path.join(root, 'source')

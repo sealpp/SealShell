@@ -33,6 +33,22 @@ export function temporarySibling(backend: FileBackend, target: string, suffix = 
   return backend.paths.join(backend.paths.parent(target), `.sealshell-${randomId()}.${suffix}`)
 }
 
+export async function removeTemporary(backend: FileBackend, path: string, signal?: AbortSignal): Promise<void> {
+  let cleanup = backend
+  try {
+    // Cancellation has already disposed the task's connections. Cleanup uses
+    // a new connection with the same endpoint snapshot, outside the abort scope.
+    if (signal?.aborted && backend.fork) cleanup = await backend.fork()
+    if (await statIfExists(cleanup, path)) await cleanup.remove(path, true)
+  } catch (error) {
+    if (signal?.aborted) throw new TransferCancelledError(path)
+    throw new TransferOrphanError(path, error)
+  } finally {
+    // A close failure must not hide the retained path or a confirmed deletion.
+    if (cleanup !== backend) await Promise.allSettled([cleanup.disconnect()])
+  }
+}
+
 // Direct replacement is used only for file providers which declare support.
 // Directory replacement keeps the old tree until the new tree is complete.
 export async function commitTemporary(backend: FileBackend, temporary: string, target: string): Promise<{ atomic: boolean; orphanPath?: string }> {
@@ -69,13 +85,17 @@ export async function transferFile(
     try {
       assertNotCancelled(options.signal)
       reader = await source.openReader?.(sourcePath)
+      assertNotCancelled(options.signal)
+      // The server can create the temporary file before cancellation prevents
+      // its reply reaching us. Cleanup must also cover that in-flight open.
+      created = true
       writer = await target.openWriter?.(temporary)
       if (!writer) await target.write(temporary, new ArrayBuffer(0), 0)
-      created = true
       while (bytes < sourceStat.size) {
         assertNotCancelled(options.signal)
         const length = Math.min(CHUNK_SIZE, sourceStat.size - bytes)
         const chunk = reader ? await reader.read(bytes, length) : await source.read(sourcePath, bytes, length)
+        assertNotCancelled(options.signal)
         if (!chunk.byteLength) throw new Error('源文件在传输完成前结束')
         const count = chunk.byteLength
         if (writer) await writer.write(bytes, chunk)
@@ -86,7 +106,7 @@ export async function transferFile(
     } finally {
       const closing = await Promise.allSettled([reader?.close(), writer?.close()])
       const failed = closing.find((item) => item.status === 'rejected')
-      if (failed?.status === 'rejected') throw failed.reason
+      if (failed?.status === 'rejected' && !options.signal?.aborted) throw failed.reason
     }
     assertNotCancelled(options.signal)
     const temporaryStat = await target.stat(temporary)
@@ -98,9 +118,9 @@ export async function transferFile(
     return { sourcePath, targetPath, bytes, ...committed, metadataApplied }
   } catch (error) {
     if (created) {
-      try { await target.remove(temporary, true) }
-      catch { throw new TransferOrphanError(temporary, error) }
+      await removeTemporary(target, temporary, options.signal)
     }
+    assertNotCancelled(options.signal)
     throw error
   }
 }
@@ -163,13 +183,23 @@ export class TransferQueue {
     return true
   }
 
+  dismiss(id: string): boolean {
+    const index = this.queue.findIndex((item) => item.snapshot.id === id)
+    if (index >= 0) {
+      if (['queued', 'running'].includes(this.queue[index].snapshot.state)) return false
+      this.queue.splice(index, 1)
+    }
+    return this.snapshots.delete(id)
+  }
+
   retry(id: string): boolean {
     const item = this.queue.find((candidate) => candidate.snapshot.id === id)
     if (!item || !['failed', 'cancelled'].includes(item.snapshot.state)) return false
-      item.snapshot.state = 'queued'
-      item.snapshot.error = undefined
-      item.snapshot.proxySource = undefined
-      item.controller = new AbortController()
+    item.snapshot.state = 'queued'
+    item.snapshot.error = undefined
+    item.snapshot.proxySource = undefined
+    item.snapshot.result = undefined
+    item.controller = new AbortController()
     item.snapshot.progress = 0
     this.emit(item.snapshot)
     this.pump()
@@ -191,16 +221,18 @@ export class TransferQueue {
         item.snapshot.state = 'completed'
         item.snapshot.progress = 1
         item.snapshot.result = result
-        item.snapshot.orphanPath = result.orphanPath
+        item.snapshot.orphanPath = result.orphanPath ?? item.snapshot.orphanPath
         item.resolve(result)
       }, (error: unknown) => {
         item.snapshot.state = error instanceof TransferCancelledError ? 'cancelled' : 'failed'
         item.snapshot.error = error instanceof Error ? error.message : String(error)
         if (error instanceof FileOperationError) item.snapshot.proxySource = error.proxySource
-        if (error instanceof TransferOrphanError) item.snapshot.orphanPath = error.orphanPath
+        if (error instanceof TransferOrphanError || error instanceof TransferCancelledError) item.snapshot.orphanPath = error.orphanPath
         item.reject(error)
       }).finally(() => {
         this.running -= 1
+        const index = this.queue.indexOf(item)
+        if (item.snapshot.state === 'completed' && index >= 0) this.queue.splice(index, 1)
         this.emit(item.snapshot)
         this.pump()
       })

@@ -3,7 +3,7 @@ import { choiceDialog, promptDialog } from '../dialogs'
 import { statIfExists, type FileBackend } from './types'
 import { copyEntry } from '../sftp/operations'
 import { enqueueTransfer } from '../sftp/transfer-runtime'
-import { assertNotCancelled, commitTemporary, temporarySibling, type TransferResult } from '../sftp/transfer'
+import { assertNotCancelled, commitTemporary, temporarySibling, TransferCancelledError, TransferOrphanError, type TransferResult } from '../sftp/transfer'
 import { fileTabLabel, getFileBackend, refreshFileTab } from '../sftp/file-tabs'
 
 export function transferTargets(sourceId: string): FileTab[] {
@@ -48,8 +48,8 @@ export async function transferFileEntries(sourceId: string, targetId: string, pa
     let target: FileBackend | undefined
     try {
       assertNotCancelled(signal)
-      source = await sourceFactory()
-      target = await targetFactory()
+      source = await sourceFactory(signal)
+      target = await targetFactory(signal)
       let result: TransferResult = { sourcePath: paths[0], targetPath: targetDirectory, bytes: 0, atomic: false, metadataApplied: false }
       const overwriteAll = new Set<string>()
       const skipAll = new Set<string>()
@@ -105,6 +105,11 @@ export async function transferFileEntries(sourceId: string, targetId: string, pa
         progress(index + 1, entries.length)
       }
       return result
+    } catch (error) {
+      if (signal.aborted && !(error instanceof TransferOrphanError)) {
+        throw error instanceof TransferCancelledError ? error : new TransferCancelledError()
+      }
+      throw error
     } finally {
       await Promise.allSettled([source?.disconnect(), target?.disconnect()])
       await Promise.allSettled([refreshFileTab(sourceId), refreshFileTab(targetId)])

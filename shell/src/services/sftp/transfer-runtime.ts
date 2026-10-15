@@ -35,4 +35,6 @@ export function enqueueTransfer(label: string, run: (signal: AbortSignal, progre
 
 export function cancelTransfer(id: string): boolean { return transferQueue.cancel(id) }
 export function retryTransfer(id: string): boolean { return transferQueue.retry(id) }
-export function dismissTransfer(id: string): void { transferRuntime.tasks = transferRuntime.tasks.filter((task) => task.id !== id) }
+export function dismissTransfer(id: string): void {
+  if (transferQueue.dismiss(id)) transferRuntime.tasks = transferRuntime.tasks.filter((task) => task.id !== id)
+}

@@ -10,11 +10,15 @@ import type { SftpBackend, SftpConnectionOptions, SftpDirectoryPage, SftpRequest
 export class SftpWorkerClient implements SftpBackend {
   readonly paths = posixPaths
   namespace = ''
-  fork?: () => Promise<FileBackend>
+  fork?: (signal?: AbortSignal) => Promise<FileBackend>
   private readonly worker: Worker
   private readonly pending = new Map<string, { resolve: (response: SftpResponse) => void; reject: (error: Error) => void }>()
   private host = ''
   private port = 0
+  private failure?: Error
+  private closing?: Promise<void>
+  private signal?: AbortSignal
+  private readonly abort = () => this.terminate(new DOMException('传输已取消', 'AbortError'))
 
   constructor(worker = new Worker(new URL('./sftp.worker.ts', import.meta.url), { type: 'module' })) {
     this.worker = worker
@@ -30,22 +34,26 @@ export class SftpWorkerClient implements SftpBackend {
       request.resolve(response)
     }
     this.worker.onerror = (event) => {
-      for (const { reject } of this.pending.values()) reject(new Error(event.message || 'SFTP worker failed'))
-      this.pending.clear()
+      this.terminate(new Error(event.message || 'SFTP worker failed'))
     }
   }
 
   private async request<T = SftpResponse>(request: SftpRequestInput): Promise<T> {
+    if (this.failure) throw this.failure
     const message = { ...request, version: 1 as const, id: randomId() } as SftpRequest
     const response = await new Promise<SftpResponse>((resolve, reject) => {
       this.pending.set(message.id, { resolve, reject })
-      this.worker.postMessage(message, transferablesForRequest(message))
+      try { this.worker.postMessage(message, transferablesForRequest(message)) }
+      catch (error) { this.pending.delete(message.id); reject(error) }
     })
     if (!response.ok) throw new FileOperationError(response.error.code, response.error.message)
     return response as unknown as T
   }
 
-  async connect(options: SftpConnectionOptions): Promise<void> {
+  async connect(options: SftpConnectionOptions, signal?: AbortSignal): Promise<void> {
+    this.signal = signal
+    if (signal?.aborted) { this.abort(); throw this.failure }
+    signal?.addEventListener('abort', this.abort, { once: true })
     this.namespace = `sftp:${options.host}:${options.port}:${options.username}`
     if (options.proxy) this.namespace += `:via:${options.proxy.type}:${options.proxy.host}:${options.proxy.port}:${options.proxy.username}`
     this.host = options.host
@@ -54,13 +62,22 @@ export class SftpWorkerClient implements SftpBackend {
     const knownHostKey = known ? base64ToBytes(known.publicKey).slice().buffer as ArrayBuffer : undefined
     await this.request({ type: 'connect', options: { ...options, knownHostKey } })
   }
-  async disconnect(): Promise<void> {
-    try { await this.request({ type: 'disconnect' }) }
-    finally {
-      this.worker.terminate()
-      for (const { reject } of this.pending.values()) reject(new Error('SFTP worker closed'))
-      this.pending.clear()
-    }
+  disconnect(): Promise<void> {
+    if (this.failure) return Promise.resolve()
+    this.closing ??= this.request({ type: 'disconnect' }).then(() => undefined)
+      .finally(() => this.terminate(new Error('SFTP worker closed')))
+    return this.closing
+  }
+
+  private terminate(error: Error): void {
+    if (this.failure) return
+    this.failure = error
+    this.signal?.removeEventListener('abort', this.abort)
+    this.worker.terminate()
+    for (const { reject } of this.pending.values()) reject(error)
+    this.pending.clear()
+    this.worker.onmessage = null
+    this.worker.onerror = null
   }
   async list(path: string, cursor?: string): Promise<SftpDirectoryPage> { return (await this.request<{ result: SftpDirectoryPage }>({ type: 'list', path, cursor })).result }
   async stat(path: string): Promise<SftpStat> { return (await this.request<{ result: SftpStat }>({ type: 'stat', path })).result }
@@ -89,7 +106,9 @@ export class SftpWorkerClient implements SftpBackend {
   async symlink(target: string, path: string): Promise<void> { await this.request({ type: 'symlink', target, path }) }
 
   private async handleHostKey(event: { publicKey: ArrayBuffer; fingerprint: string }): Promise<void> {
+    if (this.failure) return
     let accepted = await requestHostKeyApproval({ host: this.host, port: this.port, fingerprint: event.fingerprint })
+    if (this.failure) return
     if (accepted) {
       try {
         await saveKnownHost({ host: this.host, port: this.port, publicKey: bytesToBase64(new Uint8Array(event.publicKey)), fingerprint: event.fingerprint })

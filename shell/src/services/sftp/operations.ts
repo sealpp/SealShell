@@ -1,7 +1,7 @@
 import { isVisibleFileEntry, sortFileEntries } from './sort'
 import type { FileEntry, FileSortDirection, FileSortKey } from '../../stores/app'
-import { statIfExists, type FileBackend, type FileDirectoryPage } from '../files/types'
-import { assertNotCancelled, commitTemporary, temporarySibling, TransferOrphanError, type TransferOptions } from './transfer'
+import type { FileBackend, FileDirectoryPage } from '../files/types'
+import { assertNotCancelled, commitTemporary, removeTemporary, temporarySibling, type TransferOptions } from './transfer'
 import { transferFile, type TransferResult } from './transfer'
 
 export async function listDirectory(
@@ -37,8 +37,8 @@ export async function copyEntry(
   try {
     let results: TransferResult[] = []
     if (info.kind === 'directory') {
-      await target.mkdir(temporary)
       created = true
+      await target.mkdir(temporary)
       const entries = await listDirectory(source, sourcePath, { showHidden: true })
       for (let index = 0; index < entries.length; index++) {
         const child = entries[index]
@@ -48,18 +48,16 @@ export async function copyEntry(
       }
     } else {
       if (!source.readlink || !target.symlink) throw new Error('目标不支持符号链接')
-      await target.symlink(await source.readlink(sourcePath), temporary)
       created = true
+      await target.symlink(await source.readlink(sourcePath), temporary)
     }
     assertNotCancelled(signal)
     const commit = await commitTemporary(target, temporary, targetPath)
     results = [{ sourcePath, targetPath, bytes: results.reduce((total, result) => total + result.bytes, 0), ...commit, metadataApplied: false }]
     return results
   } catch (error) {
-    if (created && await statIfExists(target, temporary)) {
-      try { await target.remove(temporary, true) }
-      catch { throw new TransferOrphanError(temporary, error) }
-    }
+    if (created) await removeTemporary(target, temporary, signal)
+    assertNotCancelled(signal)
     throw error
   }
 }

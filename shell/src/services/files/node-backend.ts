@@ -26,9 +26,14 @@ export class NodeFileBackend implements FileBackend {
   nodeId = ''
   info!: FsInfo
   readonly atomicReplace = true
-  fork?: () => Promise<FileBackend>
+  fork?: (signal?: AbortSignal) => Promise<FileBackend>
+  private signal?: AbortSignal
+  private readonly abort = () => { void this.connection.close(new DOMException('传输已取消', 'AbortError')) }
 
-  async connect(): Promise<void> {
+  async connect(signal?: AbortSignal): Promise<void> {
+    this.signal = signal
+    signal?.throwIfAborted()
+    signal?.addEventListener('abort', this.abort, { once: true })
     this.nodeId = await this.connection.connect()
     try {
       this.info = resultValue(await this.rpc({ case: 'info', value: {} }), 'info')
@@ -36,7 +41,10 @@ export class NodeFileBackend implements FileBackend {
       this.namespace = `local:${this.nodeId}`
     } catch (error) { this.connection.close(); throw error }
   }
-  async disconnect(): Promise<void> { this.connection.close() }
+  async disconnect(): Promise<void> {
+    this.signal?.removeEventListener('abort', this.abort)
+    await this.connection.close()
+  }
 
   private async rpc(operation: MessageInitShape<typeof FsRequestSchema>['operation']): Promise<Result> {
     const message = await this.connection.request({ case: 'fsRequest', value: create(FsRequestSchema, { operation }) })

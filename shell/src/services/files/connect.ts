@@ -6,15 +6,17 @@ import { SftpWorkerClient } from '../sftp/worker-client'
 import { NodeFileBackend } from './node-backend'
 import { FileOperationError, type FileBackend, type FileEndpoint } from './types'
 
-export async function connectFileEndpoint(endpoint: FileEndpoint, source?: RemoteConnection): Promise<FileBackend> {
+export async function connectFileEndpoint(endpoint: FileEndpoint, source?: RemoteConnection, signal?: AbortSignal): Promise<FileBackend> {
   if (endpoint.kind === 'local') {
     const backend = new NodeFileBackend()
-    await backend.connect()
+    try { await backend.connect(signal) }
+    catch (error) { await backend.disconnect(); throw error }
     if (endpoint.nodeId && backend.nodeId !== endpoint.nodeId) {
       await backend.disconnect()
       throw new Error('本机 Node 身份已改变，请重新打开本地窗口')
     }
-    backend.fork = () => connectFileEndpoint({ kind: 'local', nodeId: backend.nodeId })
+    const nodeId = backend.nodeId
+    backend.fork = (signal) => connectFileEndpoint({ kind: 'local', nodeId }, undefined, signal)
     return backend
   }
   let connection = source
@@ -28,10 +30,10 @@ export async function connectFileEndpoint(endpoint: FileEndpoint, source?: Remot
   // Keep the live session's credentials in this factory, so closing a terminal
   // or changing its profile does not invalidate file/editor/queued transfer work.
   const options = copyConnection(connection)
-  const open = async (): Promise<FileBackend> => {
+  const open = async (signal?: AbortSignal): Promise<FileBackend> => {
     const backend = new SftpWorkerClient()
     backend.fork = open
-    try { await backend.connect({ ...options, sessionId: crypto.randomUUID() }) }
+    try { await backend.connect({ ...options, sessionId: crypto.randomUUID() }, signal) }
     catch (error) {
       await backend.disconnect().catch(() => undefined)
       if (error instanceof FileOperationError && error.code === 'PROXY_ERROR') throw new FileOperationError(error.code, error.message, options.proxySource)
@@ -39,5 +41,5 @@ export async function connectFileEndpoint(endpoint: FileEndpoint, source?: Remot
     }
     return backend
   }
-  return open()
+  return open(signal)
 }
