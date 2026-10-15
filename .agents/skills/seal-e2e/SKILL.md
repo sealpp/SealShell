@@ -180,6 +180,28 @@ unshare --net -- bash -c 'ip link set lo up; node .agents/skills/seal-e2e/run-fi
 
 `shell/tests/transfer-status.spec.ts` 使用真实传输队列与可控完成/失败回调，验证状态栏预览、关闭详情后连续进度不重开、排队取消、失败重试、完成后的保留项警示、编码入口共存和减少动态效果。此 UI 回归不启动 Node，也不操作真实文件。
 
+## 大文件、慢传输与取消
+
+按需运行 `python scripts/test.py transfers`（不加入日常 `all`，避免每次执行大文件压力测试）。
+默认验证 128 MiB；Windows 已有开发实例时使用独立回环地址：
+
+```powershell
+$env:SEAL_E2E_HOST = '127.0.0.2'
+$env:SEAL_STRESS_MIB = '256'
+$env:SEAL_STRESS_SLOW = '1'
+python scripts/test.py transfers
+```
+
+`run-transfer-stress.js` 使用分块生成的随机数据，先测真实 libssh2/WASM 堆，再通过真实 Worker、
+任务队列和 Node 执行上传、下载、远端到远端复制；三种方向均校验完整 SHA-256。
+通过 mock 服务端的可控读写延迟让请求处于等待中，取消后应在 5 秒内结束且 Worker 数量回到基线；
+最后所有 Worker 与远端句柄都必须归零。`SEAL_STRESS_SLOW=1` 另加超过一分钟的持续慢写入。
+
+取消时远端可能仍在执行请求，Windows 文件锁会阻止立即删除临时文件；测试应验证取消记录包含准确的
+保留路径，不能要求所有服务器都立即删除。测试待服务器释放句柄后清理自己的临时 fixture。
+成功或失败均退出自启服务，样本保存在系统临时目录的 `seal-e2e/transfer-stress/`。
+这里记录的 WASM 堆大小不是整个浏览器进程的工作集；不得把浏览器缓存或进程保留页当成仍存活的传输 Worker。
+
 ## 前置代理与回环隔离
 
 `python scripts/test.py proxy` 启动独立的 mock HTTP CONNECT / SOCKS5、mock SSH、SealNode 和 Vite。
@@ -194,7 +216,7 @@ $env:SEAL_E2E_HOST = '127.0.0.2'
 python scripts/test.py
 ```
 
-仅 `files`、`ssh`、`proxy` 的 PWA/Node 采用该地址；目标 fixture 仍在本机。入口会检查指定地址的端口。
+仅 `files`、`transfers`、`ssh`、`proxy` 的 PWA/Node 采用该地址；目标 fixture 仍在本机。入口会检查指定地址的端口。
 Vite 对 `127.0.0.2` 可能输出 `Network`，启动检测须同时接受 `Local` 和 `Network`。
 测试后确认自启地址的 8081/17373 均已释放，不终止原有 127.0.0.1 开发服务。
 

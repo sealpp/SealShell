@@ -30,6 +30,7 @@ bash_path = os.environ.get("MOCK_SSH_BASH")
 mock_sftp_root = Path(os.environ.get("MOCK_SFTP_ROOT", str(Path(tempfile.gettempdir()) / "seal-mock-sftp")))
 mock_sftp_root.mkdir(parents=True, exist_ok=True)
 (mock_sftp_root / "README.md").write_text("SealShell SFTP mock\n", encoding="utf-8")
+sftp_control_path = os.environ.get("MOCK_SFTP_CONTROL_PATH")
 SAMPLE_COMMAND = (
     "printf '__SEAL_CPU__\\n'; cat /proc/stat; "
     "printf '__SEAL_MEM__\\n'; free -b; "
@@ -59,6 +60,39 @@ def sample_output() -> str:
 def write_state() -> None:
     if state_path:
         Path(state_path).write_text(json.dumps(call_count), encoding="utf-8")
+
+
+class MeasuredSFTPServer(asyncssh.SFTPServer):
+    """Optional stress-test counters and delays, isolated from normal fixtures."""
+
+    def open(self, path, pflags, attrs):
+        file = super().open(path, pflags, attrs)
+        call_count["sftp_open"] = call_count.get("sftp_open", 0) + 1
+        call_count["sftp_active"] = call_count.get("sftp_active", 0) + 1
+        write_state()
+        return file
+
+    def close(self, file):
+        super().close(file)
+        call_count["sftp_close"] = call_count.get("sftp_close", 0) + 1
+        call_count["sftp_active"] = call_count.get("sftp_active", 0) - 1
+        write_state()
+
+    async def write(self, file, offset, data):
+        control = json.loads(Path(sftp_control_path).read_text(encoding="utf-8"))
+        call_count["sftp_writes"] = call_count.get("sftp_writes", 0) + 1
+        if control.get("writeDelayMs"):
+            write_state()
+            await asyncio.sleep(control["writeDelayMs"] / 1000)
+        return super().write(file, offset, data)
+
+    async def read(self, file, offset, size):
+        control = json.loads(Path(sftp_control_path).read_text(encoding="utf-8"))
+        call_count["sftp_reads"] = call_count.get("sftp_reads", 0) + 1
+        if control.get("readDelayMs"):
+            write_state()
+            await asyncio.sleep(control["readDelayMs"] / 1000)
+        return super().read(file, offset, size)
 
 
 def command_output(command: str) -> tuple[str, int]:
@@ -217,7 +251,7 @@ async def main() -> int:
         process_factory=handle_process,
         # AsyncSSH's built-in SFTP server exercises the same v3 operations as
         # the browser backend (list/stat/read/write/rename/unlink/symlink).
-        sftp_factory=lambda channel: asyncssh.SFTPServer(channel, chroot=str(mock_sftp_root)),
+        sftp_factory=lambda channel: (MeasuredSFTPServer if sftp_control_path else asyncssh.SFTPServer)(channel, chroot=str(mock_sftp_root)),
         server_factory=MockSSHServer,
     )
     port = server.sockets[0].getsockname()[1]
