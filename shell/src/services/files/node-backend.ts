@@ -1,7 +1,9 @@
-import { create, type MessageInitShape } from '@bufbuild/protobuf'
-import { FsRequestSchema, type FsResponse, type FsInfo, type FsEntry } from '../../proto/seal_pb'
+import { type MessageInitShape } from '@bufbuild/protobuf'
+import { FsRequestSchema, type FsResponse, type FsInfo, type FsEntry } from '../../native/proto/seal_pb'
 import type { FileEntry } from '../../stores/app'
 import { NodeConnection } from '../node-connection'
+import { NativeFileSystem } from '../../native/filesystem'
+import { NativeError } from '../../native/errors'
 import { createFilePaths, posixPaths } from './path'
 import { FileOperationError, type FileBackend, type FileReader, type FileWriter, type FileDirectoryPage } from './types'
 
@@ -21,6 +23,7 @@ function fileEntry(value: FsEntry): FileEntry {
 
 export class NodeFileBackend implements FileBackend {
   private readonly connection = new NodeConnection()
+  private readonly files = new NativeFileSystem(this.connection)
   paths = posixPaths
   namespace = ''
   nodeId = ''
@@ -47,11 +50,11 @@ export class NodeFileBackend implements FileBackend {
   }
 
   private async rpc(operation: MessageInitShape<typeof FsRequestSchema>['operation']): Promise<Result> {
-    const message = await this.connection.request({ case: 'fsRequest', value: create(FsRequestSchema, { operation }) })
-    if (message.body.case !== 'fsResponse') throw new Error('Unexpected Node filesystem response')
-    const result = message.body.value.result
-    if (result.case === 'error') throw new FileOperationError(result.value.code, result.value.message)
-    return result
+    try { return await this.files.request(operation) }
+    catch (error) {
+      if (error instanceof NativeError) throw new FileOperationError(error.code, error.message)
+      throw error
+    }
   }
 
   async list(path: string, cursor?: string): Promise<FileDirectoryPage> {

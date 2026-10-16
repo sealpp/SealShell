@@ -20,7 +20,7 @@ class ConnectionLifecycleTests(unittest.IsolatedAsyncioTestCase):
 
         client = ClientConnection(SimpleNamespace(file_io_slots=asyncio.Semaphore(4)), ClosedSocket())
         stream = SimpleNamespace(close=AsyncMock())
-        client.streams[1] = stream
+        client.network.streams[1] = stream
         client.files = SimpleNamespace(close=AsyncMock())
         await client.run()
         self.assertTrue(client.closed)

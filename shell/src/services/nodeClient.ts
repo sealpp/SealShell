@@ -6,7 +6,7 @@ import {
   PairProofSchema,
   SealMessageSchema,
   type SealMessage,
-} from '../proto/seal_pb'
+} from '../native/proto/seal_pb'
 import { randomId } from '../utils/id'
 import {
   clearIdentity,

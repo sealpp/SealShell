@@ -1,4 +1,4 @@
-"""Loopback WebSocket to TCP/UDP transport for SealShell."""
+"""Authenticated local gateway for native network and filesystem capabilities."""
 
 from __future__ import annotations
 
@@ -12,27 +12,16 @@ import websockets
 
 from seal.seal_pb2 import SealMessage
 from seal.filesystem import FileSession
+from seal.network import NetworkSession
+from seal.errors import ProtocolError
 from seal.trust import TrustRepository, verify_device_signature
 
 MAX_MESSAGE_BYTES = 64 * 1024
-MAX_DATA_PAYLOAD = 60 * 1024
-MAX_STREAMS_PER_CLIENT = 64
-MAX_HOST_LENGTH = 253
 MAX_IDENTIFIER_LENGTH = 128
-MAX_CREDIT = 1024 * 1024
-INITIAL_CREDIT_BYTES = 256 * 1024
 MAX_PIN_ATTEMPTS = 5
 PIN_TTL_SECONDS = 120
-CONNECT_TIMEOUT_SECONDS = 10
 PROTOCOL_VERSION = 1
 NODE_VERSION = "0.2.0"
-
-
-class ProtocolError(Exception):
-    def __init__(self, code: str, message: str):
-        super().__init__(message)
-        self.code = code
-        self.message = message
 
 
 def _text(value: str) -> bytes:
@@ -55,17 +44,6 @@ def _is_valid_identifier(value: str, field: str) -> None:
         raise ProtocolError("invalid_message", f"{field} contains control characters")
 
 
-def _validate_target(host: str, port: int) -> None:
-    if not host or len(host) > MAX_HOST_LENGTH:
-        raise ProtocolError("invalid_target", "host is invalid")
-    if host != host.strip() or any(char in host for char in ("/", "\\", "@", "\x00")):
-        raise ProtocolError("invalid_target", "host is invalid")
-    if "://" in host:
-        raise ProtocolError("invalid_target", "host must not contain a scheme")
-    if not 1 <= port <= 65535:
-        raise ProtocolError("invalid_target", "port is invalid")
-
-
 def _validate_loopback_bind(host: str) -> bool:
     if host == "localhost":
         return True
@@ -73,221 +51,6 @@ def _validate_loopback_bind(host: str) -> bool:
         return ipaddress.ip_address(host).is_loopback
     except ValueError:
         return False
-
-
-class _DatagramReceiver(asyncio.DatagramProtocol):
-    def __init__(self, queue: asyncio.Queue[bytes]):
-        self.queue = queue
-        self.transport: asyncio.DatagramTransport | None = None
-        self.error: Exception | None = None
-
-    def connection_made(self, transport: asyncio.BaseTransport) -> None:
-        self.transport = transport  # type: ignore[assignment]
-
-    def datagram_received(self, data: bytes, _addr: Any) -> None:
-        if len(data) <= MAX_DATA_PAYLOAD:
-            try:
-                self.queue.put_nowait(data)
-            except asyncio.QueueFull:
-                pass
-
-    def error_received(self, exc: Exception) -> None:
-        self.error = exc
-
-    def connection_lost(self, exc: Exception | None) -> None:
-        if exc:
-            self.error = exc
-
-
-class TransportStream:
-    def __init__(self, client: ClientConnection, stream_id: int, transport_kind: str):
-        self.client = client
-        self.stream_id = stream_id
-        self.transport_kind = transport_kind
-        self.input_credit = INITIAL_CREDIT_BYTES
-        self.output_credit = INITIAL_CREDIT_BYTES
-        self.input_sequence = 0
-        self.output_sequence = 0
-        self.closed = False
-        self._credit_condition = asyncio.Condition()
-        self._pump_task: asyncio.Task[None] | None = None
-        self._closed_event_sent = False
-
-    async def start(self) -> None:
-        raise NotImplementedError
-
-    async def write(self, payload: bytes) -> None:
-        raise NotImplementedError
-
-    async def half_close(self) -> None:
-        raise NotImplementedError
-
-    async def _take_output_credit(self, required: int = 1) -> bool:
-        async with self._credit_condition:
-            while not self.closed and self.output_credit < required:
-                await self._credit_condition.wait()
-            if self.closed:
-                return False
-            self.output_credit -= required
-            return True
-
-    async def add_output_credit(self, amount: int) -> None:
-        if amount <= 0 or amount > MAX_CREDIT:
-            raise ProtocolError("invalid_credit", "credit increment is invalid")
-        async with self._credit_condition:
-            if self.output_credit + amount > MAX_CREDIT:
-                raise ProtocolError("invalid_credit", "credit exceeds the stream limit")
-            self.output_credit += amount
-            self._credit_condition.notify_all()
-
-    async def accept_input(self, payload: bytes) -> None:
-        if len(payload) > self.input_credit:
-            raise ProtocolError("credit_exhausted", "input credit is exhausted")
-        self.input_credit -= len(payload)
-        await self.write(payload)
-        self.input_credit += len(payload)
-        await self.client.send_credit(self.stream_id, "input", len(payload))
-
-    async def send_data(self, payload: bytes) -> None:
-        if not payload or len(payload) > MAX_DATA_PAYLOAD:
-            raise ProtocolError("invalid_message", "transport payload is invalid")
-        if not await self._take_output_credit(len(payload)):
-            return
-        msg = self.client.message()
-        msg.transport_data.stream_id = self.stream_id
-        msg.transport_data.sequence = self.output_sequence
-        msg.transport_data.payload = payload
-        self.output_sequence += 1
-        await self.client.send(msg)
-
-    async def close(self, reason: str = "", notify: bool = True) -> None:
-        if self.closed:
-            return
-        self.closed = True
-        async with self._credit_condition:
-            self._credit_condition.notify_all()
-        if self._pump_task and self._pump_task is not asyncio.current_task():
-            self._pump_task.cancel()
-            try:
-                await self._pump_task
-            except asyncio.CancelledError:
-                pass
-        await self._close_transport()
-        self.client.streams.pop(self.stream_id, None)
-        if notify and not self._closed_event_sent:
-            self._closed_event_sent = True
-            msg = self.client.message()
-            msg.transport_closed_event.stream_id = self.stream_id
-            msg.transport_closed_event.reason = reason
-            await self.client.send(msg)
-
-    async def _close_transport(self) -> None:
-        raise NotImplementedError
-
-
-class TcpStream(TransportStream):
-    def __init__(
-        self,
-        client: ClientConnection,
-        stream_id: int,
-        reader: asyncio.StreamReader,
-        writer: asyncio.StreamWriter,
-    ):
-        super().__init__(client, stream_id, "tcp")
-        self.reader = reader
-        self.writer = writer
-
-    async def start(self) -> None:
-        self._pump_task = asyncio.create_task(self._pump_output())
-
-    async def _pump_output(self) -> None:
-        try:
-            while not self.closed:
-                async with self._credit_condition:
-                    while not self.closed and self.output_credit == 0:
-                        await self._credit_condition.wait()
-                    if self.closed:
-                        return
-                    read_size = min(MAX_DATA_PAYLOAD, self.output_credit)
-                payload = await self.reader.read(read_size)
-                if not payload:
-                    await self.close("eof")
-                    return
-                await self.send_data(payload)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            await self.client.send_stream_error(self.stream_id, "tcp_read_failed", str(exc))
-            await self.close("tcp_read_failed", notify=True)
-
-    async def write(self, payload: bytes) -> None:
-        if self.closed:
-            raise ProtocolError("stream_closed", "transport stream is closed")
-        self.writer.write(payload)
-        await self.writer.drain()
-
-    async def half_close(self) -> None:
-        if self.closed:
-            return
-        if self.writer.can_write_eof():
-            self.writer.write_eof()
-            await self.writer.drain()
-
-    async def _close_transport(self) -> None:
-        self.writer.close()
-        try:
-            await self.writer.wait_closed()
-        except Exception:
-            pass
-
-
-class UdpStream(TransportStream):
-    def __init__(
-        self,
-        client: ClientConnection,
-        stream_id: int,
-        transport: asyncio.DatagramTransport,
-        queue: asyncio.Queue[bytes],
-    ):
-        super().__init__(client, stream_id, "udp")
-        self.transport = transport
-        self.queue = queue
-
-    async def start(self) -> None:
-        self._pump_task = asyncio.create_task(self._pump_output())
-
-    async def _pump_output(self) -> None:
-        try:
-            while not self.closed:
-                payload = await self.queue.get()
-                if len(payload) > MAX_DATA_PAYLOAD:
-                    continue
-                if not await self._take_output_credit(len(payload)):
-                    return
-                msg = self.client.message()
-                msg.transport_data.stream_id = self.stream_id
-                msg.transport_data.sequence = self.output_sequence
-                msg.transport_data.payload = payload
-                self.output_sequence += 1
-                await self.client.send(msg)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            await self.client.send_stream_error(self.stream_id, "udp_read_failed", str(exc))
-            await self.close("udp_read_failed", notify=True)
-
-    async def write(self, payload: bytes) -> None:
-        if self.closed:
-            raise ProtocolError("stream_closed", "transport stream is closed")
-        if not payload:
-            return
-        self.transport.sendto(payload)
-
-    async def half_close(self) -> None:
-        raise ProtocolError("unsupported", "UDP does not support half-close")
-
-    async def _close_transport(self) -> None:
-        self.transport.close()
 
 
 class ClientConnection:
@@ -298,9 +61,8 @@ class ClientConnection:
         self.device_id = ""
         self.pending_pair: dict[str, Any] | None = None
         self.pending_auth: dict[str, Any] | None = None
-        self.streams: dict[int, TransportStream] = {}
+        self.network = NetworkSession(self)
         self._send_lock = asyncio.Lock()
-        self._tasks: set[asyncio.Task[Any]] = set()
         self._file_tasks: set[asyncio.Task[Any]] = set()
         self.files = FileSession(server.file_io_slots)
         self.closed = False
@@ -358,17 +120,16 @@ class ClientConnection:
                 except websockets.ConnectionClosed:
                     return
                 except ProtocolError as exc:
-                    await self.send_error(msg.request_id, exc.code, exc.message)
+                    body = msg.WhichOneof("body")
+                    stream_id = getattr(getattr(msg, body), "stream_id", 0) if body else 0
+                    await self.send_error(msg.request_id, exc.code, exc.message, stream_id)
                 except Exception as exc:
                     await self.send_error(msg.request_id, "internal", str(exc))
         except websockets.ConnectionClosed:
             pass
         finally:
             self.closed = True
-            for task in list(self._tasks):
-                task.cancel()
-            for stream in list(self.streams.values()):
-                await stream.close("websocket_closed", notify=False)
+            await self.network.close()
             # Cancelling to_thread does not stop OS I/O. Drain before closing fds.
             await asyncio.gather(*self._file_tasks, return_exceptions=True)
             await self.files.close()
@@ -398,21 +159,10 @@ class ClientConnection:
                 task = asyncio.create_task(self._file_request(msg))
                 self._file_tasks.add(task)
                 task.add_done_callback(self._file_tasks.discard)
-        elif body == "transport_open_request":
+        elif body in ("transport_open_request", "transport_data", "transport_credit", "transport_half_close_request",
+                      "transport_close_request", "tcp_listen_request", "tcp_listener_close_request"):
             self._require_authentication()
-            self._spawn(self._open_transport(msg))
-        elif body == "transport_data":
-            self._require_authentication()
-            await self._transport_data(msg)
-        elif body == "transport_credit":
-            self._require_authentication()
-            await self._transport_credit(msg)
-        elif body == "transport_half_close_request":
-            self._require_authentication()
-            await self._transport_half_close(msg)
-        elif body == "transport_close_request":
-            self._require_authentication()
-            await self._transport_close(msg)
+            await self.network.dispatch(msg)
         else:
             raise ProtocolError("unsupported", f"message type {body!r} is not supported")
 
@@ -429,11 +179,6 @@ class ClientConnection:
                 await self.send(response)
             except websockets.ConnectionClosed:
                 pass
-
-    def _spawn(self, coroutine: Any) -> None:
-        task = asyncio.create_task(coroutine)
-        self._tasks.add(task)
-        task.add_done_callback(self._tasks.discard)
 
     async def _pair_begin(self, msg: SealMessage) -> None:
         if self.authenticated:
@@ -579,86 +324,6 @@ class ClientConnection:
         response.auth_succeeded.node_id = self.server.trust.node_id
         await self.send(response)
 
-    async def _open_transport(self, msg: SealMessage) -> None:
-        request = msg.transport_open_request
-        try:
-            if request.stream_id == 0 or request.stream_id in self.streams:
-                raise ProtocolError("invalid_stream", "stream id is already in use")
-            if len(self.streams) >= MAX_STREAMS_PER_CLIENT:
-                raise ProtocolError("resource_limit", "too many transport streams")
-            if request.transport not in ("tcp", "udp"):
-                raise ProtocolError("unsupported_transport", "transport must be tcp or udp")
-            _validate_target(request.host, request.port)
-
-            if request.transport == "tcp":
-                reader, writer = await asyncio.wait_for(
-                    asyncio.open_connection(request.host, request.port),
-                    timeout=CONNECT_TIMEOUT_SECONDS,
-                )
-                stream: TransportStream = TcpStream(self, request.stream_id, reader, writer)
-            else:
-                queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=16)
-                loop = asyncio.get_running_loop()
-                transport, _protocol = await asyncio.wait_for(
-                    loop.create_datagram_endpoint(
-                        lambda: _DatagramReceiver(queue),
-                        remote_addr=(request.host, request.port),
-                    ),
-                    timeout=CONNECT_TIMEOUT_SECONDS,
-                )
-                stream = UdpStream(self, request.stream_id, transport, queue)
-
-            self.streams[stream.stream_id] = stream
-            response = self.message()
-            response.request_id = msg.request_id
-            response.transport_opened_event.stream_id = stream.stream_id
-            response.transport_opened_event.transport = stream.transport_kind
-            response.transport_opened_event.input_credit_bytes = INITIAL_CREDIT_BYTES
-            response.transport_opened_event.output_credit_bytes = INITIAL_CREDIT_BYTES
-            await self.send(response)
-            await stream.start()
-        except (ProtocolError, asyncio.TimeoutError, OSError) as exc:
-            if isinstance(exc, ProtocolError):
-                code, message = exc.code, exc.message
-            elif isinstance(exc, asyncio.TimeoutError):
-                code, message = "connect_timeout", "target connection timed out"
-            else:
-                code, message = "connect_failed", str(exc)
-            await self.send_error(msg.request_id, code, message, request.stream_id)
-
-    async def _transport_data(self, msg: SealMessage) -> None:
-        data = msg.transport_data
-        stream = self.streams.get(data.stream_id)
-        if stream is None:
-            raise ProtocolError("stream_not_found", "transport stream does not exist")
-        if data.sequence != stream.input_sequence:
-            raise ProtocolError("sequence_error", "transport sequence is not increasing")
-        payload = bytes(data.payload)
-        if not payload or len(payload) > MAX_DATA_PAYLOAD:
-            raise ProtocolError("invalid_message", "transport payload is invalid")
-        stream.input_sequence += 1
-        await stream.accept_input(payload)
-
-    async def _transport_credit(self, msg: SealMessage) -> None:
-        credit = msg.transport_credit
-        stream = self.streams.get(credit.stream_id)
-        if stream is None:
-            raise ProtocolError("stream_not_found", "transport stream does not exist")
-        if credit.direction != "output":
-            raise ProtocolError("invalid_credit", "only output credit can be granted by the PWA")
-        await stream.add_output_credit(int(credit.add_bytes))
-
-    async def _transport_half_close(self, msg: SealMessage) -> None:
-        stream = self.streams.get(msg.transport_half_close_request.stream_id)
-        if stream is None:
-            raise ProtocolError("stream_not_found", "transport stream does not exist")
-        await stream.half_close()
-
-    async def _transport_close(self, msg: SealMessage) -> None:
-        stream = self.streams.get(msg.transport_close_request.stream_id)
-        if stream is None:
-            return
-        await stream.close(msg.transport_close_request.reason)
 
 
 class SealServer:

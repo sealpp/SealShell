@@ -20,6 +20,7 @@ shell/test-results/
 node/seal/seal_pb2.py
 node/seal/seal_pb2_grpc.py
 shell/src/proto/
+shell/src/native/proto/
 
 # Runtime state and data
 node/data/

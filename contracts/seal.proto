@@ -25,8 +25,14 @@ message SealMessage {
     TransportCloseRequest transport_close_request = 35;
     TransportClosedEvent transport_closed_event = 36;
     TransportErrorEvent transport_error_event = 37;
+    TransportEofEvent transport_eof_event = 38;
     FsRequest fs_request = 40;
     FsResponse fs_response = 41;
+    TcpListenRequest tcp_listen_request = 50;
+    TcpListeningEvent tcp_listening_event = 51;
+    TcpAcceptedEvent tcp_accepted_event = 52;
+    TcpListenerCloseRequest tcp_listener_close_request = 53;
+    TcpListenerClosedEvent tcp_listener_closed_event = 54;
   }
 }
 
@@ -125,6 +131,32 @@ message TransportErrorEvent {
   string code = 2;
   string message = 3;
 }
+
+message TransportEofEvent { uint32 stream_id = 1; }
+
+// Listeners and accepted streams are owned by the authenticated connection.
+// Port 0 requests an OS-assigned port. Node does not choose fallback ports.
+message TcpListenRequest {
+  uint32 listener_id = 1;
+  string host = 2;
+  uint32 port = 3;
+}
+message TcpListeningEvent {
+  uint32 listener_id = 1;
+  string host = 2;
+  uint32 port = 3;
+}
+message TcpAcceptedEvent {
+  uint32 listener_id = 1;
+  uint32 stream_id = 2;
+  string peer_host = 3;
+  uint32 peer_port = 4;
+  uint64 input_credit_bytes = 5;
+  uint64 output_credit_bytes = 6;
+}
+// Closing a listener stops accepting. Existing streams have their own lifetime.
+message TcpListenerCloseRequest { uint32 listener_id = 1; }
+message TcpListenerClosedEvent { uint32 listener_id = 1; }
 
 // File handles and directory cursors belong to the authenticated WS connection.
 message FsRequest {

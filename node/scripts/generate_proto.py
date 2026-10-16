@@ -61,7 +61,7 @@ def main() -> int:
             print(response.error, file=sys.stderr)
             return 1
         for file in response.file:
-            destination = shell / "src/proto" / file.name
+            destination = shell / "src/native/proto" / file.name
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_text(file.content, encoding="utf-8", newline="\n")
     return 0
