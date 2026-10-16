@@ -32,6 +32,13 @@ class MockSSHServer(asyncssh.SSHServer):
         expected = os.environ.get("MOCK_SSH_PASSWORD")
         return expected is None or password == expected
 
+    def connection_requested(self, dest_host, dest_port, orig_host, orig_port):
+        if not os.environ.get("MOCK_SSH_FORWARDING"):
+            return False
+        call_count["direct_tcpip"] = call_count.get("direct_tcpip", 0) + 1
+        write_state()
+        return True
+
 
 call_count = {"shell": 0, "exec": 0, "probe": 0, "stat": 0, "connections": 0, "active_connections": 0}
 state_path = os.environ.get("MOCK_SSH_STATE_PATH")

@@ -9,7 +9,7 @@ export default async function createSealShellLibssh2(options = {}) {
     'ssh2_init', 'ssh2_exit', 'ssh2_version', 'ssh2_session_init', 'ssh2_session_free',
     'ssh2_session_callback_set_custom', 'ssh2_session_handshake_custom', 'ssh2_session_disconnect',
     'ssh2_session_set_blocking', 'ssh2_session_last_errno', 'ssh2_session_last_error',
-    'ssh2_userauth_password', 'ssh2_channel_open_session', 'ssh2_channel_free', 'ssh2_channel_close',
+    'ssh2_userauth_password', 'ssh2_channel_open_session', 'ssh2_channel_direct_tcpip', 'ssh2_channel_free', 'ssh2_channel_close',
     'ssh2_channel_wait_closed', 'ssh2_channel_eof', 'ssh2_channel_send_eof', 'ssh2_channel_request_pty',
     'ssh2_channel_request_pty_size', 'ssh2_channel_shell', 'ssh2_channel_exec', 'ssh2_channel_subsystem',
     'ssh2_channel_read', 'ssh2_channel_read_stderr', 'ssh2_channel_write', 'ssh2_channel_write_stderr',

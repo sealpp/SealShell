@@ -83,6 +83,8 @@ export class Libssh2Session {
   private readonly outputHandlers = new Set<(payload: Uint8Array) => void>()
   private handshakeBytes = new Uint8Array()
   private readonly openFiles = new Set<() => Promise<void>>()
+  private readonly directChannels = new Set<number>()
+  private directOperations: Promise<unknown> = Promise.resolve()
 
   async connect(options: Libssh2SessionOptions): Promise<void> {
     this.module = await createLibssh2Module({
@@ -134,6 +136,70 @@ export class Libssh2Session {
   onRawData(handler: (payload: Uint8Array) => void): () => void {
     this.outputHandlers.add(handler)
     return () => this.outputHandlers.delete(handler)
+  }
+
+  // libssh2 retains nonblocking operation state. Serialize channel creation and
+  // writes; pull reads independently so remote receive windows can advance.
+  private directOperation<T>(operation: () => Promise<T>): Promise<T> {
+    const pending = this.directOperations.then(operation)
+    this.directOperations = pending.catch(() => undefined)
+    return pending
+  }
+
+  openDirect(host: string, port: number): Promise<number> {
+    return this.directOperation(async () => {
+      const channel = await this.withStrings([host], ([pointer]) => this.pumpHandle(() => (this.module as any).ssh2_channel_direct_tcpip(this.session, pointer, port)))
+      if (!channel) throw errorFor(this.module, this.session, 'SSH direct-tcpip channel refused')
+      this.directChannels.add(channel)
+      return channel
+    })
+  }
+
+  async readDirect(channel: number): Promise<Uint8Array | null> {
+    const buffer = this.module._malloc(60 * 1024)
+    try {
+      while (this.directChannels.has(channel)) {
+        const count = this.module.ssh2_channel_read(channel, buffer, 60 * 1024)
+        if (count > 0) return this.module.HEAPU8.slice(buffer, buffer + count)
+        if (count < 0 && count !== EAGAIN) throw errorFor(this.module, this.session, 'SSH forwarding read failed')
+        if (this.module.ssh2_channel_eof(channel)) return null
+        await this.transport.waitForData(25)
+      }
+      throw new Error('SSH forwarding channel closed')
+    } finally { this.module._free(buffer) }
+  }
+
+  writeDirect(channel: number, payload: Uint8Array): Promise<void> {
+    return this.directOperation(async () => {
+      if (!this.directChannels.has(channel)) throw new Error('SSH forwarding channel closed')
+      const buffer = this.module._malloc(payload.length)
+      try {
+        this.module.HEAPU8.set(payload, buffer)
+        let offset = 0
+        while (offset < payload.length) {
+          const count = await this.pump(() => this.module.ssh2_channel_write(channel, buffer + offset, payload.length - offset))
+          if (count < 0) throw errorFor(this.module, this.session, 'SSH forwarding write failed')
+          if (!count) await this.transport.waitForData(25)
+          offset += count
+        }
+      } finally { this.module._free(buffer) }
+    })
+  }
+
+  endDirect(channel: number): Promise<void> {
+    return this.directOperation(async () => {
+      if (!this.directChannels.has(channel)) return
+      const result = await this.pump(() => this.module.ssh2_channel_send_eof(channel))
+      if (result < 0) throw errorFor(this.module, this.session, 'SSH forwarding EOF failed')
+    })
+  }
+
+  closeDirect(channel: number): Promise<void> {
+    return this.directOperation(async () => {
+      if (!this.directChannels.delete(channel)) return
+      await this.pump(() => this.module.ssh2_channel_close(channel))
+      await this.pump(() => (this.module as any).ssh2_channel_free(channel))
+    })
   }
 
   async openShell(columns: number, rows: number, integrateShell = false): Promise<void> {
@@ -237,6 +303,7 @@ export class Libssh2Session {
   async close(): Promise<void> {
     if (this.closed) return
     try {
+      for (const channel of this.directChannels) await this.closeDirect(channel)
       for (const close of this.openFiles) await close()
       // SFTP owns a channel and allocates through its parent session.
       // Release it while that session and its callbacks are still alive.

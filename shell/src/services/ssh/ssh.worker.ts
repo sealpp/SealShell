@@ -7,6 +7,7 @@ type ConnectRequest = {
 }
 
 type Request = ConnectRequest | { type: 'hostKeyDecision'; accepted: boolean } | { type: 'input'; payload: ArrayBuffer } | { type: 'resize'; columns: number; rows: number } | { type: 'exec'; id: string; command: string } | { type: 'close' }
+  | { type: 'direct'; id: string; operation: 'open' | 'read' | 'write' | 'end' | 'close'; channel: number; host: string; port: number; payload: ArrayBuffer }
 
 const scope = globalThis as unknown as { onmessage?: (event: MessageEvent<Request>) => void; postMessage?: (value: unknown, transfer?: Transferable[]) => void }
 let session: Libssh2Session | undefined
@@ -83,7 +84,15 @@ scope.onmessage = (event) => {
         return
       }
       if (!session) throw new Error('SSH session is unavailable')
-      if (request.type === 'input') await session.write(new Uint8Array(request.payload))
+      if (request.type === 'direct') {
+        try {
+          const value = request.operation === 'open' ? await session.openDirect(request.host, request.port)
+            : request.operation === 'read' ? (await session.readDirect(request.channel))?.buffer ?? null
+              : request.operation === 'write' ? await session.writeDirect(request.channel, new Uint8Array(request.payload))
+                : request.operation === 'end' ? await session.endDirect(request.channel) : await session.closeDirect(request.channel)
+          post({ type: 'directResult', id: request.id, value }, value instanceof ArrayBuffer ? [value] : [])
+        } catch (error) { post({ type: 'directResult', id: request.id, error: error instanceof Error ? error.message : String(error) }) }
+      } else if (request.type === 'input') await session.write(new Uint8Array(request.payload))
       else if (request.type === 'resize') await session.resize(request.columns, request.rows)
       else if (request.type === 'exec') {
         const result = await session.exec(request.command)

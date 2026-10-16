@@ -22,6 +22,7 @@ type WorkerState = 'connecting' | 'online' | 'error' | 'idle'
 export class SshWorkerClient {
   private readonly worker: Worker
   private readonly execPending = new Map<string, { resolve: (value: { stdout: Uint8Array; stderr: Uint8Array; exitCode: number }) => void; reject: (error: Error) => void }>()
+  private readonly directPending = new Map<string, { resolve: (value: any) => void; reject: (error: Error) => void }>()
   private closed = false
   private closing?: Promise<void>
   private closeDone?: () => void
@@ -72,6 +73,30 @@ export class SshWorkerClient {
 
   resize(columns: number, rows: number): void { this.post({ type: 'resize', columns, rows }) }
 
+  openDirect(host: string, port: number): Promise<number> { return this.direct('open', { host, port }) }
+  async readDirect(channel: number): Promise<Uint8Array | null> {
+    const value = await this.direct('read', { channel })
+    return value === null ? null : new Uint8Array(value)
+  }
+  writeDirect(channel: number, payload: Uint8Array): Promise<void> { return this.direct('write', { channel, payload: payload.slice().buffer }) }
+  endDirect(channel: number): Promise<void> { return this.direct('end', { channel }) }
+  closeDirect(channel: number): Promise<void> { return this.direct('close', { channel }) }
+
+  private direct(operation: string, args: Record<string, unknown>): Promise<any> {
+    if (this.closed) return Promise.reject(new Error('SSH worker closed'))
+    const id = randomId()
+    return new Promise((resolve, reject) => {
+      this.directPending.set(id, { resolve, reject })
+      this.post({ type: 'direct', id, operation, ...args }, args.payload instanceof ArrayBuffer ? [args.payload] : [])
+    })
+  }
+
+  private rejectPending(error: Error): void {
+    for (const pending of [...this.execPending.values(), ...this.directPending.values()]) pending.reject(error)
+    this.execPending.clear()
+    this.directPending.clear()
+  }
+
   exec(command: string): Promise<{ stdout: Uint8Array; stderr: Uint8Array; exitCode: number }> {
     if (this.closed) return Promise.reject(new Error('SSH worker closed'))
     const id = randomId()
@@ -89,8 +114,7 @@ export class SshWorkerClient {
     this.worker.postMessage({ type: 'close' })
     await this.closing
     this.worker.terminate()
-    for (const pending of this.execPending.values()) pending.reject(new Error('SSH worker closed'))
-    this.execPending.clear()
+    this.rejectPending(new Error('SSH worker closed'))
   }
 
   abort(): void {
@@ -123,10 +147,16 @@ export class SshWorkerClient {
       pending.resolve({ stdout: new Uint8Array(event.stdout), stderr: new Uint8Array(event.stderr), exitCode: event.exitCode })
       return
     }
+    if (event.type === 'directResult') {
+      const pending = this.directPending.get(event.id)
+      this.directPending.delete(event.id)
+      if (event.error) pending?.reject(new Error(event.error))
+      else pending?.resolve(event.value)
+      return
+    }
     if (event.type === 'error') {
       this.onState?.('error', `${event.code}: ${event.message}`)
-      for (const pending of this.execPending.values()) pending.reject(new Error(`${event.code}: ${event.message}`))
-      this.execPending.clear()
+      this.rejectPending(new Error(`${event.code}: ${event.message}`))
       this.closeDone?.()
     }
   }
@@ -160,8 +190,7 @@ export class SshWorkerClient {
     this.closed = true
     this.lifetime.abort()
     this.onState?.('error', error.message)
-    for (const pending of this.execPending.values()) pending.reject(error)
-    this.execPending.clear()
+    this.rejectPending(error)
     this.worker.terminate()
     this.closeDone?.()
   }

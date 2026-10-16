@@ -231,10 +231,8 @@ declare module '@verdigris/libssh2.js' {
     ssh2_channel_open_session(session: LIBSSH2_SESSION): LIBSSH2_CHANNEL;
     ssh2_channel_direct_tcpip(
       session: LIBSSH2_SESSION,
-      host: string,
-      port: number,
-      shost: string,
-      sport: number
+      host: number,
+      port: number
     ): LIBSSH2_CHANNEL;
     ssh2_channel_request_pty(channel: LIBSSH2_CHANNEL, term: string): number;
     ssh2_channel_request_pty_size(channel: LIBSSH2_CHANNEL, width: number, height: number): number;
