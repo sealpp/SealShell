@@ -2,11 +2,12 @@ import { reactive } from 'vue'
 import type { CommandContext } from '../services/context'
 import type { FileEndpoint } from '../services/files/types'
 import type { HostProxySettings, ProxyProfile, ProxySource } from '../services/proxy/types'
+import type { PortsState } from '../services/ports/types'
 
 export type View = 'welcome' | 'shell'
 export type ShellState = 'idle' | 'connecting' | 'online' | 'error'
-export type TabKind = 'terminal' | 'file' | 'editor' | 'monitor'
-export type BottomPanelCategory = 'files' | 'editors' | 'monitors'
+export type TabKind = 'terminal' | 'file' | 'editor' | 'monitor' | 'port'
+export type BottomPanelCategory = 'files' | 'editors' | 'monitors' | 'ports'
 export type FocusedDock = 'terminal' | 'bottomPanel'
 
 export type TerminalFontWeight = 400 | 500 | 600 | 700
@@ -170,6 +171,12 @@ export interface MonitorTab extends Tab {
   }
 }
 
+export interface PortsTab extends Tab {
+  kind: 'port'
+  hostId: string
+  ports: PortsState
+}
+
 export interface SftpClipboardState {
   version: 1
   mode: 'copy' | 'cut'
@@ -217,6 +224,7 @@ export interface AppState {
   visibleFileTabIds: string[]
   activeEditorTabId: string
   activeMonitorTabId: string
+  activePortsTabId: string
   lastFilePanelCategory: 'files' | 'editors'
   bottomPanelCategory: BottomPanelCategory
   focusedDock: FocusedDock
@@ -237,7 +245,7 @@ export interface AppState {
   connectionModalOpen: boolean
   loginDialogOpen: boolean
   settingsModalOpen: boolean
-  settingsSection: 'appearance' | 'proxies'
+  settingsSection: 'appearance' | 'proxies' | 'ports'
   editingProxyId: string
   aboutModalOpen: boolean
   dirtyCloseConfirm: {
@@ -298,6 +306,7 @@ export const store = reactive<AppState>({
   visibleFileTabIds: [],
   activeEditorTabId: '',
   activeMonitorTabId: '',
+  activePortsTabId: '',
   lastFilePanelCategory: 'files',
   bottomPanelCategory: 'files',
   focusedDock: 'terminal',
@@ -356,7 +365,7 @@ export const store = reactive<AppState>({
 })
 
 export function getActiveBottomPanelTabId(category = store.bottomPanelCategory): string {
-  return category === 'files' ? store.activeFileTabId : category === 'editors' ? store.activeEditorTabId : store.activeMonitorTabId
+  return category === 'files' ? store.activeFileTabId : category === 'editors' ? store.activeEditorTabId : category === 'monitors' ? store.activeMonitorTabId : store.activePortsTabId
 }
 
 export function getFocusedTabId(): string {
@@ -366,8 +375,9 @@ export function getFocusedTabId(): string {
 export function setBottomPanelActiveTab(tabId: string, category: BottomPanelCategory): void {
   if (category === 'files') store.activeFileTabId = tabId
   else if (category === 'editors') store.activeEditorTabId = tabId
-  else store.activeMonitorTabId = tabId
-  if (category !== 'monitors') store.lastFilePanelCategory = category
+  else if (category === 'monitors') store.activeMonitorTabId = tabId
+  else store.activePortsTabId = tabId
+  if (category === 'files' || category === 'editors') store.lastFilePanelCategory = category
   store.bottomPanelCategory = category
   store.focusedDock = 'bottomPanel'
 }

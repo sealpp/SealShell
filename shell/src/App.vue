@@ -4,6 +4,7 @@ import { getFocusedTabId, store } from './stores/app'
 import { connect, initializePwa, setNodeDisconnectedHandler } from './services/ws'
 import { commandService, keybindingService, syncAppContext, ContextKeys } from './services/commands'
 import { startMonitoringService, stopMonitoringService } from './services/monitoring/runtime'
+import { startPortsService, stopPortsService } from './services/ports/runtime'
 import { startWorkbenchCloseProtection } from './services/workbench-close-protection'
 import PairingView from './views/PairingView.vue'
 import HostFormView from './views/HostFormView.vue'
@@ -148,6 +149,7 @@ const stopContextSync = watch(
     store.activeFileTabId,
     store.activeEditorTabId,
     store.activeMonitorTabId,
+    store.activePortsTabId,
     store.bottomPanelCategory,
     store.focusedDock,
     store.bottomPanelOpen,
@@ -218,6 +220,7 @@ onMounted(async () => {
   }
   if (disposed) return
   startMonitoringService()
+  startPortsService()
   keybindingService.attach(window, () => {
     const tabId = getFocusedTabId()
     const tab = store.tabs.find((item) => item.id === tabId)
@@ -238,6 +241,7 @@ onBeforeUnmount(() => {
   disposed = true
   stopCloseProtection()
   stopMonitoringService()
+  stopPortsService()
   endResize()
   setNodeDisconnectedHandler(undefined)
   keybindingService.dispose()

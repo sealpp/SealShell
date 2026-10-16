@@ -1,5 +1,6 @@
 import type { FolderProfile, HostProfile, TerminalPreferences } from '../stores/app'
 import type { ProxyProfile } from './proxy/types'
+import type { PortRule, PortBindHost } from './ports/types'
 
 const DB_NAME = 'seal-shell'
 const DB_VERSION = 3
@@ -158,7 +159,7 @@ export async function deleteFolderTree(rootFolderIds: string[]): Promise<{ folde
   const hostIds = allHosts
     .filter((host) => host.folderId !== null && folderIds.has(host.folderId))
     .map((host) => host.id)
-  const transaction = db.transaction(['folders', 'hosts', 'credentials'], 'readwrite')
+  const transaction = db.transaction(['folders', 'hosts', 'credentials', 'meta'], 'readwrite')
   const folders = transaction.objectStore('folders')
   const hosts = transaction.objectStore('hosts')
   const credentials = transaction.objectStore('credentials')
@@ -166,6 +167,7 @@ export async function deleteFolderTree(rootFolderIds: string[]): Promise<{ folde
   hostIds.forEach((id) => {
     hosts.delete(id)
     credentials.delete(id)
+    transaction.objectStore('meta').delete(`ports:${id}`)
   })
   await new Promise<void>((resolve, reject) => {
     transaction.onerror = () => reject(transaction.error ?? new Error('failed to delete folder tree'))
@@ -202,18 +204,18 @@ export async function moveTreeNodes(
 }
 
 export async function deleteHost(id: string): Promise<void> {
-  await deleteFromStore('hosts', id)
-  await deleteFromStore('credentials', id)
+  await deleteHosts([id])
 }
 
 export async function deleteHosts(ids: string[]): Promise<void> {
   const db = await openDatabase()
-  const transaction = db.transaction(['hosts', 'credentials'], 'readwrite')
+  const transaction = db.transaction(['hosts', 'credentials', 'meta'], 'readwrite')
   const hosts = transaction.objectStore('hosts')
   const credentials = transaction.objectStore('credentials')
   for (const id of ids) {
     hosts.delete(id)
     credentials.delete(id)
+    transaction.objectStore('meta').delete(`ports:${id}`)
   }
   await new Promise<void>((resolve, reject) => {
     transaction.onerror = () => reject(transaction.error ?? new Error('failed to delete hosts'))
@@ -256,4 +258,29 @@ export async function readKnownHost(host: string, port: number): Promise<KnownHo
 
 export async function saveKnownHost(record: Omit<KnownHostRecord, 'id'>): Promise<void> {
   await putInStore('knownHosts', { ...record, id: knownHostId(record.host, record.port) })
+}
+
+export async function readPortRules(hostId: string): Promise<PortRule[]> {
+  return (await getFromStore<{ items: PortRule[] }>('meta', `ports:${hostId}`))?.items ?? []
+}
+
+export async function savePortRules(hostId: string, items: PortRule[]): Promise<void> {
+  const db = await openDatabase()
+  // Host existence and write share a transaction: a deleted profile cannot be
+  // resurrected by an independent panel which retains its connection snapshot.
+  const transaction = db.transaction(['hosts', 'meta'], 'readwrite')
+  const host = transaction.objectStore('hosts').get(hostId)
+  host.onsuccess = () => { if (host.result) transaction.objectStore('meta').put({ key: `ports:${hostId}`, items }) }
+  await new Promise<void>((resolve, reject) => {
+    transaction.oncomplete = () => resolve()
+    transaction.onabort = () => reject(transaction.error ?? new Error('端口规则保存失败'))
+    transaction.onerror = () => reject(transaction.error ?? new Error('端口规则保存失败'))
+  })
+}
+
+export async function readPortBindHost(): Promise<PortBindHost> {
+  return (await getFromStore<{ host: PortBindHost }>('meta', 'portBindHost'))?.host ?? '127.0.0.1'
+}
+export async function savePortBindHost(host: PortBindHost): Promise<void> {
+  await putInStore('meta', { key: 'portBindHost', host })
 }

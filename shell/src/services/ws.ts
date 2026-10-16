@@ -20,6 +20,7 @@ import {
   sendInput,
 } from './ssh'
 import { disposeMonitor } from './monitoring/runtime'
+import { disposePorts } from './ports/runtime'
 import { nodeClient, type NodeCallbacks } from './nodeClient'
 import { closeFileTabSession } from './sftp/file-tabs'
 import { hostProxySource, loadProxyProfiles, resolveHostConnection } from './proxy/profiles'
@@ -365,6 +366,7 @@ export function closeTabs(tabIds: string[], skipDirtyPrompt = false): void {
     outputHandlers.delete(tab.sessionId)
     pendingOutput.delete(tab.sessionId)
     if (tab.kind === 'monitor') disposeMonitor(tab.id)
+    else if (tab.kind === 'port') void disposePorts(tab.id)
     else void closeSsh(tab.sessionId)
     if (tab.kind === 'file' || tab.kind === 'editor') void closeFileTabSession(tab.id)
   }
@@ -373,6 +375,7 @@ export function closeTabs(tabIds: string[], skipDirtyPrompt = false): void {
   store.activeFileTabId = nextActiveId('file', store.activeFileTabId)
   store.activeEditorTabId = nextActiveId('editor', store.activeEditorTabId)
   store.activeMonitorTabId = nextActiveId('monitor', store.activeMonitorTabId)
+  store.activePortsTabId = nextActiveId('port', store.activePortsTabId)
   if (!store.tabs.length) {
     store.view = store.bottomPanelOpen ? 'shell' : 'welcome'
   } else {
