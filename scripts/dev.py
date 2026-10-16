@@ -22,7 +22,7 @@ def main() -> int:
     options = parser.parse_args()
     python = ROOT / "node/.venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     vite = ROOT / "shell/node_modules/vite/bin/vite.js"
-    for artifact in (python, vite, ROOT / "node/seal/seal_pb2.py", ROOT / "shell/src/proto/seal_pb.ts"):
+    for artifact in (python, vite, ROOT / "node/seal/seal_pb2.py", ROOT / "shell/src/native/proto/seal_pb.ts"):
         if not artifact.exists():
             parser.error("Run python scripts/setup.py first.")
     for port in (int(os.environ.get("SEAL_PORT", "17373")), options.port):
