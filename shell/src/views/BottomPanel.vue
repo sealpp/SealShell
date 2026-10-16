@@ -39,6 +39,7 @@ let resizeTarget: HTMLElement | null = null
 const visible = computed(() => store.view === 'shell' && store.bottomPanelOpen)
 const heightStyle = computed(() => ({ height: store.bottomPanelMaximized ? '100%' : `${clampNormalHeight(store.bottomPanelHeight)}px` }))
 const terminalContext = computed(() => ({ area: 'terminal' as const, tabId: store.activeTerminalTabId }))
+const canOpenTerminalPorts = computed(() => commandService.isEnabled('ports.open', terminalContext.value))
 const canOpenTerminalMonitor = computed(() => commandService.isEnabled('monitor.open', terminalContext.value))
 
 function getShellWorkspace(): HTMLElement | null {
@@ -307,7 +308,15 @@ watch(
         :aria-selected="store.bottomPanelCategory === 'monitors'" @click="selectCategory('monitors')">
         <IconChartLine :size="14" aria-hidden="true" /><span>性能监测</span>
       </button>
+      <button type="button" role="tab" class="workspace-category"
+        :class="{ active: store.bottomPanelCategory === 'ports' }"
+        :aria-selected="store.bottomPanelCategory === 'ports'" @click="selectCategory('ports')">
+        <span class="codicon codicon-plug" aria-hidden="true"></span><span>端口转发</span>
+      </button>
       <div class="workspace-actions">
+        <button v-if="store.bottomPanelCategory === 'ports'" type="button" class="workspace-action" :disabled="!canOpenTerminalPorts"
+          aria-label="打开或定位当前终端的端口转发" :title="canOpenTerminalPorts ? '打开或定位当前终端的端口转发' : '当前没有可用的终端会话'"
+          @click="commandService.execute('ports.open', terminalContext)"><IconFocus2 :size="15" aria-hidden="true" /></button>
         <button v-if="store.bottomPanelCategory === 'monitors'" type="button" class="workspace-action" :disabled="!canOpenTerminalMonitor"
           aria-label="打开或定位当前终端的性能监测" :title="canOpenTerminalMonitor ? '打开或定位当前终端的性能监测' : '当前没有可用的终端会话'"
           @click="commandService.execute('monitor.open', terminalContext)"><IconFocus2 :size="15" aria-hidden="true" /></button>
@@ -344,6 +353,9 @@ watch(
       </div>
       <div class="workspace-category-view" :class="{ active: store.bottomPanelCategory === 'monitors' }">
         <BottomPanelDock category="monitors" />
+      </div>
+      <div class="workspace-category-view" :class="{ active: store.bottomPanelCategory === 'ports' }">
+        <BottomPanelDock category="ports" />
       </div>
     </div>
     <div

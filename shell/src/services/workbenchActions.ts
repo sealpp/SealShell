@@ -63,6 +63,11 @@ registerAction({
 })
 
 registerAction({
+  id: 'workbench.togglePorts', title: '端口转发', description: '显示或隐藏端口转发视图', category: 'workbench',
+  run: () => toggleCategory('ports'),
+})
+
+registerAction({
   id: 'workbench.toggleBottomPanel',
   title: '面板',
   description: '显示或隐藏底部面板',

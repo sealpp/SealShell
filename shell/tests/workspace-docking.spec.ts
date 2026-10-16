@@ -41,7 +41,7 @@ async function visibleWorkspaceGroups(page: Page) {
 }
 
 test('keeps fixed categories and shows only the selected category instances', async ({ page }) => {
-  await expect(page.getByRole('tab')).toHaveCount(3)
+  await expect(page.getByRole('tab')).toHaveCount(4)
   await expect(page.locator('.workspace-category-view.active .workspace-instance')).toHaveCount(3)
   const dockBox = await page.locator('.workspace-category-view.active .workspace-dockview').boundingBox()
   expect(dockBox?.height ?? 0).toBeGreaterThan(0)

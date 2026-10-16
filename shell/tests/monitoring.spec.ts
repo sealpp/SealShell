@@ -12,7 +12,7 @@ async function openFrom(page: Page, source: 'host' | 'terminal') {
 test('shares one bottom panel between two status entries and remembers the file category', async ({ page }) => {
   await page.getByRole('button', { name: '性能监测 0', exact: true }).click()
   await expect(page.getByText('从终端或会话列表右键打开性能监测')).toBeVisible()
-  await expect(page.getByRole('tab')).toHaveCount(3)
+  await expect(page.getByRole('tab')).toHaveCount(4)
   await page.getByRole('button', { name: '文件管理', exact: true }).click()
   await expect(page.getByRole('tab', { name: '文件列表', exact: true })).toHaveAttribute('aria-selected', 'true')
   await page.getByRole('tab', { name: '文件编辑', exact: true }).click()

@@ -4,8 +4,10 @@ import { IconFolder, IconChartLine } from '@tabler/icons-vue'
 import { commandService } from '../services/commands'
 import { store } from '../stores/app'
 
-const filesOpen = computed(() => store.bottomPanelOpen && store.bottomPanelCategory !== 'monitors')
+const filesOpen = computed(() => store.bottomPanelOpen && (store.bottomPanelCategory === 'files' || store.bottomPanelCategory === 'editors'))
 const monitorsOpen = computed(() => store.bottomPanelOpen && store.bottomPanelCategory === 'monitors')
+const portsOpen = computed(() => store.bottomPanelOpen && store.bottomPanelCategory === 'ports')
+const portsCount = computed(() => store.tabs.filter(tab => tab.kind === 'port').length)
 const count = computed(() => store.tabs.filter(tab => tab.kind === 'monitor').length)
 </script>
 
@@ -26,6 +28,11 @@ const count = computed(() => store.tabs.filter(tab => tab.kind === 'monitor').le
     :title="`${monitorsOpen ? '隐藏' : '显示'}性能监测 · ${count} 个实例`"
     @click="commandService.execute('workbench.toggleMonitoring', { area: 'global' })">
     <IconChartLine :size="14" aria-hidden="true" /><span>性能监测</span><span class="monitor-count">{{ count }}</span>
+  </button>
+  <button type="button" class="workspace-status" :class="{ active: portsOpen, monitoring: portsCount > 0 }"
+    :aria-pressed="portsOpen" :aria-label="`端口转发 ${portsCount}`" :title="`${portsOpen ? '隐藏' : '显示'}端口转发 · ${portsCount} 个实例`"
+    @click="commandService.execute('workbench.togglePorts', { area: 'global' })">
+    <span class="codicon codicon-plug" aria-hidden="true"></span><span>端口转发</span><span class="monitor-count">{{ portsCount }}</span>
   </button>
 </template>
 

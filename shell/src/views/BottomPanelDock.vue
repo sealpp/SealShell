@@ -8,6 +8,7 @@ import { commandService } from '../services/commands'
 import { arrangeWorkspaceInstances, canDropWorkspaceInstance } from '../services/workspace-docking'
 import FilePanel from './FilePanel.vue'
 import MetricsPanel from './MetricsPanel.vue'
+import PortsPanel from './PortsPanel.vue'
 import EditorPanel from './EditorPanel.vue'
 import CommandContextMenu from '../components/CommandContextMenu.vue'
 import { MenuId } from '../services/actions/menuIds'
@@ -41,9 +42,10 @@ const components = {
   file: FilePanel,
   editor: EditorPanel,
   monitor: MetricsPanel,
+  port: PortsPanel,
 }
 
-const tabs = computed(() => store.tabs.filter((tab): tab is Tab & { kind: 'file' | 'editor' | 'monitor' } => tab.kind === props.category.slice(0, -1)))
+const tabs = computed(() => store.tabs.filter((tab): tab is Tab & { kind: 'file' | 'editor' | 'monitor' | 'port' } => tab.kind === props.category.slice(0, -1)))
 
 function newWorkspaceGroupId(tabId: string): string {
   return `${props.category}:${tabId}`
@@ -475,7 +477,7 @@ function readWorkspaceDrag(event: DragEvent | PointerEvent): { tabId: string; ca
   if (!raw) return undefined
   try {
     const data = JSON.parse(raw) as { tabId?: string; category?: BottomPanelCategory }
-    if (!data.tabId || (data.category !== 'files' && data.category !== 'editors' && data.category !== 'monitors')) return undefined
+    if (!data.tabId || (data.category !== 'files' && data.category !== 'editors' && data.category !== 'monitors' && data.category !== 'ports')) return undefined
     return { tabId: data.tabId, category: data.category }
   } catch {
     return undefined
@@ -534,8 +536,9 @@ onBeforeUnmount(() => {
       <div v-if="!tabs.length" class="workspace-dock-empty">
         <IconFolder v-if="props.category === 'files'" :size="22" aria-hidden="true" />
         <IconChartLine v-else-if="props.category === 'monitors'" :size="22" aria-hidden="true" />
+        <span v-else-if="props.category === 'ports'" class="codicon codicon-plug" aria-hidden="true"></span>
         <IconFile v-else :size="22" aria-hidden="true" />
-        <span>{{ props.category === 'files' ? '暂无文件列表' : props.category === 'editors' ? '暂无打开的文件' : '从终端或会话列表右键打开性能监测' }}</span>
+        <span>{{ props.category === 'files' ? '暂无文件列表' : props.category === 'editors' ? '暂无打开的文件' : props.category === 'monitors' ? '从终端或会话列表右键打开性能监测' : '从终端或会话列表右键打开端口转发' }}</span>
       </div>
     </div>
     <CommandContextMenu :menu-id="MenuId.FileInstances" :context="{ area: 'global' }" :can-open="() => props.category === 'files'">
@@ -558,6 +561,7 @@ onBeforeUnmount(() => {
         <span class="workspace-instance-marker" aria-hidden="true">{{ instanceMarker(tab.id) }}</span>
         <IconFolder v-if="tab.kind === 'file'" :size="14" aria-hidden="true" />
         <IconChartLine v-else-if="tab.kind === 'monitor'" :size="14" aria-hidden="true" />
+        <span v-else-if="tab.kind === 'port'" class="codicon codicon-plug" aria-hidden="true"></span>
         <IconFile v-else :size="14" aria-hidden="true" />
         <span class="workspace-instance-label" :title="panelTitle(tab)">{{ panelTitle(tab) }}</span>
         <span class="workspace-instance-state" :class="tab.state" aria-hidden="true"></span>
