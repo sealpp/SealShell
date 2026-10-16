@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { IconDeviceDesktopPlus, IconFile, IconFolder, IconChartLine, IconMaximize, IconMaximizeOff, IconX } from '@tabler/icons-vue'
+import { IconDeviceDesktopPlus, IconFile, IconFolder, IconChartLine, IconFocus2, IconMaximize, IconMaximizeOff, IconX } from '@tabler/icons-vue'
 import { getActiveBottomPanelTabId, setBottomPanelActiveTab, store, type BottomPanelCategory } from '../stores/app'
 import {
   BOTTOM_PANEL_DEFAULT_HEIGHT_RATIO,
@@ -38,6 +38,8 @@ let resizeTarget: HTMLElement | null = null
 
 const visible = computed(() => store.view === 'shell' && store.bottomPanelOpen)
 const heightStyle = computed(() => ({ height: store.bottomPanelMaximized ? '100%' : `${clampNormalHeight(store.bottomPanelHeight)}px` }))
+const terminalContext = computed(() => ({ area: 'terminal' as const, tabId: store.activeTerminalTabId }))
+const canOpenTerminalMonitor = computed(() => commandService.isEnabled('monitor.open', terminalContext.value))
 
 function getShellWorkspace(): HTMLElement | null {
   const parent = panelEl.value?.parentElement
@@ -306,6 +308,9 @@ watch(
         <IconChartLine :size="14" aria-hidden="true" /><span>性能监测</span>
       </button>
       <div class="workspace-actions">
+        <button v-if="store.bottomPanelCategory === 'monitors'" type="button" class="workspace-action" :disabled="!canOpenTerminalMonitor"
+          aria-label="打开或定位当前终端的性能监测" :title="canOpenTerminalMonitor ? '打开或定位当前终端的性能监测' : '当前没有可用的终端会话'"
+          @click="commandService.execute('monitor.open', terminalContext)"><IconFocus2 :size="15" aria-hidden="true" /></button>
         <button v-if="store.bottomPanelCategory === 'files'" type="button" class="workspace-action" :disabled="!store.paired"
           aria-label="新建本地窗口并分栏" title="新建本地窗口并分栏 (Alt+L)"
           @click="commandService.execute('file.newLocalSplit', { area: 'global' })"><IconDeviceDesktopPlus :size="15" /></button>
@@ -433,11 +438,16 @@ watch(
   cursor: pointer;
 }
 
-.workspace-action:hover,
+.workspace-action:hover:not(:disabled),
 .workspace-action:focus-visible {
   background: #3c3c3c;
   color: #fff;
   outline: none;
+}
+
+.workspace-action:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .workspace-category {
