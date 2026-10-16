@@ -126,6 +126,10 @@ const proxyState = () => JSON.parse(fs.readFileSync(statePath, 'utf8'));
       return createFileTab(store.hosts.find(item => item.id === hostId), tabId).id;
     }, original);
     await until(async () => await page.evaluate(async id => (await import('/src/stores/app.ts')).store.tabs.find(item => item.id === id)?.state === 'online', fileId), 'SFTP did not inherit the original route');
+    await until(async () => await page.evaluate(async id => {
+      const tab = (await import('/src/stores/app.ts')).store.tabs.find(item => item.id === id);
+      return !tab?.file.loading && tab?.file.entries.some(entry => entry.name === 'note.txt');
+    }, fileId), 'SFTP initial directory did not finish loading');
     await page.evaluate(async id => (await import('/src/services/ws.ts')).closeTab(id), original.tabId);
     const editorId = await page.evaluate(async fileId => {
       const { store } = await import('/src/stores/app.ts');

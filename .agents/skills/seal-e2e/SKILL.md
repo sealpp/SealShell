@@ -29,6 +29,7 @@ python scripts/test.py ui
 python scripts/test.py files
 python scripts/test.py ssh
 python scripts/test.py proxy
+python scripts/test.py ports
 ```
 
 `python scripts/test.py` 按顺序执行上述全部验证及生产构建。Python 环境由 uv 管理并锁定；
@@ -37,11 +38,21 @@ setup 使用清华 PyPI、npmmirror npm 和 Playwright 镜像，并保留其他�
 
 Python 测试入口检查所需端口，发生占用时直接报错，先由使用者关闭已有服务。
 `files` 自行启动所需服务；`ssh` 由 Python 入口启动 Vite、JS runner 启动其余服务。
+`ports` 自行启动隔离的 TCP fixture、SSH、Node 和 Vite。Windows 已有日常开发服务时使用
+`$env:SEAL_E2E_HOST='127.0.0.2'`，不要终止用户在 127.0.0.1 的服务。
 Playwright 的浏览器交互保留在 JS/TS 中，解释器路径自动区分 `.venv/Scripts/python.exe` 与 `.venv/bin/python`；
 两条完整链路均可用 `SEAL_PYTHON` 覆盖解释器，并在成功、失败或启动失败后等待自启进程退出。
 
 SealNode 不实现 SSH，也不保存主机或凭据业务数据。完整链路中的 SSH 协议由 PWA/WASM
 Worker 执行；mock SSH 只属于测试依赖。
+
+端口套件覆盖：注入身份/端点的独立 SDK 客户端（同连接 TCP 与文件查询）、真实 WASM
+direct-tcpip、多连接大块传输、FIN 后回复、占用端口回退、发现默认不转发、菜单/当前终端
+定位去重、隐藏持续发现与转发、Enter/blur/Escape、全局监听范围切换、手工即启用、取消
+结束已有连接、勾选持久化、配置快照、失败红灯及无弹窗、刷新和资源回收。mock 的
+`MOCK_PORTS_CONTROL_PATH` 用 JSON 端口数组控制发现列表，`MOCK_SSH_FORWARDING=1`
+启用真实 direct-tcpip。成功/失败截图保存到系统临时目录 `seal-e2e/ports`。
+修改本地 libssh2 vendor 导出时更新包版本/锁文件，并在套件冷启动时重新生成 Vite 依赖缓存。
 
 ## 端口
 

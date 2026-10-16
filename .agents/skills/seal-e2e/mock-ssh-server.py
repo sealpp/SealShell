@@ -114,6 +114,14 @@ class MeasuredSFTPServer(asyncssh.SFTPServer):
 
 
 def command_output(command: str) -> tuple[str, int]:
+    if command == "cat /proc/net/tcp /proc/net/tcp6 2>/dev/null":
+        control = os.environ.get("MOCK_PORTS_CONTROL_PATH")
+        ports = json.loads(Path(control).read_text(encoding="utf-8")) if control else []
+        call_count["port_scans"] = call_count.get("port_scans", 0) + 1
+        write_state()
+        return "sl local_address rem_address st\n" + "".join(
+            f"{index}: 00000000:{port:04X} 00000000:0000 0A\n" for index, port in enumerate(ports)
+        ), 0
     if command == "printf 'SEAL_BASH_VERSION=%s\\nSEAL_ZSH_VERSION=%s\\n' \"${BASH_VERSION-}\" \"${ZSH_VERSION-}\"":
         if shell_path:
             args = ["-f"] if zsh_path else ["--noprofile", "--norc"]
