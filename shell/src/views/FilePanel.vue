@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ProxyErrorAction from '../components/ProxyErrorAction.vue'
+import FileIcon from '../components/FileIcon.vue'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { IconArrowBackUp, IconArrowForwardUp, IconArrowUp, IconEye, IconRefresh } from '@tabler/icons-vue'
 import CommandContextMenu from '../components/CommandContextMenu.vue'
@@ -8,6 +9,7 @@ import type { CommandContext } from '../services/context'
 import { commandService } from '../services/commands'
 import { setBottomPanelActiveTab, store, type FileEntry, type FileTab } from '../stores/app'
 import { transferFileEntries } from '../services/files/transfers'
+import { fileType, fileTypeLabels } from '../services/files/file-type'
 import { getFileBackend, goBackFileTab, goForwardFileTab, navigateFileTab, navigateParentFileTab, refreshFileTab } from '../services/sftp/file-tabs'
 
 const props = defineProps<{ params: { params: { tabId: string; [key: string]: unknown }; [key: string]: unknown } }>()
@@ -81,7 +83,8 @@ const canNavigateParent = computed(() => {
 })
 const renderStart = computed(() => Math.max(0, Math.floor(scrollTop.value / ROW_HEIGHT) - 8))
 const renderEnd = computed(() => Math.min(sortedEntries.value.length, renderStart.value + Math.ceil(viewportHeight.value / ROW_HEIGHT) + 16))
-const renderedEntries = computed(() => sortedEntries.value.slice(renderStart.value, renderEnd.value))
+const renderedEntries = computed(() => sortedEntries.value.slice(renderStart.value, renderEnd.value)
+  .map(entry => ({ entry, type: fileType(entry) })))
 const topSpacer = computed(() => renderStart.value * ROW_HEIGHT)
 const bottomSpacer = computed(() => Math.max(0, (sortedEntries.value.length - renderEnd.value) * ROW_HEIGHT))
 
@@ -278,14 +281,14 @@ onBeforeUnmount(onDragLeave)
           title="返回上一级目录"
           @dblclick="goToParent"
         >
-          <span class="file-name"><span class="file-kind">↩</span><span>..</span></span>
+          <span class="file-name"><IconArrowBackUp class="file-parent-icon" :size="16" :stroke-width="1.75" aria-hidden="true" /><span>..</span></span>
           <span>—</span>
           <span>—</span>
           <span>目录</span>
         </div>
         <div class="virtual-spacer" :style="{ height: `${topSpacer}px` }" aria-hidden="true" />
         <div
-          v-for="entry in renderedEntries"
+          v-for="{ entry, type } in renderedEntries"
           :key="entry.path"
           class="file-row"
           :class="{ selected: isSelected(entry), drop: dropTarget === entry.path }"
@@ -298,10 +301,10 @@ onBeforeUnmount(onDragLeave)
           @drop="onDrop($event, entry)"
           @contextmenu="!isSelected(entry) && select(entry, $event)"
         >
-          <span class="file-name"><span class="file-kind">{{ entry.kind === 'directory' ? '▰' : entry.kind === 'symlink' ? '↗' : '•' }}</span><span>{{ entry.name }}</span></span>
+          <span class="file-name"><FileIcon :type="type" /><span>{{ entry.name }}</span></span>
           <span :title="entry.kind === 'directory' ? undefined : `${entry.size.toLocaleString()} 字节`">{{ entry.kind === 'directory' ? '—' : formatFileSize(entry.size) }}</span>
           <span>{{ entry.modifiedAt ? new Date(entry.modifiedAt).toLocaleString() : '—' }}</span>
-          <span>{{ entry.kind }}</span>
+          <span :title="fileTypeLabels[type]">{{ fileTypeLabels[type] }}</span>
         </div>
         <div class="virtual-spacer" :style="{ height: `${bottomSpacer}px` }" aria-hidden="true" />
         <div v-if="tab.file.loading" class="file-empty">正在加载...</div>
@@ -313,6 +316,6 @@ onBeforeUnmount(onDragLeave)
 
 <style scoped>
 .file-parent{color:#ddd;cursor:pointer}.file-parent.disabled{color:#777;cursor:default}
-.file-panel{min-width:0;overflow:hidden;width:100%;height:100%;display:flex;flex-direction:column;background:#1e1e1e;color:#ccc;outline:none}.file-toolbar{min-height:40px;flex-wrap:wrap;display:flex;align-items:center;gap:5px;padding:5px 8px;background:#252526;border-bottom:1px solid #333}.file-toolbar button{width:27px;height:27px;display:inline-flex;align-items:center;justify-content:center;background:#333;border:1px solid #444;color:#ccc;cursor:pointer}.file-toolbar button:hover,.file-toolbar button.active{background:#0e639c;color:#fff}.file-toolbar button:disabled{opacity:.4;cursor:default}.file-toolbar input{min-width:100px;flex:1;height:27px;background:#1e1e1e;border:1px solid #555;color:#eee;padding:0 8px}.file-toolbar select{height:27px;max-width:120px;background:#1e1e1e;border:1px solid #555;color:#ddd}.file-error{padding:8px 12px;color:#f48771;background:#3a1d1d;border-bottom:1px solid #633}.file-list{min-height:0;flex:1;overflow:auto}.file-list-head,.file-row{box-sizing:border-box;display:grid;grid-template-columns:var(--file-columns,minmax(140px,1fr) 80px 155px 80px);gap:10px;align-items:center;padding:0 12px;min-width:max(100%,var(--file-list-width,510px));min-height:32px;height:32px;border-bottom:1px solid #2a2a2a}.virtual-spacer{pointer-events:none}.file-list-head{position:sticky;top:0;background:#2d2d2d;color:#aaa;font-size:12px;z-index:1}.file-row{cursor:default}.file-row:hover{background:#2a2d2e}.file-row.selected{background:#37373d;color:#ccc}.file-panel.focused .file-row.selected{background:#094771;color:#fff}.file-row.drop{outline:1px solid #3794ff}.file-row>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.file-name{display:flex;align-items:center;gap:8px;min-width:0}.file-name span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-kind{color:#dcdcaa}.file-empty{padding:28px;color:#777;text-align:center}
+.file-panel{min-width:0;overflow:hidden;width:100%;height:100%;display:flex;flex-direction:column;background:#1e1e1e;color:#ccc;outline:none}.file-toolbar{min-height:40px;flex-wrap:wrap;display:flex;align-items:center;gap:5px;padding:5px 8px;background:#252526;border-bottom:1px solid #333}.file-toolbar button{width:27px;height:27px;display:inline-flex;align-items:center;justify-content:center;background:#333;border:1px solid #444;color:#ccc;cursor:pointer}.file-toolbar button:hover,.file-toolbar button.active{background:#0e639c;color:#fff}.file-toolbar button:disabled{opacity:.4;cursor:default}.file-toolbar input{min-width:100px;flex:1;height:27px;background:#1e1e1e;border:1px solid #555;color:#eee;padding:0 8px}.file-toolbar select{height:27px;max-width:120px;background:#1e1e1e;border:1px solid #555;color:#ddd}.file-error{padding:8px 12px;color:#f48771;background:#3a1d1d;border-bottom:1px solid #633}.file-list{min-height:0;flex:1;overflow:auto}.file-list-head,.file-row{box-sizing:border-box;display:grid;grid-template-columns:var(--file-columns,minmax(140px,1fr) 80px 155px 80px);gap:10px;align-items:center;padding:0 12px;min-width:max(100%,var(--file-list-width,510px));min-height:32px;height:32px;border-bottom:1px solid #2a2a2a}.virtual-spacer{pointer-events:none}.file-list-head{position:sticky;top:0;background:#2d2d2d;color:#aaa;font-size:12px;z-index:1}.file-row{cursor:default}.file-row:hover{background:#2a2d2e}.file-row.selected{background:#37373d;color:#ccc}.file-panel.focused .file-row.selected{background:#094771;color:#fff}.file-row.drop{outline:1px solid #3794ff}.file-row>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.file-name{display:flex;align-items:center;gap:8px;min-width:0}.file-name span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-parent-icon{flex:0 0 16px}.file-empty{padding:28px;color:#777;text-align:center}
 .file-column-header{position:relative;min-width:0;height:100%;display:flex;align-items:center}.file-column-header>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-column-resizer{position:absolute;top:0;right:-9px;bottom:0;width:8px;cursor:col-resize;touch-action:none;user-select:none;outline:none}.file-column-resizer::after{content:"";position:absolute;top:6px;bottom:6px;left:3px;width:1px;background:#444}.file-column-resizer:hover::after,.file-column-resizer:focus-visible::after,.file-column-resizer.dragging::after{top:0;bottom:0;width:2px;background:#3794ff}
 </style>
