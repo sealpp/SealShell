@@ -1,5 +1,7 @@
 :root {
   color-scheme: dark;
+  --workbench-font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', sans-serif;
+  --workbench-font-size: 13px;
   --workbench-bg: #1e1e1e;
   --workbench-activity-bg: #333333;
   --workbench-surface: #252526;
@@ -11,6 +13,12 @@
   --workbench-text-strong: #ffffff;
   --workbench-text-muted: #888888;
   --workbench-text-disabled: #666666;
+  --workbench-focus-border: #007fd4;
+  --workbench-list-hover-bg: #2a2d2e;
+  --workbench-list-active-bg: #094771;
+  --workbench-list-inactive-bg: #37373d;
+  --workbench-table-border: #cccccc20;
+  --workbench-toolbar-hover-bg: #5a5d5e50;
   --workbench-accent: #0e639c;
   --workbench-accent-hover: #1177bb;
   --workbench-danger: #a31515;

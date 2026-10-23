@@ -2,7 +2,7 @@
 import ProxyErrorAction from '../components/ProxyErrorAction.vue'
 import FileIcon from '../components/FileIcon.vue'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { IconArrowBackUp, IconArrowForwardUp, IconArrowUp, IconEye, IconRefresh } from '@tabler/icons-vue'
+import { IconArrowBackUp, IconArrowForwardUp, IconArrowUp, IconChevronDown, IconChevronUp, IconEye, IconRefresh } from '@tabler/icons-vue'
 import CommandContextMenu from '../components/CommandContextMenu.vue'
 import { FILE_MENU_ID } from '../services/actions/menuIds'
 import type { CommandContext } from '../services/context'
@@ -36,7 +36,7 @@ const columnWidths = ref<number[]>([])
 const columnResize = shallowRef<{ index: number; pointerId: number; startX: number; startWidth: number } | null>(null)
 const columnStyle = computed(() => columnWidths.value.length ? {
   '--file-columns': columnWidths.value.map((width) => `${width}px`).join(' '),
-  '--file-list-width': `${columnWidths.value.reduce((sum, width) => sum + width, 0) + 54}px`,
+  '--file-list-width': `${columnWidths.value.reduce((sum, width) => sum + width, 0)}px`,
 } : undefined)
 
 function measureColumns(handle: HTMLElement): void {
@@ -246,14 +246,15 @@ onBeforeUnmount(onDragLeave)
           <option v-for="root in tab.file.roots ?? []" :key="root" :value="root">{{ root }}</option>
         </select>
         <input v-model="pathInput" :aria-label="tab.endpoint?.kind === 'local' ? '本地路径' : '远端路径'" @keydown.enter="navigateFromInput" @blur="syncPath">
-        <button type="button" title="显示隐藏文件" :class="{ active: tab.file.showHidden }" @click="toggleHidden"><IconEye :size="16" /></button>
+        <button type="button" title="显示隐藏文件" :class="{ active: tab.file.showHidden }" :aria-pressed="tab.file.showHidden" @click="toggleHidden"><IconEye :size="16" /></button>
       </header>
       <div v-if="tab.file.error" class="file-error">{{ tab.file.error }} <ProxyErrorAction :source="tab.proxySource" :message="tab.file.error" /></div>
       <div ref="listEl" class="file-list" role="table" aria-label="文件列表" :aria-rowcount="sortedEntries.length + 2" :style="columnStyle" @scroll="onListScroll">
         <div class="file-list-head" role="row">
           <span v-for="(column, index) in columns" :key="column.key" class="file-column-header" role="columnheader" :aria-sort="tab.file.sortKey === column.key ? (tab.file.sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
             <button type="button" class="file-sort-button" :aria-label="`按${column.label}排序`" @click="setSort(column.key)">
-              <span>{{ column.label }}</span><span v-if="tab.file.sortKey === column.key" class="file-sort-arrow" aria-hidden="true">{{ tab.file.sortDirection === 'asc' ? '↑' : '↓' }}</span>
+              <span>{{ column.label }}</span>
+              <component :is="tab.file.sortDirection === 'asc' ? IconChevronUp : IconChevronDown" v-if="tab.file.sortKey === column.key" class="file-sort-arrow" :size="14" aria-hidden="true" />
             </button>
             <span
               class="file-column-resizer"
@@ -323,7 +324,148 @@ onBeforeUnmount(onDragLeave)
 </template>
 
 <style scoped>
-.file-parent{color:#ddd;cursor:pointer}.file-parent.disabled{color:#777;cursor:default}
-.file-panel{min-width:0;overflow:hidden;width:100%;height:100%;display:flex;flex-direction:column;background:#1e1e1e;color:#ccc;outline:none}.file-toolbar{min-height:40px;flex-wrap:wrap;display:flex;align-items:center;gap:5px;padding:5px 8px;background:#252526;border-bottom:1px solid #333}.file-toolbar button{width:27px;height:27px;display:inline-flex;align-items:center;justify-content:center;background:#333;border:1px solid #444;color:#ccc;cursor:pointer}.file-toolbar button:hover,.file-toolbar button.active{background:#0e639c;color:#fff}.file-toolbar button:disabled{opacity:.4;cursor:default}.file-toolbar input{min-width:100px;flex:1;height:27px;background:#1e1e1e;border:1px solid #555;color:#eee;padding:0 8px}.file-toolbar select{height:27px;max-width:120px;background:#1e1e1e;border:1px solid #555;color:#ddd}.file-error{padding:8px 12px;color:#f48771;background:#3a1d1d;border-bottom:1px solid #633}.file-list{min-height:0;flex:1;overflow:auto}.file-list-head,.file-row{box-sizing:border-box;display:grid;grid-template-columns:var(--file-columns,minmax(140px,1fr) 80px 155px 80px);gap:10px;align-items:center;padding:0 12px;min-width:max(100%,var(--file-list-width,510px));min-height:32px;height:32px;border-bottom:1px solid #2a2a2a}.virtual-spacer{pointer-events:none}.file-list-head{position:sticky;top:0;background:#2d2d2d;color:#aaa;font-size:12px;z-index:1}.file-row{cursor:default}.file-row:hover{background:#2a2d2e}.file-row.selected{background:#37373d;color:#ccc}.file-panel.focused .file-row.selected{background:#094771;color:#fff}.file-row.drop{outline:1px solid #3794ff}.file-row>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.file-name{display:flex;align-items:center;gap:8px;min-width:0}.file-name-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-decoration{flex:none;margin-left:auto;font-size:16px}.file-parent-icon{flex:0 0 16px}.file-empty{padding:28px;color:#777;text-align:center}
-.file-column-header{position:relative;min-width:0;height:100%;display:flex;align-items:center}.file-sort-button{width:100%;height:100%;min-width:0;display:flex;align-items:center;gap:5px;border:0;padding:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}.file-sort-button>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-sort-arrow{flex:none}.file-sort-button:hover{background:#383838;color:#eee}.file-sort-button:focus-visible{outline:1px solid #3794ff;outline-offset:-1px}.file-column-resizer{position:absolute;top:0;right:-9px;bottom:0;width:8px;cursor:col-resize;touch-action:none;user-select:none;outline:none}.file-column-resizer::after{content:"";position:absolute;top:6px;bottom:6px;left:3px;width:1px;background:#444}.file-column-resizer:hover::after,.file-column-resizer:focus-visible::after,.file-column-resizer.dragging::after{top:0;bottom:0;width:2px;background:#3794ff}
+.file-panel {
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  outline: none;
+  background: var(--workbench-bg);
+  color: var(--workbench-text);
+  font: 400 var(--workbench-font-size)/20px var(--workbench-font-family);
+}
+.file-toolbar button, .file-toolbar input, .file-toolbar select { font: inherit; }
+.file-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 36px;
+  box-sizing: border-box;
+  padding: 5px 8px;
+  background: var(--workbench-surface);
+  border-bottom: 1px solid var(--workbench-table-border);
+}
+.file-toolbar button {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--workbench-text);
+  cursor: pointer;
+}
+.file-toolbar button:hover:not(:disabled), .file-toolbar button.active {
+  background: var(--workbench-toolbar-hover-bg);
+  color: var(--workbench-text-strong);
+}
+.file-toolbar button:disabled { opacity: .4; cursor: default; }
+.file-toolbar input, .file-toolbar select {
+  box-sizing: border-box;
+  height: 26px;
+  border: 1px solid var(--workbench-border);
+  border-radius: 0;
+  background: var(--workbench-input-bg);
+  color: var(--workbench-text);
+}
+.file-toolbar input { min-width: 100px; flex: 1; padding: 0 8px; }
+.file-toolbar select { max-width: 120px; padding: 0 6px; }
+.file-toolbar input:focus {
+  border-color: var(--workbench-focus-border);
+  outline: none;
+}
+.file-toolbar button:focus-visible, .file-toolbar select:focus-visible, .file-sort-button:focus-visible {
+  outline: 1px solid var(--workbench-focus-border);
+  outline-offset: -1px;
+}
+.file-error { padding: 8px 12px; color: #f48771; background: #3a1d1d; border-bottom: 1px solid #633; }
+.file-list { min-height: 0; flex: 1; overflow: auto; }
+.file-list-head, .file-row {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: var(--file-columns, minmax(160px, 1fr) 90px 165px 100px);
+  align-items: center;
+  min-width: max(100%, var(--file-list-width, 515px));
+  height: 32px;
+}
+.file-list-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--workbench-surface);
+  border-bottom: 1px solid var(--workbench-table-border);
+  user-select: none;
+}
+.file-column-header { position: relative; min-width: 0; height: 100%; }
+.file-sort-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 0;
+  padding: 0 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.file-sort-button > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-sort-arrow { flex: 0 0 14px; }
+.file-sort-button:hover { background: var(--workbench-list-hover-bg); }
+.file-column-header:not([aria-sort='none']) { color: var(--workbench-text-strong); }
+.file-column-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  width: 6px;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  outline: none;
+}
+.file-column-resizer::after {
+  content: '';
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  right: 0;
+  width: 1px;
+  background: var(--workbench-table-border);
+}
+.file-column-resizer:hover::after, .file-column-resizer:focus-visible::after, .file-column-resizer.dragging::after {
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--workbench-focus-border);
+}
+.file-row { cursor: default; user-select: none; }
+.file-row:hover { background: var(--workbench-list-hover-bg); }
+.file-row.selected { background: var(--workbench-list-inactive-bg); }
+.file-panel.focused .file-row.selected { background: var(--workbench-list-active-bg); color: var(--workbench-text-strong); }
+.file-row.drop { outline: 1px solid var(--workbench-focus-border); outline-offset: -1px; }
+.file-row > [role='cell'] { min-width: 0; padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.file-row > [role='cell']:nth-child(2), .file-row > [role='cell']:nth-child(3) { font-variant-numeric: tabular-nums; }
+.file-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.file-name-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-decoration { flex: none; margin-left: auto; font-size: 16px; }
+.file-parent { cursor: pointer; }
+.file-parent.disabled { color: var(--workbench-text-disabled); cursor: default; }
+.file-parent-icon { flex: 0 0 16px; }
+.virtual-spacer { pointer-events: none; }
+.file-empty { padding: 28px; color: var(--workbench-text-muted); text-align: center; }
 </style>

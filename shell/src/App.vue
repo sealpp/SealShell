@@ -346,8 +346,8 @@ html, body, #app {
   overflow: hidden;
   background: #1e1e1e;
   color: #cccccc;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 13px;
+  font-family: var(--workbench-font-family);
+  font-size: var(--workbench-font-size);
 }
 
 button, input {
