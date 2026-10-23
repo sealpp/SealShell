@@ -31,7 +31,7 @@ function newFileTab(endpoint: FileEndpoint, initialPath: string, splitBeside?: s
     fileSplitBeside: splitBeside,
     label: endpoint.kind === 'local' ? '本地' : 'SFTP',
     state: 'connecting', error: '', sessionId: randomId(), terminalId: '', encoding: 'utf-8', cwd: initialPath,
-    file: { cwd: initialPath, defaultPath: initialPath, history: [initialPath], historyIndex: 0, entries: [], selectedPaths: [], sortKey: 'name', sortDirection: 'asc', showHidden: false, loading: true, error: '' },
+    file: { cwd: initialPath, defaultPath: initialPath, history: [initialPath], historyIndex: 0, entries: [], selectedPaths: [], sortKey: null, sortDirection: 'asc', showHidden: false, loading: true, error: '' },
   }
   store.tabs.push(tab)
   setBottomPanelActiveTab(tab.id, 'files')

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import ProxyErrorAction from '../components/ProxyErrorAction.vue'
 import FileIcon from '../components/FileIcon.vue'
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { IconArrowBackUp, IconArrowForwardUp, IconArrowUp, IconChevronDown, IconChevronUp, IconEye, IconRefresh } from '@tabler/icons-vue'
+import WorkbenchColumnHeader from '../components/WorkbenchColumnHeader.vue'
+import { nextColumnSort } from '../components/table-sort'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { IconArrowBackUp, IconArrowForwardUp, IconArrowUp, IconEye, IconRefresh } from '@tabler/icons-vue'
 import CommandContextMenu from '../components/CommandContextMenu.vue'
 import { FILE_MENU_ID } from '../services/actions/menuIds'
 import type { CommandContext } from '../services/context'
@@ -33,47 +35,14 @@ const columns = [
   { key: 'type', label: '类型', minWidth: 64 },
 ] as const
 const columnWidths = ref<number[]>([])
-const columnResize = shallowRef<{ index: number; pointerId: number; startX: number; startWidth: number } | null>(null)
 const columnStyle = computed(() => columnWidths.value.length ? {
   '--file-columns': columnWidths.value.map((width) => `${width}px`).join(' '),
   '--file-list-width': `${columnWidths.value.reduce((sum, width) => sum + width, 0)}px`,
 } : undefined)
 
-function measureColumns(handle: HTMLElement): void {
-  const header = handle.parentElement!.parentElement!
-  columnWidths.value = Array.from(header.children, (cell) => cell.getBoundingClientRect().width)
-}
-
-function startColumnResize(event: PointerEvent, index: number): void {
-  if (event.button !== 0 || columnResize.value) return
-  event.preventDefault()
-  const handle = event.currentTarget as HTMLElement
-  measureColumns(handle)
-  columnResize.value = { index, pointerId: event.pointerId, startX: event.clientX, startWidth: columnWidths.value[index] }
-  handle.setPointerCapture(event.pointerId)
-}
-
-function moveColumnResize(event: PointerEvent): void {
-  const resize = columnResize.value
-  if (!resize || resize.pointerId !== event.pointerId) return
-  columnWidths.value[resize.index] = Math.max(columns[resize.index].minWidth, Math.round(resize.startWidth + event.clientX - resize.startX))
-}
-
-function endColumnResize(event: PointerEvent): void {
-  if (columnResize.value?.pointerId !== event.pointerId) return
-  columnResize.value = null
-  const handle = event.currentTarget as HTMLElement
-  if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId)
-}
-
-function resizeColumnWithKeyboard(event: KeyboardEvent, index: number): void {
-  if (!['ArrowLeft', 'ArrowRight', 'Home'].includes(event.key)) return
-  event.preventDefault()
-  event.stopPropagation()
-  measureColumns(event.currentTarget as HTMLElement)
-  columnWidths.value[index] = event.key === 'Home'
-    ? columns[index].minWidth
-    : Math.max(columns[index].minWidth, columnWidths.value[index] + (event.key === 'ArrowLeft' ? -10 : 10))
+function measureColumns(): void {
+  const header = listEl.value!.querySelector('.file-list-head')!
+  columnWidths.value = Array.from(header.children, cell => cell.getBoundingClientRect().width)
 }
 
 const sortedEntries = computed(() => tab.value?.file.entries ?? [])
@@ -149,11 +118,10 @@ async function goToParent(): Promise<void> {
 function setSort(key: FileSortKey): void {
   const current = tab.value
   if (!current) return
-  current.file.sortDirection = current.file.sortKey === key
-    ? (current.file.sortDirection === 'asc' ? 'desc' : 'asc')
-    : (key === 'name' || key === 'type' ? 'asc' : 'desc')
-  current.file.sortKey = key
-  current.file.entries = sortFileEntries(current.file.entries, key, current.file.sortDirection)
+  const next = nextColumnSort(current.file.sortKey ? { key: current.file.sortKey, direction: current.file.sortDirection } : null, key)
+  current.file.sortKey = next?.key ?? null
+  current.file.sortDirection = next?.direction ?? 'asc'
+  current.file.entries = sortFileEntries(current.file.entries, next?.key ?? 'name', next?.direction ?? 'asc')
   scrollTop.value = 0
   if (listEl.value) listEl.value.scrollTop = 0
 }
@@ -235,8 +203,8 @@ onBeforeUnmount(onDragLeave)
 
 <template>
   <CommandContextMenu v-if="tab" :menu-id="FILE_MENU_ID" :context="fileContext">
-    <div class="file-panel" :class="{ focused: isFocused }" :data-file-tab="tabId" :data-endpoint="tab.endpoint?.kind" tabindex="0" @pointerdown="setBottomPanelActiveTab(tabId, 'files')" @focusin="setBottomPanelActiveTab(tabId, 'files')" @keydown="onKeydown" @dragover.prevent @dragenter="onDragEnter" @dragleave="onDragLeave" @drop="onDrop">
-      <header class="file-toolbar">
+    <div class="file-panel workbench-list-panel" :class="{ focused: isFocused }" :data-file-tab="tabId" :data-endpoint="tab.endpoint?.kind" tabindex="0" @pointerdown="setBottomPanelActiveTab(tabId, 'files')" @focusin="setBottomPanelActiveTab(tabId, 'files')" @keydown="onKeydown" @dragover.prevent @dragenter="onDragEnter" @dragleave="onDragLeave" @drop="onDrop">
+      <header class="file-toolbar workbench-list-toolbar">
         <button type="button" title="后退" :disabled="tab.file.historyIndex <= 0" @click="goBackFileTab(tabId)"><IconArrowBackUp :size="16" /></button>
         <button type="button" title="前进" :disabled="tab.file.historyIndex >= tab.file.history.length - 1" @click="goForwardFileTab(tabId)"><IconArrowForwardUp :size="16" /></button>
         <button type="button" title="上级目录" :disabled="!canNavigateParent" @click="goToParent"><IconArrowUp :size="16" /></button>
@@ -249,34 +217,14 @@ onBeforeUnmount(onDragLeave)
         <button type="button" title="显示隐藏文件" :class="{ active: tab.file.showHidden }" :aria-pressed="tab.file.showHidden" @click="toggleHidden"><IconEye :size="16" /></button>
       </header>
       <div v-if="tab.file.error" class="file-error">{{ tab.file.error }} <ProxyErrorAction :source="tab.proxySource" :message="tab.file.error" /></div>
-      <div ref="listEl" class="file-list" role="table" aria-label="文件列表" :aria-rowcount="sortedEntries.length + 2" :style="columnStyle" @scroll="onListScroll">
-        <div class="file-list-head" role="row">
-          <span v-for="(column, index) in columns" :key="column.key" class="file-column-header" role="columnheader" :aria-sort="tab.file.sortKey === column.key ? (tab.file.sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-            <button type="button" class="file-sort-button" :aria-label="`按${column.label}排序`" @click="setSort(column.key)">
-              <span>{{ column.label }}</span>
-              <component :is="tab.file.sortDirection === 'asc' ? IconChevronUp : IconChevronDown" v-if="tab.file.sortKey === column.key" class="file-sort-arrow" :size="14" aria-hidden="true" />
-            </button>
-            <span
-              class="file-column-resizer"
-              :class="{ dragging: columnResize?.index === index }"
-              role="separator"
-              tabindex="0"
-              aria-orientation="vertical"
-              :aria-label="`调整${column.label}列宽`"
-              :aria-valuemin="column.minWidth"
-              :aria-valuenow="columnWidths[index]"
-              :title="`拖动调整${column.label}列宽`"
-              @pointerdown="startColumnResize($event, index)"
-              @pointermove="moveColumnResize"
-              @pointerup="endColumnResize"
-              @pointercancel="endColumnResize"
-              @lostpointercapture="endColumnResize"
-              @keydown="resizeColumnWithKeyboard($event, index)"
-            />
-          </span>
+      <div ref="listEl" class="file-list workbench-table-scroll" role="grid" aria-label="文件列表" aria-multiselectable="true" :aria-rowcount="sortedEntries.length + 2" :style="columnStyle" @scroll="onListScroll">
+        <div class="file-list-head workbench-table-head" role="row">
+          <WorkbenchColumnHeader v-for="(column, index) in columns" :key="column.key" :label="column.label" :min-width="column.minWidth"
+            :direction="tab.file.sortKey === column.key ? tab.file.sortDirection : null" help="默认：目录优先，名称升序"
+            @sort="setSort(column.key)" @resize-start="measureColumns" @resize="columnWidths[index] = $event" />
         </div>
         <div
-          class="file-row file-parent"
+          class="file-row file-parent workbench-table-row"
           role="row"
           aria-rowindex="2"
           :class="{ disabled: !canNavigateParent }"
@@ -284,18 +232,19 @@ onBeforeUnmount(onDragLeave)
           title="返回上一级目录"
           @dblclick="goToParent"
         >
-          <span class="file-name" role="cell"><IconArrowBackUp class="file-parent-icon" :size="16" :stroke-width="1.75" aria-hidden="true" /><span>..</span></span>
-          <span role="cell">—</span>
-          <span role="cell">—</span>
-          <span role="cell">目录</span>
+          <span class="file-name workbench-table-cell" role="gridcell"><IconArrowBackUp class="file-parent-icon" :size="16" :stroke-width="1.75" aria-hidden="true" /><span>..</span></span>
+          <span class="workbench-table-cell" role="gridcell">—</span>
+          <span class="workbench-table-cell" role="gridcell">—</span>
+          <span class="workbench-table-cell" role="gridcell">目录</span>
         </div>
         <div class="virtual-spacer" :style="{ height: `${topSpacer}px` }" aria-hidden="true" />
         <div
           v-for="({ entry, presentation }, index) in renderedEntries"
           :key="entry.path"
-          class="file-row"
+          class="file-row workbench-table-row"
           role="row"
           :aria-rowindex="renderStart + index + 3"
+          :aria-selected="isSelected(entry)"
           :class="{ selected: isSelected(entry), drop: dropTarget === entry.path }"
           draggable="true"
           @click="select(entry, $event)"
@@ -306,14 +255,14 @@ onBeforeUnmount(onDragLeave)
           @drop="onDrop($event, entry)"
           @contextmenu="!isSelected(entry) && select(entry, $event)"
         >
-          <span class="file-name" role="cell">
+          <span class="file-name workbench-table-cell" role="gridcell">
             <FileIcon :icon="presentation.icon" :label="presentation.typeLabel" />
             <span class="file-name-text">{{ entry.name }}</span>
             <span v-if="presentation.decoration" class="file-decoration" :title="presentation.typeLabel" aria-hidden="true">{{ presentation.decoration }}</span>
           </span>
-          <span role="cell" :title="entry.kind === 'directory' ? undefined : `${entry.size.toLocaleString()} 字节`">{{ entry.kind === 'directory' ? '—' : formatFileSize(entry.size) }}</span>
-          <span role="cell">{{ entry.modifiedAt ? new Date(entry.modifiedAt).toLocaleString() : '—' }}</span>
-          <span role="cell" :title="presentation.typeLabel">{{ presentation.typeLabel }}</span>
+          <span class="workbench-table-cell" role="gridcell" :title="entry.kind === 'directory' ? undefined : `${entry.size.toLocaleString()} 字节`">{{ entry.kind === 'directory' ? '—' : formatFileSize(entry.size) }}</span>
+          <span class="workbench-table-cell" role="gridcell">{{ entry.modifiedAt ? new Date(entry.modifiedAt).toLocaleString() : '—' }}</span>
+          <span class="workbench-table-cell" role="gridcell" :title="presentation.typeLabel">{{ presentation.typeLabel }}</span>
         </div>
         <div class="virtual-spacer" :style="{ height: `${bottomSpacer}px` }" aria-hidden="true" />
         <div v-if="tab.file.loading" class="file-empty">正在加载...</div>
@@ -332,59 +281,10 @@ onBeforeUnmount(onDragLeave)
   flex-direction: column;
   overflow: hidden;
   outline: none;
-  background: var(--workbench-bg);
-  color: var(--workbench-text);
-  font: 400 var(--workbench-font-size)/20px var(--workbench-font-family);
 }
-.file-toolbar button, .file-toolbar input, .file-toolbar select { font: inherit; }
-.file-toolbar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
-  min-height: 36px;
-  box-sizing: border-box;
-  padding: 5px 8px;
-  background: var(--workbench-surface);
-  border-bottom: 1px solid var(--workbench-table-border);
-}
-.file-toolbar button {
-  width: 26px;
-  height: 26px;
-  flex: 0 0 26px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: 2px;
-  background: transparent;
-  color: var(--workbench-text);
-  cursor: pointer;
-}
-.file-toolbar button:hover:not(:disabled), .file-toolbar button.active {
-  background: var(--workbench-toolbar-hover-bg);
-  color: var(--workbench-text-strong);
-}
-.file-toolbar button:disabled { opacity: .4; cursor: default; }
-.file-toolbar input, .file-toolbar select {
-  box-sizing: border-box;
-  height: 26px;
-  border: 1px solid var(--workbench-border);
-  border-radius: 0;
-  background: var(--workbench-input-bg);
-  color: var(--workbench-text);
-}
-.file-toolbar input { min-width: 100px; flex: 1; padding: 0 8px; }
+.file-toolbar button { width: 26px; padding: 0; }
+.file-toolbar input { min-width: 100px; flex: 1; }
 .file-toolbar select { max-width: 120px; padding: 0 6px; }
-.file-toolbar input:focus {
-  border-color: var(--workbench-focus-border);
-  outline: none;
-}
-.file-toolbar button:focus-visible, .file-toolbar select:focus-visible, .file-sort-button:focus-visible {
-  outline: 1px solid var(--workbench-focus-border);
-  outline-offset: -1px;
-}
 .file-error { padding: 8px 12px; color: #f48771; background: #3a1d1d; border-bottom: 1px solid #633; }
 .file-list { min-height: 0; flex: 1; overflow: auto; }
 .file-list-head, .file-row {
@@ -399,67 +299,10 @@ onBeforeUnmount(onDragLeave)
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--workbench-surface);
-  border-bottom: 1px solid var(--workbench-table-border);
-  user-select: none;
 }
-.file-column-header { position: relative; min-width: 0; height: 100%; }
-.file-sort-button {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-  border: 0;
-  border-radius: 0;
-  padding: 0 8px;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-.file-sort-button > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.file-sort-arrow { flex: 0 0 14px; }
-.file-sort-button:hover { background: var(--workbench-list-hover-bg); }
-.file-column-header:not([aria-sort='none']) { color: var(--workbench-text-strong); }
-.file-column-resizer {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 1;
-  width: 6px;
-  cursor: col-resize;
-  touch-action: none;
-  user-select: none;
-  outline: none;
-}
-.file-column-resizer::after {
-  content: '';
-  position: absolute;
-  top: 7px;
-  bottom: 7px;
-  right: 0;
-  width: 1px;
-  background: var(--workbench-table-border);
-}
-.file-column-resizer:hover::after, .file-column-resizer:focus-visible::after, .file-column-resizer.dragging::after {
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: var(--workbench-focus-border);
-}
-.file-row { cursor: default; user-select: none; }
-.file-row:hover { background: var(--workbench-list-hover-bg); }
-.file-row.selected { background: var(--workbench-list-inactive-bg); }
-.file-panel.focused .file-row.selected { background: var(--workbench-list-active-bg); color: var(--workbench-text-strong); }
+.file-row { user-select: none; }
 .file-row.drop { outline: 1px solid var(--workbench-focus-border); outline-offset: -1px; }
-.file-row > [role='cell'] { min-width: 0; padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.file-row > [role='cell']:nth-child(2), .file-row > [role='cell']:nth-child(3) { font-variant-numeric: tabular-nums; }
+.file-row > [role='gridcell'] { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .file-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .file-name-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-decoration { flex: none; margin-left: auto; font-size: 16px; }

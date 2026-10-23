@@ -219,7 +219,7 @@ unshare --net -- bash -c 'ip link set lo up; node .agents/skills/seal-e2e/run-fi
 
 `shell/tests/file-icons.spec.ts` 复用同一文件列表夹具，验证本地/远端主题图标、格式说明、独立链接标记、选中色与断网后的图标切换；图标渲染不得调用文件后端。主题资源由固定版本离线生成，生产构建应把包含内嵌图标的 CSS 纳入 PWA 预缓存。
 
-`shell/tests/file-sorting.spec.ts` 验证四列表头的整格点击、升降序、Enter/空格、调宽不排序、窗格独立状态与选择保留。排序只重排已有数据；夹具计数验证不额外读目录，并延迟一次刷新，确认返回结果采用等待期间新选的排序。
+`shell/tests/file-sorting.spec.ts` 验证四列表头整格点击、升序/降序/恢复默认三态、Enter/空格、调宽不排序、窗格独立状态和选中/失焦高亮。排序只重排已有数据；夹具计数验证不额外读目录，并延迟刷新，确认返回结果采用等待期间新选或已取消的排序。`processes.spec.ts` 与 `ports.spec.ts` 对应覆盖同一三态表头与指针/键盘调宽；进程恢复 CPU 默认顺序、保留选择详情、未知 CPU 始终在后，端口保留启用状态及正常行内编辑。
 
 `shell/tests/transfer-status.spec.ts` 使用真实传输队列与可控完成/失败回调，验证状态栏预览、关闭详情后连续进度不重开、排队取消、失败重试、完成后的保留项警示、编码入口共存和减少动态效果。此 UI 回归不启动 Node，也不操作真实文件。
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { columnSizingFeature, columnResizingFeature, createSortedRowModel, createExpandedRowModel, rowSortingFeature, rowSelectionFeature, rowExpandingFeature, sortFns, tableFeatures, useTable, type ColumnDef, type SortingState, type RowSelectionState, type ExpandedState } from '@tanstack/vue-table'
+import { columnSizingFeature, createSortedRowModel, createExpandedRowModel, rowSortingFeature, rowSelectionFeature, rowExpandingFeature, sortFns, tableFeatures, useTable, type ColumnDef, type RowSelectionState, type ExpandedState } from '@tanstack/vue-table'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { ContextMenuContent, ContextMenuItem, ContextMenuPortal, ContextMenuRoot, ContextMenuTrigger, DropdownMenuItem } from 'reka-ui'
 import { IconChevronDown, IconChevronRight, IconRefresh, IconX } from '@tabler/icons-vue'
@@ -12,6 +12,8 @@ import UiDialog from '../components/UiDialog.vue'
 import UiDropdownMenu from '../components/UiDropdownMenu.vue'
 import ProxyErrorAction from '../components/ProxyErrorAction.vue'
 import ProcessIcon from '../components/ProcessIcon.vue'
+import WorkbenchColumnHeader from '../components/WorkbenchColumnHeader.vue'
+import { nextColumnSort, type ColumnSort } from '../components/table-sort'
 
 const props = defineProps<{ params: { params: { tabId: string } } }>()
 function formatFileSize(bytes: number): string {
@@ -26,7 +28,9 @@ const viewport = ref<HTMLElement>()
 const query = ref('')
 const tree = ref(false)
 const password = ref('')
-const sorting = ref<SortingState>([{ id: 'cpu', desc: true }])
+const sorting = ref<ColumnSort | null>(null)
+const tableSorting = computed(() => [{ id: sorting.value?.key ?? 'cpu', desc: sorting.value ? sorting.value.direction === 'desc' : true }])
+const isFocused = computed(() => store.focusedDock === 'bottomPanel' && store.bottomPanelCategory === 'processes' && store.activeProcessTabId === tab.value?.id)
 const selection = ref<RowSelectionState>({})
 const expanded = ref<ExpandedState>({})
 const detail = ref<ProcessRow>()
@@ -35,37 +39,36 @@ const executing = ref(false)
 let anchor = ''
 let visibility: IntersectionObserver | undefined
 const features = tableFeatures({
-  columnSizingFeature, columnResizingFeature, rowSortingFeature, rowSelectionFeature, rowExpandingFeature,
+  columnSizingFeature, rowSortingFeature, rowSelectionFeature, rowExpandingFeature,
   sortedRowModel: createSortedRowModel(), expandedRowModel: createExpandedRowModel(), sortFns,
 })
 const columns: ColumnDef<typeof features, ProcessTreeRow>[] = [
-  { id: 'select', header: '', size: 36, minSize: 36, maxSize: 36, enableResizing: false, enableSorting: false },
+  { id: 'select', header: '', size: 36, minSize: 36, maxSize: 36, enableSorting: false },
   { accessorKey: 'name', header: '进程', size: 190, minSize: 120 },
   { accessorKey: 'pid', header: 'PID', size: 75, minSize: 60 },
   { accessorKey: 'user', header: '用户', size: 95, minSize: 65 },
-  { accessorKey: 'cpu', header: 'CPU', size: 85, minSize: 65, sortUndefined: 'last' },
+  { id: 'cpu', accessorFn: row => row.cpu ?? undefined, header: 'CPU', size: 85, minSize: 65, sortUndefined: 'last' },
   { accessorKey: 'rss', header: '内存', size: 105, minSize: 80 },
-  { accessorKey: 'state', header: '状态', size: 85, minSize: 65 },
+  { id: 'state', accessorFn: row => processStateLabels[row.state] ?? row.state, header: '状态', size: 85, minSize: 65 },
   { accessorKey: 'command', header: '命令行', size: 300, minSize: 150 },
 ]
 const data = computed(() => processViewRows(state.value?.rows ?? [], query.value, tree.value))
 const table = useTable({
   features, columns, get data() { return data.value },
   getRowId: (row: ProcessTreeRow) => row.key, getSubRows: (row: ProcessTreeRow) => row.children,
-  enableSubRowSelection: false, autoResetExpanded: false, columnResizeMode: 'onChange',
+  enableSubRowSelection: false, autoResetExpanded: false,
   state: {
-    get sorting() { return sorting.value },
+    get sorting() { return tableSorting.value },
     get rowSelection() { return selection.value },
     get expanded() { return query.value ? true : expanded.value },
   },
-  onSortingChange: value => { sorting.value = typeof value === 'function' ? value(sorting.value) : value },
   onRowSelectionChange: value => { selection.value = typeof value === 'function' ? value(selection.value) : value },
   onExpandedChange: value => { expanded.value = typeof value === 'function' ? value(expanded.value) : value },
 })
 const rows = computed(() => table.getRowModel().rows)
 const virtualizer = useVirtualizer(computed(() => ({
   count: rows.value.length, getScrollElement: () => viewport.value ?? null,
-  estimateSize: () => 30, overscan: 8, scrollMargin: 32,
+  estimateSize: () => 32, overscan: 8, scrollMargin: 32,
   getItemKey: (index: number) => rows.value[index]?.id ?? index,
 })))
 const virtualRows = computed(() => virtualizer.value.getVirtualItems())
@@ -81,6 +84,11 @@ const actions: { title: string; signal: ProcessSignal; scope: ProcessScope }[] =
 ]
 const planTitle = computed(() => actions.find(item => item.signal === plan.value?.signal && item.scope === plan.value?.scope)?.title ?? '确认操作')
 function focusPane() { if (tab.value) setBottomPanelActiveTab(tab.value.id, 'processes') }
+function setSort(key: string) {
+  sorting.value = nextColumnSort(sorting.value, key)
+  if (viewport.value) viewport.value.scrollTop = 0
+}
+function resizeColumn(key: string, width: number) { table.setColumnSizing(current => ({ ...current, [key]: width })) }
 function select(row: ProcessRow, event: MouseEvent, checkbox = false) {
   const ids = rows.value.map(item => item.id)
   if (event.shiftKey && anchor && ids.includes(anchor)) {
@@ -146,8 +154,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section v-if="tab && state" ref="root" class="process-panel" @pointerdown="focusPane">
-    <header class="process-toolbar">
+  <section v-if="tab && state" ref="root" class="process-panel workbench-list-panel" :class="{ focused: isFocused }" @pointerdown="focusPane" @focusin="focusPane">
+    <header class="process-toolbar workbench-list-toolbar">
       <span class="process-host" :title="state.username + '@' + state.address + ':' + state.port">{{ tab.label }}</span>
       <input v-model="query" type="search" aria-label="搜索进程" placeholder="搜索进程、PID、用户或命令" />
       <button type="button" :aria-pressed="tree" @click="tree = !tree">{{ tree ? '树视图' : '列表视图' }}</button>
@@ -179,22 +187,24 @@ onBeforeUnmount(() => {
       <div class="process-workspace">
         <ContextMenuRoot>
           <ContextMenuTrigger as-child>
-            <div ref="viewport" class="process-table-scroll" role="grid" aria-label="进程列表" :aria-rowcount="rows.length + 1" aria-multiselectable="true" tabindex="0" @keydown="keyboard">
-              <div class="process-table-head" role="row" :style="{ width: table.getTotalSize() + 'px' }">
-                <div v-for="header in table.getHeaderGroups()[0]?.headers" :key="header.id" class="process-cell" role="columnheader" :style="{ width: header.getSize() + 'px' }" :aria-sort="header.column.getIsSorted() === 'desc' ? 'descending' : header.column.getIsSorted() === 'asc' ? 'ascending' : 'none'">
-                  <input v-if="header.column.id === 'select'" type="checkbox" aria-label="选择全部可见进程" :checked="!!rows.length && rows.every(row => selection[row.id])" @change="selectAll(($event.target as HTMLInputElement).checked)" />
-                  <button v-else type="button" class="process-sort-button" :title="header.column.id === 'cpu' ? '单个逻辑核心 100%，多线程进程可超过 100%' : String(header.column.columnDef.header)" @click="header.column.getToggleSortingHandler()?.($event)">{{ header.column.columnDef.header }}{{ header.column.getIsSorted() === 'desc' ? ' ↓' : header.column.getIsSorted() === 'asc' ? ' ↑' : '' }}</button>
-                  <span v-if="header.column.getCanResize()" class="process-column-resizer" role="separator" aria-orientation="vertical" :aria-label="'调整' + header.column.columnDef.header + '列宽'" @mousedown="header.getResizeHandler()($event)" @touchstart="header.getResizeHandler()($event)" />
-                </div>
+            <div ref="viewport" class="process-table-scroll workbench-table-scroll" role="grid" aria-label="进程列表" :aria-rowcount="rows.length + 1" aria-multiselectable="true" tabindex="0" @keydown="keyboard">
+              <div class="process-table-head workbench-table-head" role="row" :style="{ width: table.getTotalSize() + 'px' }">
+                <WorkbenchColumnHeader v-for="header in table.getHeaderGroups()[0]?.headers" :key="header.id" :style="{ width: header.getSize() + 'px' }"
+                  :label="String(header.column.columnDef.header)" :sortable="header.column.id !== 'select'" :resizable="header.column.id !== 'select'"
+                  :min-width="header.column.columnDef.minSize" :direction="sorting?.key === header.column.id ? sorting.direction : null"
+                  :help="header.column.id === 'cpu' ? '默认：CPU 降序；单个逻辑核心 100%，多线程进程可超过 100%' : '默认：CPU 降序'"
+                  @sort="setSort(header.column.id)" @resize="resizeColumn(header.column.id, $event)">
+                  <input type="checkbox" aria-label="选择全部可见进程" :checked="!!rows.length && rows.every(row => selection[row.id])" @change="selectAll(($event.target as HTMLInputElement).checked)" />
+                </WorkbenchColumnHeader>
               </div>
               <div class="process-virtual-body" :style="{ height: virtualizer.getTotalSize() + 'px', width: table.getTotalSize() + 'px' }">
-                <div v-for="item in virtualRows" :key="String(item.key)" class="process-row" :class="{ selected: selection[rows[item.index].id] }" role="row" :aria-selected="!!selection[rows[item.index].id]" :aria-rowindex="item.index + 2" :data-pid="rows[item.index].original.pid" :style="{ transform: 'translateY(' + (item.start - 32) + 'px)' }"
+                <div v-for="item in virtualRows" :key="String(item.key)" class="process-row workbench-table-row" :class="{ selected: selection[rows[item.index].id] }" role="row" :aria-selected="!!selection[rows[item.index].id]" :aria-rowindex="item.index + 2" :data-pid="rows[item.index].original.pid" :style="{ transform: 'translateY(' + (item.start - 32) + 'px)' }"
                   @click="select(rows[item.index].original, $event)" @contextmenu="contextRow(rows[item.index].original)">
-                  <div v-for="cell in rows[item.index].getAllCells()" :key="cell.id" class="process-cell" role="gridcell" :style="{ width: cell.column.getSize() + 'px' }">
+                  <div v-for="cell in rows[item.index].getAllCells()" :key="cell.id" class="process-cell workbench-table-cell" role="gridcell" :style="{ width: cell.column.getSize() + 'px' }">
                     <input v-if="cell.column.id === 'select'" type="checkbox" :aria-label="'选择进程 ' + rows[item.index].original.pid" :checked="!!selection[rows[item.index].id]" @click.stop="select(rows[item.index].original, $event, true)" />
                     <template v-else-if="cell.column.id === 'name'">
                       <span v-if="tree" class="process-indent" :style="{ width: rows[item.index].depth * 14 + 'px' }"></span>
-                      <button v-if="tree && rows[item.index].getCanExpand()" type="button" class="process-expand" :aria-label="(rows[item.index].getIsExpanded() ? '收起进程 ' : '展开进程 ') + rows[item.index].original.pid" :aria-expanded="rows[item.index].getIsExpanded()" @click.stop="rows[item.index].toggleExpanded()"><IconChevronDown v-if="rows[item.index].getIsExpanded()" :size="12" /><IconChevronRight v-else :size="12" /></button>
+                      <button v-if="tree && rows[item.index].getCanExpand()" type="button" class="process-expand workbench-list-action" :aria-label="(rows[item.index].getIsExpanded() ? '收起进程 ' : '展开进程 ') + rows[item.index].original.pid" :aria-expanded="rows[item.index].getIsExpanded()" @click.stop="rows[item.index].toggleExpanded()"><IconChevronDown v-if="rows[item.index].getIsExpanded()" :size="12" /><IconChevronRight v-else :size="12" /></button>
                       <span v-else-if="tree" class="process-tree-spacer" aria-hidden="true"></span>
                       <ProcessIcon :process="rows[item.index].original" />
                       <span class="process-text" :title="rows[item.index].original.name">{{ rows[item.index].original.name }}</span>
@@ -211,7 +221,7 @@ onBeforeUnmount(() => {
           </ContextMenuContent></ContextMenuPortal>
         </ContextMenuRoot>
         <aside v-if="detail" class="process-detail" aria-label="进程详情">
-          <header><strong class="process-detail-name"><ProcessIcon :process="detail" /><span class="process-text">{{ detail.name }}</span></strong><button type="button" aria-label="关闭进程详情" @click="detail = undefined"><IconX :size="14" /></button></header>
+          <header><strong class="process-detail-name"><ProcessIcon :process="detail" /><span class="process-text">{{ detail.name }}</span></strong><button type="button" class="workbench-list-action" aria-label="关闭进程详情" @click="detail = undefined"><IconX :size="14" /></button></header>
           <p v-if="!detailCurrent" class="process-gone">进程已退出或当前不可见</p>
           <dl><dt>PID / 父 PID</dt><dd>{{ detail.pid }} / {{ detail.ppid }}</dd><dt>用户 / UID</dt><dd>{{ detail.user }} / {{ detail.uid }}</dd>
             <dt>状态</dt><dd>{{ processStateLabels[detail.state] ?? detail.state }}</dd><dt>CPU（单核 100%）</dt><dd>{{ display(detail, 'cpu') }}</dd>
@@ -235,11 +245,39 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.process-cell > .process-sort-button { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0 7px; text-align: left; }
-.process-sort-button:focus-visible { outline: 1px solid #3794ff; outline-offset: -1px; }
-.process-column-resizer { z-index: 1; }
+.process-panel { height: 100%; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.process-host { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.process-toolbar input[type=search] { flex: 1; min-width: 150px; }
+.process-connection { padding: 20px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.process-connection input { background: var(--workbench-input-bg); color: inherit; border: 1px solid var(--workbench-border); padding: 4px; }
+.process-connection button, .process-results > button { background: var(--workbench-accent); color: var(--workbench-text-strong); border: 0; padding: 4px 8px; cursor: pointer; }
+.process-workspace { display: flex; flex: 1; min-height: 0; min-width: 0; }
+.process-table-scroll { position: relative; flex: 1; min-width: 0; outline: none; }
+.process-table-head { display: flex; position: sticky; top: 0; z-index: 2; min-width: 100%; }
+.process-cell { position: relative; flex-shrink: 0; display: flex; align-items: center; gap: 4px; overflow: hidden; }
+.process-virtual-body { position: relative; min-width: 100%; }
+.process-row { display: flex; position: absolute; left: 0; right: 0; top: 0; box-sizing: border-box; user-select: none; }
+.process-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.process-indent, .process-expand { flex-shrink: 0; }
+.process-expand { padding: 0; width: 12px; height: 20px; }
 .process-tree-spacer { width: 12px; flex: 0 0 12px; }
+.process-empty { padding: 28px; text-align: center; color: var(--workbench-text-muted); }
+.process-detail { box-sizing: border-box; width: 320px; max-width: 46%; min-width: 200px; border-left: 1px solid var(--workbench-table-border); overflow: auto; padding: 10px 12px; background: var(--workbench-surface); }
+.process-detail header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.process-detail header strong { overflow: hidden; text-overflow: ellipsis; }
 .process-detail-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.process-panel{height:100%;min-width:0;min-height:0;display:flex;flex-direction:column;background:#1e1e1e;color:#ccc;font-size:12px}
-.process-toolbar{display:flex;align-items:center;gap:6px;padding:6px 8px;background:#252526;flex-wrap:wrap;border-bottom:1px solid #333}.process-host{max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.process-toolbar input[type=search]{flex:1;min-width:150px}.process-panel input,.process-panel button{font:inherit}.process-panel input{background:#1e1e1e;color:#ddd;border:1px solid #555;padding:4px}.process-panel button{background:#2d2d2d;border:1px solid #444;color:inherit;padding:4px 7px;cursor:pointer}.process-panel button:hover,.process-panel button[aria-pressed=true]{background:#37373d;color:#fff}.process-panel button:disabled{opacity:.45;cursor:default}.process-connection{padding:20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}.process-workspace{display:flex;flex:1;min-height:0;min-width:0}.process-table-scroll{position:relative;flex:1;min-width:0;overflow:auto;outline:none}.process-table-head{display:flex;position:sticky;top:0;z-index:2;background:#252526;height:32px;border-bottom:1px solid #444;box-sizing:border-box}.process-cell{position:relative;box-sizing:border-box;flex-shrink:0;display:flex;align-items:center;gap:4px;padding:0 7px;overflow:hidden}.process-cell input[type=checkbox]{width:14px;height:14px;accent-color:#3794ff;flex-shrink:0}.process-cell>button{border:0;background:transparent;padding:0;white-space:nowrap}.process-column-resizer{position:absolute;right:0;top:0;height:100%;width:6px;cursor:col-resize;touch-action:none}.process-column-resizer:hover{background:#3794ff}.process-virtual-body{position:relative;min-width:100%}.process-row{display:flex;position:absolute;left:0;right:0;top:0;height:30px;box-sizing:border-box;border-bottom:1px solid #292929}.process-row:hover{background:#2a2d2e}.process-row.selected{background:#094771;color:#fff}.process-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}.process-indent,.process-expand{flex-shrink:0}.process-empty{padding:22px;text-align:center;color:#888}.process-detail{box-sizing:border-box;width:320px;max-width:46%;min-width:200px;border-left:1px solid #444;overflow:auto;padding:10px 12px;background:#252526}.process-detail header{display:flex;align-items:center;justify-content:space-between;gap:8px}.process-detail header strong{overflow:hidden;text-overflow:ellipsis}.process-detail header button{padding:2px;display:flex}.process-detail dl{margin:12px 0}.process-detail dt{color:#999;margin-top:10px}.process-detail dd{margin:3px 0;color:#ddd;overflow-wrap:anywhere}.process-command{white-space:pre-wrap;font-family:ui-monospace,monospace}.process-footer{display:flex;justify-content:space-between;padding:5px 10px;color:#999;border-top:1px solid #333;font-variant-numeric:tabular-nums}.process-error,.process-gone{padding:7px;color:#f48771}.process-results{padding:6px 10px;border-bottom:1px solid #444}.process-results summary{cursor:pointer}.process-result-list{max-height:95px;overflow:auto;margin:6px 0}.process-result-list .failed,.process-danger{color:#f48771}.process-confirm-list{max-height:35vh;overflow:auto;border:1px solid #444;padding:8px}.process-confirm-list>div{padding:4px}.process-confirm-list strong{display:inline-block;min-width:70px}.process-confirm-list span{color:#999;margin-left:8px}
+.process-detail dl { margin: 12px 0; }
+.process-detail dt { color: var(--workbench-text-muted); margin-top: 10px; }
+.process-detail dd { margin: 3px 0; overflow-wrap: anywhere; }
+.process-command { white-space: pre-wrap; font-family: ui-monospace, monospace; }
+.process-footer { display: flex; justify-content: space-between; padding: 5px 10px; color: var(--workbench-text-muted); border-top: 1px solid var(--workbench-table-border); font-variant-numeric: tabular-nums; }
+.process-error, .process-gone { padding: 7px; color: #f48771; }
+.process-results { padding: 6px 10px; border-bottom: 1px solid var(--workbench-table-border); }
+.process-results summary { cursor: pointer; }
+.process-result-list { max-height: 95px; overflow: auto; margin: 6px 0; }
+.process-result-list .failed, .process-danger { color: #f48771; }
+.process-confirm-list { max-height: 35vh; overflow: auto; border: 1px solid var(--workbench-table-border); padding: 8px; }
+.process-confirm-list > div { padding: 4px; }
+.process-confirm-list strong { display: inline-block; min-width: 70px; }
+.process-confirm-list span { color: var(--workbench-text-muted); margin-left: 8px; }
 </style>

@@ -60,7 +60,7 @@ export interface FileWorkspaceState {
   historyIndex: number
   entries: FileEntry[]
   selectedPaths: string[]
-  sortKey: FileSortKey
+  sortKey: FileSortKey | null
   sortDirection: FileSortDirection
   showHidden: boolean
   loading: boolean

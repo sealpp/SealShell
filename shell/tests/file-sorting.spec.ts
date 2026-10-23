@@ -36,34 +36,44 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-test('sorts all four headers locally, keeps directories and selections, and removes the sort dropdown', async ({ page }) => {
+test('cycles every header through ascending, descending and default without changing selection or reading the backend', async ({ page }) => {
+  const defaultNames = ['z-folder', 'a.yaml', 'b.json', 'c.go', 'file2.txt', 'file10.txt', 'link.go']
+  const ascending = [
+    defaultNames,
+    ['z-folder', 'b.json', 'link.go', 'file2.txt', 'a.yaml', 'file10.txt', 'c.go'],
+    ['z-folder', 'link.go', 'file10.txt', 'b.json', 'file2.txt', 'c.go', 'a.yaml'],
+    ['z-folder', 'c.go', 'b.json', 'a.yaml', 'file2.txt', 'file10.txt', 'link.go'],
+  ]
   for (const endpoint of ['local', 'remote']) {
     const pane = page.locator('[data-file-tab="' + endpoint + '"]')
     const names = pane.locator('.file-row:not(.file-parent) .file-name-text')
     await expect(pane.getByRole('combobox', { name: '排序', exact: true })).toHaveCount(0)
-    await expect(names).toHaveText(['z-folder', 'a.yaml', 'b.json', 'c.go', 'file2.txt', 'file10.txt', 'link.go'])
+    await expect(names).toHaveText(defaultNames)
     await pane.locator('.file-row').filter({ hasText: 'file2.txt' }).click()
-
-    const nameButton = pane.getByRole('button', { name: '按名称排序' })
-    const bounds = await nameButton.boundingBox()
-    await nameButton.click({ position: { x: bounds!.width - 14, y: bounds!.height / 2 } })
-    await expect(pane.getByRole('columnheader').nth(0)).toHaveAttribute('aria-sort', 'descending')
-    await expect(names).toHaveText(['z-folder', 'link.go', 'file10.txt', 'file2.txt', 'c.go', 'b.json', 'a.yaml'])
-    await pane.getByRole('button', { name: '按大小排序' }).click()
-    await expect(names).toHaveText(['z-folder', 'c.go', 'file10.txt', 'a.yaml', 'file2.txt', 'link.go', 'b.json'])
-    await pane.getByRole('button', { name: '按大小排序' }).click()
-    await expect(names).toHaveText(['z-folder', 'b.json', 'link.go', 'file2.txt', 'a.yaml', 'file10.txt', 'c.go'])
-    await pane.getByRole('button', { name: '按修改时间排序' }).click()
-    await expect(names).toHaveText(['z-folder', 'a.yaml', 'c.go', 'file2.txt', 'b.json', 'file10.txt', 'link.go'])
-    await pane.getByRole('button', { name: '按类型排序' }).click()
-    expect((await names.allTextContents()).slice(0, 4)).toEqual(['z-folder', 'c.go', 'b.json', 'a.yaml'])
-    await expect(pane.locator('.file-row.selected .file-name-text')).toHaveText('file2.txt')
-    await nameButton.focus()
-    await nameButton.press('Enter')
-    await expect(pane.getByRole('columnheader').nth(0)).toHaveAttribute('aria-sort', 'ascending')
-    await nameButton.press('Space')
-    await expect(pane.getByRole('columnheader').nth(0)).toHaveAttribute('aria-sort', 'descending')
+    for (const [index, label] of ['名称', '大小', '修改时间', '类型'].entries()) {
+      const header = pane.getByRole('columnheader').nth(index)
+      const button = header.getByRole('button', { name: `按${label}排序` })
+      await expect(header).toHaveAttribute('aria-sort', 'none')
+      const bounds = (await button.boundingBox())!
+      await button.click({ position: { x: bounds.width - 14, y: bounds.height / 2 } })
+      await expect(header).toHaveAttribute('aria-sort', 'ascending')
+      await expect(names).toHaveText(ascending[index])
+      await button.press('Space')
+      await expect(header).toHaveAttribute('aria-sort', 'descending')
+      await expect(names).toHaveText(['z-folder', ...ascending[index].slice(1).reverse()])
+      await button.press('Enter')
+      await expect(header).toHaveAttribute('aria-sort', 'none')
+      await expect(header.locator('svg')).toHaveCount(0)
+      await expect(names).toHaveText(defaultNames)
+      await expect(pane.locator('.file-row.selected .file-name-text')).toHaveText('file2.txt')
+    }
   }
+  const localSelection = page.locator('[data-file-tab="local"] .file-row.selected')
+  const remoteSelection = page.locator('[data-file-tab="remote"] .file-row.selected')
+  await expect(localSelection).toHaveAttribute('aria-selected', 'true')
+  await expect(localSelection).toHaveCSS('background-color', 'rgb(55, 55, 61)')
+  await expect(remoteSelection).toHaveCSS('background-color', 'rgb(9, 71, 113)')
+  await expect(remoteSelection).toHaveCSS('height', '32px')
   expect(await page.evaluate(() => (window as unknown as { fileSorting: SortingFixture }).fileSorting.listCalls)).toBe(2)
 })
 
@@ -81,20 +91,24 @@ test('resizes columns without sorting and keeps pane sort state independent', as
   expect((await pane.getByRole('columnheader').first().boundingBox())!.width).toBeGreaterThan(original!.width + 40)
   await handle.focus()
   await handle.press('ArrowRight')
-  await expect(pane.getByRole('columnheader').nth(1)).toHaveAttribute('aria-sort', 'descending')
+  await expect(pane.getByRole('columnheader').nth(1)).toHaveAttribute('aria-sort', 'ascending')
   await expect(pane.getByRole('columnheader').nth(0)).toHaveAttribute('aria-sort', 'none')
-  await expect(remote.getByRole('columnheader').nth(0)).toHaveAttribute('aria-sort', 'ascending')
+  await expect(remote.getByRole('columnheader').nth(0)).toHaveAttribute('aria-sort', 'none')
   expect(await page.evaluate(() => (window as unknown as { fileSorting: SortingFixture }).fileSorting.listCalls)).toBe(2)
 })
 
-test('applies the newest header order when an in-flight refresh finishes', async ({ page }) => {
+for (const clear of [false, true]) test(`applies ${clear ? 'default' : 'explicit'} order when an in-flight refresh finishes`, async ({ page }) => {
   const pane = page.locator('[data-file-tab="remote"]')
   await page.evaluate(() => { (window as unknown as { fileSorting: SortingFixture }).fileSorting.hold = true })
   await pane.getByRole('button', { name: '刷新', exact: true }).click()
   await expect(pane.getByText('正在加载...')).toBeVisible()
   await pane.getByRole('button', { name: '按大小排序' }).click()
-  await pane.getByRole('button', { name: '按大小排序' }).click()
-  const expected = ['z-folder', 'b.json', 'link.go', 'file2.txt', 'a.yaml', 'file10.txt', 'c.go']
+  if (clear) {
+    await pane.getByRole('button', { name: '按大小排序' }).click()
+    await pane.getByRole('button', { name: '按大小排序' }).click()
+  }
+  const expected = clear ? ['z-folder', 'a.yaml', 'b.json', 'c.go', 'file2.txt', 'file10.txt', 'link.go']
+    : ['z-folder', 'b.json', 'link.go', 'file2.txt', 'a.yaml', 'file10.txt', 'c.go']
   await expect(pane.locator('.file-row:not(.file-parent) .file-name-text')).toHaveText(expected)
   await page.evaluate(() => {
     const fixture = (window as unknown as { fileSorting: SortingFixture }).fileSorting

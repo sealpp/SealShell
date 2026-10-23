@@ -7,7 +7,7 @@ import { transferFile, type TransferResult } from './transfer'
 export async function listDirectory(
   backend: FileBackend,
   path: string,
-  options: { showHidden?: boolean; sortKey?: FileSortKey; sortDirection?: FileSortDirection } = {},
+  options: { showHidden?: boolean; sortKey?: FileSortKey | null; sortDirection?: FileSortDirection } = {},
 ): Promise<FileEntry[]> {
   const entries: FileEntry[] = []
   let cursor: string | undefined
