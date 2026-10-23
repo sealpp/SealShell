@@ -183,7 +183,7 @@ onBeforeUnmount(() => {
               <div class="process-table-head" role="row" :style="{ width: table.getTotalSize() + 'px' }">
                 <div v-for="header in table.getHeaderGroups()[0]?.headers" :key="header.id" class="process-cell" role="columnheader" :style="{ width: header.getSize() + 'px' }" :aria-sort="header.column.getIsSorted() === 'desc' ? 'descending' : header.column.getIsSorted() === 'asc' ? 'ascending' : 'none'">
                   <input v-if="header.column.id === 'select'" type="checkbox" aria-label="选择全部可见进程" :checked="!!rows.length && rows.every(row => selection[row.id])" @change="selectAll(($event.target as HTMLInputElement).checked)" />
-                  <button v-else type="button" :title="header.column.id === 'cpu' ? '单个逻辑核心 100%，多线程进程可超过 100%' : String(header.column.columnDef.header)" @click="header.column.getToggleSortingHandler()?.($event)">{{ header.column.columnDef.header }}{{ header.column.getIsSorted() === 'desc' ? ' ↓' : header.column.getIsSorted() === 'asc' ? ' ↑' : '' }}</button>
+                  <button v-else type="button" class="process-sort-button" :title="header.column.id === 'cpu' ? '单个逻辑核心 100%，多线程进程可超过 100%' : String(header.column.columnDef.header)" @click="header.column.getToggleSortingHandler()?.($event)">{{ header.column.columnDef.header }}{{ header.column.getIsSorted() === 'desc' ? ' ↓' : header.column.getIsSorted() === 'asc' ? ' ↑' : '' }}</button>
                   <span v-if="header.column.getCanResize()" class="process-column-resizer" role="separator" aria-orientation="vertical" :aria-label="'调整' + header.column.columnDef.header + '列宽'" @mousedown="header.getResizeHandler()($event)" @touchstart="header.getResizeHandler()($event)" />
                 </div>
               </div>
@@ -235,6 +235,9 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.process-cell > .process-sort-button { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0 7px; text-align: left; }
+.process-sort-button:focus-visible { outline: 1px solid #3794ff; outline-offset: -1px; }
+.process-column-resizer { z-index: 1; }
 .process-tree-spacer { width: 12px; flex: 0 0 12px; }
 .process-detail-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .process-panel{height:100%;min-width:0;min-height:0;display:flex;flex-direction:column;background:#1e1e1e;color:#ccc;font-size:12px}
