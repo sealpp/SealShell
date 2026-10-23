@@ -1,3 +1,5 @@
+@import './workbench-table.css';
+
 :root {
   color-scheme: dark;
   --workbench-font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', sans-serif;

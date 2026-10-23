@@ -1,0 +1,22 @@
+.workbench-list-panel {
+  background: var(--workbench-bg);
+  color: var(--workbench-text);
+  font: 400 var(--workbench-font-size)/20px var(--workbench-font-family);
+}
+.workbench-list-panel input, .workbench-list-panel select, .workbench-list-panel button { font: inherit; }
+.workbench-list-panel input[type='checkbox'] { width: 14px; height: 14px; margin: 0; accent-color: var(--workbench-focus-border); flex-shrink: 0; cursor: pointer; }
+.workbench-list-panel :is(button, input, select):focus-visible { outline: 1px solid var(--workbench-focus-border); outline-offset: -1px; }
+.workbench-table-head { height: 32px; background: var(--workbench-surface); box-shadow: inset 0 -1px var(--workbench-table-border); user-select: none; }
+.workbench-table-row { height: 32px; color: inherit; cursor: default; }
+.workbench-table-row:hover { background: var(--workbench-list-hover-bg); }
+.workbench-table-row[aria-selected='true'] { background: var(--workbench-list-inactive-bg); }
+.workbench-list-panel.focused .workbench-table-row[aria-selected='true'] { background: var(--workbench-list-active-bg); color: var(--workbench-text-strong); }
+.workbench-table-cell { box-sizing: border-box; min-width: 0; padding: 0 8px; font-variant-numeric: tabular-nums; }
+.workbench-table-scroll { overflow: auto; scrollbar-width: thin; }
+.workbench-table-scroll:focus-visible { outline: 1px solid var(--workbench-focus-border); outline-offset: -1px; }
+.workbench-list-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; min-height: 36px; box-sizing: border-box; padding: 5px 8px; background: var(--workbench-surface); border-bottom: 1px solid var(--workbench-table-border); flex-shrink: 0; }
+.workbench-list-toolbar button, .workbench-list-action { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; height: 26px; padding: 0 6px; border: 0; border-radius: 2px; background: transparent; color: inherit; cursor: pointer; }
+.workbench-list-toolbar button:hover:not(:disabled), .workbench-list-toolbar button[aria-pressed='true'], .workbench-list-action:hover:not(:disabled) { background: var(--workbench-toolbar-hover-bg); color: var(--workbench-text-strong); }
+.workbench-list-toolbar button:disabled, .workbench-list-action:disabled { opacity: .4; cursor: default; }
+.workbench-list-toolbar input, .workbench-list-toolbar select { box-sizing: border-box; height: 26px; padding: 0 8px; border: 1px solid var(--workbench-border); border-radius: 0; background: var(--workbench-input-bg); color: inherit; }
+.workbench-list-toolbar input:focus { border-color: var(--workbench-focus-border); outline: none; }
