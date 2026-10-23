@@ -2,13 +2,20 @@ import { describe, expect, it } from 'vitest'
 import { parseProcessSnapshot, processTargets, signalCommand, LinuxProcessProvider } from './provider'
 
 function sample(up = 10, ticks = 100, started = 2, boot = 'boot') {
-  return ['SEAL_PROCESS_V1\t' + boot + '\t100\t' + up + '\t1700000000',
+  return ['SEAL_PROCESS_V2\t' + boot + '\t100\t' + up + '\t1700000000',
     '10\t1\t1000\tuser\tS\t1024\t' + started + '\t' + ticks + '\t2\tparent\tcommand %2509 with spaces',
     '11\t10\t1000\tuser\tR\t2048\t3\t500\t1\tchild\tchild',
     '12\t11\t1000\tuser\tS\t0\t4\t0\t1\tleaf\tleaf',
     'SEAL_PROCESS_END\t3\n'].join('\n')
 }
 describe('Linux process snapshots', () => {
+  it('keeps argument boundaries, whitespace, empty arguments and literal percent escapes', () => {
+    const raw = sample().replace('command %2509 with spaces', '/usr/bin/node%00/目录 with space/node_modules/vite/bin/vite.js%00line%0Anext%00literal %2500%00%00')
+    const row = parseProcessSnapshot(raw).rows[0]
+    expect(row.argv).toEqual(['/usr/bin/node', '/目录 with space/node_modules/vite/bin/vite.js', 'line\nnext', 'literal %00', ''])
+    expect(row.command).toBe(row.argv.join(' '))
+    expect(parseProcessSnapshot(sample().replace('command %2509 with spaces', '[parent]')).rows[0].argv).toEqual([])
+  })
   it('uses interval CPU with a single-core scale and preserves process identity', () => {
     const first = parseProcessSnapshot(sample())
     expect(first.rows[0].cpu).toBeNull()

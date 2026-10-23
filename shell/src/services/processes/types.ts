@@ -7,6 +7,7 @@ export interface ProcessRow {
   state: string
   name: string
   command: string
+  argv: string[]
   rss: number
   threads: number
   startTicks: number

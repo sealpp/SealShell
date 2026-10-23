@@ -1,4 +1,4 @@
-# SEAL_PROCESS_COLLECT_V1
+# SEAL_PROCESS_COLLECT_V2
 LC_ALL=C
 export LC_ALL
 if [ "$(uname -s)" != Linux ] || [ ! -r /proc/uptime ]; then
@@ -14,6 +14,7 @@ ps -eo pid=,uid=,user= | awk -v hz="$hz" -v page_size="$page_size" '
 function escape(s) {
   gsub(/%/, "%25", s); gsub(/\t/, "%09", s)
   gsub(/\r/, "%0D", s); gsub(/\n/, "%0A", s)
+  gsub(/\000/, "%00", s)
   return s
 }
 BEGIN {
@@ -26,7 +27,7 @@ BEGIN {
   }
   close("/proc/stat")
   if (!boot || hz <= 0 || page_size <= 0 || !born) exit 65
-  printf "SEAL_PROCESS_V1\t%s\t%s\t%s\t%s\n", boot, hz, times[1], born
+  printf "SEAL_PROCESS_V2\t%s\t%s\t%s\t%s\n", boot, hz, times[1], born
 }
 {
   pid = $1; uid = $2; user = $3
@@ -39,11 +40,11 @@ BEGIN {
   count = split(rest, fields, " ")
   if (count < 22 || fields[20] !~ /^[0-9]+$/) next
   name = stat; sub(/^[0-9]+ \(/, "", name); sub(/\) [^)]*$/, "", name)
-  command = ""; file = "/proc/" pid "/cmdline"
-  while ((read = (getline line < file)) > 0) command = command (command ? "\n" : "") line
+  command = ""; first = 1; file = "/proc/" pid "/cmdline"
+  while ((read = (getline line < file)) > 0) { command = command (first ? "" : "\n") line; first = 0 }
   close(file)
   if (read < 0) command = "(无法读取命令行)"
-  gsub(/\000/, " ", command); sub(/ $/, "", command)
+  # Keep NUL boundaries; the PWA derives display text separately from argv.
   if (!command) command = "[" name "]"
   # Read identity again: do not associate a replacement process command
   # with the process identity read before cmdline.

@@ -7,7 +7,7 @@ vi.mock('../proxy/profiles', () => ({ resolveHostConnection: fake.route, hostPro
 import { store } from '../../stores/app'
 import { cancelProcessAction, disposeProcesses, executeProcessAction, openProcesses, prepareProcessAction, setProcessVisible, startProcessesService, stopProcessesService } from './runtime'
 const encoder = new TextEncoder()
-const snapshot = 'SEAL_PROCESS_V1\tboot\t100\t10\t1700000000\n10\t1\t1000\tuser\tS\t1024\t2\t100\t1\tparent\tparent\n11\t10\t1000\tuser\tS\t1024\t3\t100\t1\tchild\tchild\nSEAL_PROCESS_END\t2\n'
+const snapshot = 'SEAL_PROCESS_V2\tboot\t100\t10\t1700000000\n10\t1\t1000\tuser\tS\t1024\t2\t100\t1\tparent\tparent\n11\t10\t1000\tuser\tS\t1024\t3\t100\t1\tchild\tchild\nSEAL_PROCESS_END\t2\n'
 const result = (stdout: string, exitCode = 0) => ({ stdout: encoder.encode(stdout), stderr: new Uint8Array(), exitCode })
 async function settle() { for (let i = 0; i < 40; i++) await Promise.resolve(); await nextTick() }
 beforeEach(() => {

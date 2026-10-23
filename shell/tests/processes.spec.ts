@@ -19,9 +19,9 @@ export async function connectMonitor(options, signal) {
     for(let i=10;i<1510;i++) {
       const name=i===10?'tree-root':i===11?'tree-child':i===12?'tree-leaf':'worker-'+i;
       const parent=i===11?10:i===12?11:1;
-      rows.push([i,parent,1000,'alice','S',1048576,i,100+f.samples*10,2,name,'/usr/bin/'+name+' --argument=中文'].join('\\t'));
+      rows.push([i,parent,1000,'alice','S',1048576,i,100+f.samples*10,2,name,'/usr/bin/'+name+'%00--argument=中文%00'].join('\\t'));
     }
-    return result('SEAL_PROCESS_V1\\tboot\\t100\\t'+(10+f.samples*2)+'\\t1700000000\\n'+rows.join('\\n')+'\\nSEAL_PROCESS_END\\t'+rows.length+'\\n');
+    return result('SEAL_PROCESS_V2\\tboot\\t100\\t'+(10+f.samples*2)+'\\t1700000000\\n'+rows.join('\\n')+'\\nSEAL_PROCESS_END\\t'+rows.length+'\\n');
   }};
 }
 `

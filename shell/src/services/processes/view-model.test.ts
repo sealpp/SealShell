@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import { processViewRows } from './view-model'
 import type { ProcessRow } from './types'
 const row = (pid: number, ppid: number, name: string): ProcessRow => ({
-  key: String(pid), pid, ppid, name, command: name, user: 'user', uid: 1000, state: 'S',
+  key: String(pid), pid, ppid, name, command: name, argv: [name], user: 'user', uid: 1000, state: 'S',
   rss: 0, threads: 1, startTicks: pid, startedAt: 0, cpuTicks: 0, cpu: null,
 })
 it('retains ancestors of search matches without selecting or mutating descendants', () => {

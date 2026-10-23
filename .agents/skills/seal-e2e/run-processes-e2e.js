@@ -64,7 +64,8 @@ while True: time.sleep(1)
     remote(['docker', 'exec', container, 'sh', '-c', 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openssh-server procps python3 >/tmp/install.log 2>&1']);
     remote(['docker', 'exec', '-i', container, 'sh', '-c', 'useradd -m -s /bin/bash sealproc && chpasswd && mkdir -p /run/sshd && /usr/sbin/sshd'], 'sealproc:' + password + '\n');
     remote(['docker', 'exec', '-i', container, 'sh', '-c', 'cat > /tmp/process-fixture.py'], processFixture);
-    for (const role of ['seal-root', 'seal-stubborn', 'seal-denied']) remote(['docker', 'exec', '-d', '-u', role === 'seal-denied' ? 'root' : 'sealproc', container, 'python3', '/tmp/process-fixture.py', role]);
+    const literalArgs = ['argument with spaces', 'line\nnext', 'literal %00', ''];
+    for (const role of ['seal-root', 'seal-stubborn', 'seal-denied']) remote(['docker', 'exec', '-d', '-u', role === 'seal-denied' ? 'root' : 'sealproc', container, 'python3', '/tmp/process-fixture.py', role, ...literalArgs]);
     const mappedPort = Number(remote(['docker', 'port', container, '22/tcp']).trim().split(':').pop());
     const reservation = net.createServer();
     await new Promise(resolve => reservation.listen(0, '127.0.0.1', resolve));
@@ -93,6 +94,9 @@ while True: time.sleep(1)
     await page.getByRole('menuitem', { name: '打开进程管理', exact: true }).click();
     await page.locator('#host-key-accept').click();
     await until(() => page.evaluate(async () => (await import('/src/stores/app.ts')).store.tabs.find(t => t.kind === 'process')?.processes.rows.some(row => row.name === 'seal-root')), 'Real Linux collection failed');
+    const collectedArgs = await page.evaluate(async () => (await import('/src/stores/app.ts')).store.tabs.find(t => t.kind === 'process').processes.rows.find(row => row.name === 'seal-root').argv);
+    assert.deepEqual(collectedArgs.slice(3), literalArgs);
+    console.log('PASS real /proc collection preserves spaces, newlines, percent escapes and empty arguments');
     async function choose(name) {
       await page.getByRole('searchbox', { name: '搜索进程' }).fill(name);
       await page.locator('.process-row').filter({ hasText: name }).first().click();

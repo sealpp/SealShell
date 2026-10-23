@@ -4,14 +4,14 @@ import type { ProcessOutcome, ProcessRow, ProcessScope, ProcessSignal, ProcessSn
 
 export const PROCESS_COLLECT_COMMAND = collectScript
 const decoder = new TextDecoder()
-const unescape = (value: string) => value.replace(/%(25|09|0D|0A)/g, (_, code) => ({ '25': '%', '09': '\t', '0D': '\r', '0A': '\n' })[code as '25'])
+const unescape = (value: string) => value.replace(/%(25|09|0D|0A|00)/g, (_, code) => ({ '25': '%', '09': '\t', '0D': '\r', '0A': '\n', '00': '\0' })[code as '25'])
 const keyFor = (boot: string, pid: number, started: number) => boot + ':' + pid + ':' + started
 
 export function parseProcessSnapshot(text: string, previous?: ProcessSnapshot): ProcessSnapshot {
   const lines = text.trimEnd().split('\n')
   const [magic, bootId, hzText, upText, bornText] = lines.shift()!.split('\t')
   const hz = Number(hzText), uptime = Number(upText), born = Number(bornText)
-  if (magic !== 'SEAL_PROCESS_V1' || !/^[a-zA-Z0-9-]+$/.test(bootId) || !(hz > 0) || !(uptime >= 0) || !(born > 0)) throw new Error('进程采集响应无效')
+  if (magic !== 'SEAL_PROCESS_V2' || !/^[a-zA-Z0-9-]+$/.test(bootId) || !(hz > 0) || !(uptime >= 0) || !(born > 0)) throw new Error('进程采集响应无效')
   const footer = lines.pop()?.split('\t')
   if (footer?.[0] !== 'SEAL_PROCESS_END' || Number(footer[1]) !== lines.length) throw new Error('进程列表不完整，已拒绝使用')
   const baseline = previous?.bootId === bootId && previous.hz === hz && uptime > previous.uptime ? previous : undefined
@@ -25,7 +25,9 @@ export function parseProcessSnapshot(text: string, previous?: ProcessSnapshot): 
     const key = keyFor(bootId, pid, startTicks)
     const before = old.get(key)
     const cpu = before && baseline && cpuTicks >= before.cpuTicks ? (cpuTicks - before.cpuTicks) / hz / (uptime - baseline.uptime) * 100 : null
-    return { key, pid, ppid, uid, user: fields[3], state: fields[4], rss, startTicks, startedAt: (born + startTicks / hz) * 1000, cpuTicks, threads, name: unescape(fields[9]), command: unescape(fields[10]), cpu }
+    const rawCommand = unescape(fields[10])
+    const argv = rawCommand.endsWith('\0') ? rawCommand.slice(0, -1).split('\0') : []
+    return { key, pid, ppid, uid, user: fields[3], state: fields[4], rss, startTicks, startedAt: (born + startTicks / hz) * 1000, cpuTicks, threads, name: unescape(fields[9]), command: argv.length ? argv.join(' ') : rawCommand, argv, cpu }
   })
   return { bootId, hz, uptime, rows }
 }
