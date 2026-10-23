@@ -44,7 +44,9 @@ for (const endpoint of endpoints) {
     await expect(input).toHaveValue(endpoint.root)
     await expect(pane.getByRole('button', { name: '上级目录', exact: true })).toBeDisabled()
     await expect(pane.locator('.file-parent')).toHaveAttribute('aria-disabled', 'true')
-    await pane.locator('.file-parent').dblclick()
+    await expect(pane.locator('.file-parent')).toBeDisabled()
+    // Intentionally target the disabled row to verify the navigation guard too.
+    await pane.locator('.file-parent').dblclick({ force: true })
     await expect(input).toHaveValue(endpoint.root)
   })
 

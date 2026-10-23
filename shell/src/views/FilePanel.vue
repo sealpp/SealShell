@@ -7,9 +7,10 @@ import CommandContextMenu from '../components/CommandContextMenu.vue'
 import { FILE_MENU_ID } from '../services/actions/menuIds'
 import type { CommandContext } from '../services/context'
 import { commandService } from '../services/commands'
-import { setBottomPanelActiveTab, store, type FileEntry, type FileTab } from '../stores/app'
+import { setBottomPanelActiveTab, store, type FileEntry, type FileTab, type FileSortKey } from '../stores/app'
 import { transferFileEntries } from '../services/files/transfers'
 import { filePresentation } from '../services/files/file-type'
+import { sortFileEntries } from '../services/sftp/sort'
 import { getFileBackend, goBackFileTab, goForwardFileTab, navigateFileTab, navigateParentFileTab, refreshFileTab } from '../services/sftp/file-tabs'
 
 const props = defineProps<{ params: { params: { tabId: string; [key: string]: unknown }; [key: string]: unknown } }>()
@@ -26,11 +27,11 @@ const ROW_HEIGHT = 32
 let activateTimer: number | undefined
 
 const columns = [
-  { label: '名称', minWidth: 80 },
-  { label: '大小', minWidth: 64 },
-  { label: '修改时间', minWidth: 110 },
-  { label: '类型', minWidth: 64 },
-]
+  { key: 'name', label: '名称', minWidth: 80 },
+  { key: 'size', label: '大小', minWidth: 64 },
+  { key: 'modified', label: '修改时间', minWidth: 110 },
+  { key: 'type', label: '类型', minWidth: 64 },
+] as const
 const columnWidths = ref<number[]>([])
 const columnResize = shallowRef<{ index: number; pointerId: number; startX: number; startWidth: number } | null>(null)
 const columnStyle = computed(() => columnWidths.value.length ? {
@@ -145,14 +146,16 @@ async function goToParent(): Promise<void> {
   syncPath()
 }
 
-function setSort(event: Event): void {
+function setSort(key: FileSortKey): void {
   const current = tab.value
   if (!current) return
-  const value = (event.target as HTMLSelectElement).value
-  const [sortKey, sortDirection] = value.split(':') as [FileTab['file']['sortKey'], FileTab['file']['sortDirection']]
-  current.file.sortKey = sortKey
-  current.file.sortDirection = sortDirection
-  void refreshFileTab(tabId.value)
+  current.file.sortDirection = current.file.sortKey === key
+    ? (current.file.sortDirection === 'asc' ? 'desc' : 'asc')
+    : (key === 'name' || key === 'type' ? 'asc' : 'desc')
+  current.file.sortKey = key
+  current.file.entries = sortFileEntries(current.file.entries, key, current.file.sortDirection)
+  scrollTop.value = 0
+  if (listEl.value) listEl.value.scrollTop = 0
 }
 
 function toggleHidden(): void {
@@ -244,17 +247,14 @@ onBeforeUnmount(onDragLeave)
         </select>
         <input v-model="pathInput" :aria-label="tab.endpoint?.kind === 'local' ? '本地路径' : '远端路径'" @keydown.enter="navigateFromInput" @blur="syncPath">
         <button type="button" title="显示隐藏文件" :class="{ active: tab.file.showHidden }" @click="toggleHidden"><IconEye :size="16" /></button>
-        <select :value="`${tab.file.sortKey}:${tab.file.sortDirection}`" aria-label="排序" @change="setSort">
-          <option value="name:asc">文件名 A-Z</option><option value="name:desc">文件名 Z-A</option>
-          <option value="modified:desc">修改时间 新-旧</option><option value="modified:asc">修改时间 旧-新</option>
-          <option value="size:desc">大小 大-小</option><option value="size:asc">大小 小-大</option>
-        </select>
       </header>
       <div v-if="tab.file.error" class="file-error">{{ tab.file.error }} <ProxyErrorAction :source="tab.proxySource" :message="tab.file.error" /></div>
-      <div ref="listEl" class="file-list" :style="columnStyle" @scroll="onListScroll">
-        <div class="file-list-head">
-          <span v-for="(column, index) in columns" :key="column.label" class="file-column-header">
-            <span>{{ column.label }}</span>
+      <div ref="listEl" class="file-list" role="table" aria-label="文件列表" :aria-rowcount="sortedEntries.length + 2" :style="columnStyle" @scroll="onListScroll">
+        <div class="file-list-head" role="row">
+          <span v-for="(column, index) in columns" :key="column.key" class="file-column-header" role="columnheader" :aria-sort="tab.file.sortKey === column.key ? (tab.file.sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+            <button type="button" class="file-sort-button" :aria-label="`按${column.label}排序`" @click="setSort(column.key)">
+              <span>{{ column.label }}</span><span v-if="tab.file.sortKey === column.key" class="file-sort-arrow" aria-hidden="true">{{ tab.file.sortDirection === 'asc' ? '↑' : '↓' }}</span>
+            </button>
             <span
               class="file-column-resizer"
               :class="{ dragging: columnResize?.index === index }"
@@ -276,21 +276,25 @@ onBeforeUnmount(onDragLeave)
         </div>
         <div
           class="file-row file-parent"
+          role="row"
+          aria-rowindex="2"
           :class="{ disabled: !canNavigateParent }"
           :aria-disabled="!canNavigateParent"
           title="返回上一级目录"
           @dblclick="goToParent"
         >
-          <span class="file-name"><IconArrowBackUp class="file-parent-icon" :size="16" :stroke-width="1.75" aria-hidden="true" /><span>..</span></span>
-          <span>—</span>
-          <span>—</span>
-          <span>目录</span>
+          <span class="file-name" role="cell"><IconArrowBackUp class="file-parent-icon" :size="16" :stroke-width="1.75" aria-hidden="true" /><span>..</span></span>
+          <span role="cell">—</span>
+          <span role="cell">—</span>
+          <span role="cell">目录</span>
         </div>
         <div class="virtual-spacer" :style="{ height: `${topSpacer}px` }" aria-hidden="true" />
         <div
-          v-for="{ entry, presentation } in renderedEntries"
+          v-for="({ entry, presentation }, index) in renderedEntries"
           :key="entry.path"
           class="file-row"
+          role="row"
+          :aria-rowindex="renderStart + index + 3"
           :class="{ selected: isSelected(entry), drop: dropTarget === entry.path }"
           draggable="true"
           @click="select(entry, $event)"
@@ -301,14 +305,14 @@ onBeforeUnmount(onDragLeave)
           @drop="onDrop($event, entry)"
           @contextmenu="!isSelected(entry) && select(entry, $event)"
         >
-          <span class="file-name">
+          <span class="file-name" role="cell">
             <FileIcon :icon="presentation.icon" :label="presentation.typeLabel" />
             <span class="file-name-text">{{ entry.name }}</span>
             <span v-if="presentation.decoration" class="file-decoration" :title="presentation.typeLabel" aria-hidden="true">{{ presentation.decoration }}</span>
           </span>
-          <span :title="entry.kind === 'directory' ? undefined : `${entry.size.toLocaleString()} 字节`">{{ entry.kind === 'directory' ? '—' : formatFileSize(entry.size) }}</span>
-          <span>{{ entry.modifiedAt ? new Date(entry.modifiedAt).toLocaleString() : '—' }}</span>
-          <span :title="presentation.typeLabel">{{ presentation.typeLabel }}</span>
+          <span role="cell" :title="entry.kind === 'directory' ? undefined : `${entry.size.toLocaleString()} 字节`">{{ entry.kind === 'directory' ? '—' : formatFileSize(entry.size) }}</span>
+          <span role="cell">{{ entry.modifiedAt ? new Date(entry.modifiedAt).toLocaleString() : '—' }}</span>
+          <span role="cell" :title="presentation.typeLabel">{{ presentation.typeLabel }}</span>
         </div>
         <div class="virtual-spacer" :style="{ height: `${bottomSpacer}px` }" aria-hidden="true" />
         <div v-if="tab.file.loading" class="file-empty">正在加载...</div>
@@ -321,5 +325,5 @@ onBeforeUnmount(onDragLeave)
 <style scoped>
 .file-parent{color:#ddd;cursor:pointer}.file-parent.disabled{color:#777;cursor:default}
 .file-panel{min-width:0;overflow:hidden;width:100%;height:100%;display:flex;flex-direction:column;background:#1e1e1e;color:#ccc;outline:none}.file-toolbar{min-height:40px;flex-wrap:wrap;display:flex;align-items:center;gap:5px;padding:5px 8px;background:#252526;border-bottom:1px solid #333}.file-toolbar button{width:27px;height:27px;display:inline-flex;align-items:center;justify-content:center;background:#333;border:1px solid #444;color:#ccc;cursor:pointer}.file-toolbar button:hover,.file-toolbar button.active{background:#0e639c;color:#fff}.file-toolbar button:disabled{opacity:.4;cursor:default}.file-toolbar input{min-width:100px;flex:1;height:27px;background:#1e1e1e;border:1px solid #555;color:#eee;padding:0 8px}.file-toolbar select{height:27px;max-width:120px;background:#1e1e1e;border:1px solid #555;color:#ddd}.file-error{padding:8px 12px;color:#f48771;background:#3a1d1d;border-bottom:1px solid #633}.file-list{min-height:0;flex:1;overflow:auto}.file-list-head,.file-row{box-sizing:border-box;display:grid;grid-template-columns:var(--file-columns,minmax(140px,1fr) 80px 155px 80px);gap:10px;align-items:center;padding:0 12px;min-width:max(100%,var(--file-list-width,510px));min-height:32px;height:32px;border-bottom:1px solid #2a2a2a}.virtual-spacer{pointer-events:none}.file-list-head{position:sticky;top:0;background:#2d2d2d;color:#aaa;font-size:12px;z-index:1}.file-row{cursor:default}.file-row:hover{background:#2a2d2e}.file-row.selected{background:#37373d;color:#ccc}.file-panel.focused .file-row.selected{background:#094771;color:#fff}.file-row.drop{outline:1px solid #3794ff}.file-row>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.file-name{display:flex;align-items:center;gap:8px;min-width:0}.file-name-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-decoration{flex:none;margin-left:auto;font-size:16px}.file-parent-icon{flex:0 0 16px}.file-empty{padding:28px;color:#777;text-align:center}
-.file-column-header{position:relative;min-width:0;height:100%;display:flex;align-items:center}.file-column-header>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-column-resizer{position:absolute;top:0;right:-9px;bottom:0;width:8px;cursor:col-resize;touch-action:none;user-select:none;outline:none}.file-column-resizer::after{content:"";position:absolute;top:6px;bottom:6px;left:3px;width:1px;background:#444}.file-column-resizer:hover::after,.file-column-resizer:focus-visible::after,.file-column-resizer.dragging::after{top:0;bottom:0;width:2px;background:#3794ff}
+.file-column-header{position:relative;min-width:0;height:100%;display:flex;align-items:center}.file-sort-button{width:100%;height:100%;min-width:0;display:flex;align-items:center;gap:5px;border:0;padding:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}.file-sort-button>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-sort-arrow{flex:none}.file-sort-button:hover{background:#383838;color:#eee}.file-sort-button:focus-visible{outline:1px solid #3794ff;outline-offset:-1px}.file-column-resizer{position:absolute;top:0;right:-9px;bottom:0;width:8px;cursor:col-resize;touch-action:none;user-select:none;outline:none}.file-column-resizer::after{content:"";position:absolute;top:6px;bottom:6px;left:3px;width:1px;background:#444}.file-column-resizer:hover::after,.file-column-resizer:focus-visible::after,.file-column-resizer.dragging::after{top:0;bottom:0;width:2px;background:#3794ff}
 </style>

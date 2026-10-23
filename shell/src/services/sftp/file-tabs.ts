@@ -102,7 +102,8 @@ export async function refreshFileTab(tabId: string): Promise<void> {
   tab.file.loading = true
   tab.file.error = ''
   try {
-    const entries = await listDirectory(backend, path, { showHidden: tab.file.showHidden, sortKey: tab.file.sortKey, sortDirection: tab.file.sortDirection })
+    // Read live options after listing, including header changes made while awaiting pages.
+    const entries = await listDirectory(backend, path, tab.file)
     if (listings.get(tabId) !== generation) return
     tab.file.entries = entries
     tab.label = fileTabLabel(tab)
