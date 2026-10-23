@@ -1,12 +1,14 @@
 <script lang="ts">
 import type { Component } from 'vue'
-import { IconAppWindow, IconBrandDeno, IconBrandDocker, IconBrandMysql, IconBrandNodejs, IconBrandPhp, IconBrandPython, IconBrandOpenai, IconBrandNpm, IconBrandPnpm, IconBrandYarn, IconBrandVite, IconBrandTypescript, IconBrandNextjs, IconRobot, IconCoffee, IconSettings, IconTerminal2 } from '@tabler/icons-vue'
+import { IconAppWindow, IconBrandDeno, IconBrandDocker, IconBrandMysql, IconBrandNodejs, IconBrandPhp, IconBrandPython, IconBrandNpm, IconBrandPnpm, IconBrandYarn, IconBrandVite, IconBrandTypescript, IconBrandNextjs, IconRobot, IconCoffee, IconSettings, IconTerminal2 } from '@tabler/icons-vue'
 import { clickhousePath, nginxPath, postgresqlPath, redisPath } from '../assets/process-icons/brand-paths'
 import { pyreflyPaths, pyreflyViewBox } from '../assets/process-icons/pyrefly'
+import { aiBrandPaths } from '../assets/process-icons/ai-brand-paths'
 import { processIconKind, type ProcessIconKind } from '../services/processes/icon'
 import type { ProcessRow } from '../services/processes/types'
 
-interface IconDefinition { label: string; component?: Component; paths?: string[]; viewBox?: string }
+interface IconDefinition { label: string; component?: Component; paths?: string[]; viewBox?: string; fillRule?: 'evenodd' }
+const aiIcon = (label: string, brand: keyof typeof aiBrandPaths): IconDefinition => ({ label, paths: aiBrandPaths[brand], fillRule: 'evenodd' })
 const icons: Record<ProcessIconKind, IconDefinition> = {
   process: { label: '进程', component: IconAppWindow },
   shell: { label: 'Shell / SSH', component: IconTerminal2 },
@@ -22,9 +24,22 @@ const icons: Record<ProcessIconKind, IconDefinition> = {
   postgresql: { label: 'PostgreSQL', paths: [postgresqlPath] },
   system: { label: '系统初始化', component: IconSettings },
   clickhouse: { label: 'ClickHouse', paths: [clickhousePath] },
-  codex: { label: 'Codex / OpenAI', component: IconBrandOpenai },
+  codex: aiIcon('Codex', 'codex'),
   pyrefly: { label: 'Pyrefly', paths: pyreflyPaths, viewBox: pyreflyViewBox },
-  devin: { label: 'Devin（代理工具）', component: IconRobot },
+  devin: aiIcon('Devin', 'devin'),
+  claude: aiIcon('Claude Code', 'claude'),
+  gemini: aiIcon('Gemini CLI', 'gemini'),
+  copilot: aiIcon('GitHub Copilot CLI', 'copilot'),
+  opencode: aiIcon('OpenCode', 'opencode'),
+  cursor: aiIcon('Cursor Agent', 'cursor'),
+  qwen: aiIcon('Qwen Code', 'qwen'),
+  cline: aiIcon('Cline', 'cline'),
+  kilo: aiIcon('Kilo Code', 'kilocode'),
+  amp: aiIcon('Amp', 'amp'),
+  droid: { label: 'Droid（AI 编程）', component: IconRobot },
+  aider: { label: 'Aider（AI 编程）', component: IconRobot },
+  mistral: aiIcon('Mistral Vibe', 'mistral'),
+  ollama: aiIcon('Ollama', 'ollama'),
   npm: { label: 'npm / npx', component: IconBrandNpm },
   pnpm: { label: 'pnpm', component: IconBrandPnpm },
   yarn: { label: 'Yarn', component: IconBrandYarn },
@@ -44,7 +59,7 @@ const icon = computed(() => icons[kind.value])
 
 <template>
   <span class="process-icon" :data-process-icon="kind" :title="icon.label" aria-hidden="true">
-    <svg v-if="icon.paths" :viewBox="icon.viewBox ?? '0 0 24 24'" fill="currentColor" focusable="false"><path v-for="(path, index) in icon.paths" :key="index" :d="path" /></svg>
+    <svg v-if="icon.paths" :viewBox="icon.viewBox ?? '0 0 24 24'" fill="currentColor" :fill-rule="icon.fillRule" focusable="false"><path v-for="(path, index) in icon.paths" :key="index" :d="path" /></svg>
     <component :is="icon.component" v-else :size="16" :stroke-width="1.75" />
   </span>
 </template>

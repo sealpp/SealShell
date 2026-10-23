@@ -27,3 +27,20 @@ it('falls back to the runtime or generic icon when the command line is unavailab
   expect(processIconKind({ name: 'python3.12', argv: [] })).toBe('python')
   expect(processIconKind({ name: 'node-worker', argv: [] })).toBe('process')
 })
+
+it('recognizes AI CLI entry points without treating model names or generic agents as applications', () => {
+  expect(processIconKind({ name: 'node', argv: ['node', '/srv/node_modules/@anthropic-ai/claude-code/cli.js'] })).toBe('claude')
+  expect(processIconKind({ name: 'node', argv: ['node', '/srv/node_modules/@google/gemini-cli/bundle/gemini.js'] })).toBe('gemini')
+  expect(processIconKind({ name: 'node', argv: ['node', '/srv/node_modules/@anthropic-ai/claude-code-helper/cli.js'] })).toBe('node')
+  expect(processIconKind({ name: 'node', argv: ['node', 'agent.js', '--model=claude', '--provider=gemini'] })).toBe('node')
+  expect(processIconKind({ name: 'agent', argv: ['/home/user/.local/bin/agent', '--model=claude'] })).toBe('process')
+  expect(processIconKind({ name: 'cursor-agent', argv: ['/home/user/.local/bin/cursor-agent'] })).toBe('cursor')
+})
+
+it('identifies Python AI console scripts and explicit modules, not eval code or script arguments', () => {
+  expect(processIconKind({ name: 'python3.12', argv: ['python3.12', '-u', '-m', 'aider'] })).toBe('aider')
+  expect(processIconKind({ name: 'python', argv: ['python', '/srv/project with spaces/.venv/bin/vibe'] })).toBe('mistral')
+  for (const args of [['-c', 'import aider'], ['agent.py', '-m', 'aider'], ['-m', 'aider_helper'], ['--unknown-flag', '-m', 'aider'], ['/srv/project/aider']]) {
+    expect(processIconKind({ name: 'python', argv: ['python', ...args] })).toBe('python')
+  }
+})

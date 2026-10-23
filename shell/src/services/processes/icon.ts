@@ -1,6 +1,14 @@
 import type { ProcessRow } from './types'
 
-export type ProcessIconKind = 'process' | 'shell' | 'node' | 'python' | 'java' | 'php' | 'deno' | 'docker' | 'mysql' | 'nginx' | 'redis' | 'postgresql' | 'system' | 'clickhouse' | 'codex' | 'pyrefly' | 'devin' | 'npm' | 'pnpm' | 'yarn' | 'vite' | 'typescript' | 'nextjs'
+export type ProcessIconKind = 'process' | 'shell' | 'node' | 'python' | 'java' | 'php' | 'deno' | 'docker' | 'mysql' | 'nginx' | 'redis' | 'postgresql' | 'system' | 'clickhouse' | 'pyrefly' | 'npm' | 'pnpm' | 'yarn' | 'vite' | 'typescript' | 'nextjs'
+  | 'codex' | 'devin' | 'claude' | 'gemini' | 'copilot' | 'opencode' | 'cursor' | 'qwen' | 'cline' | 'kilo' | 'amp' | 'droid' | 'aider' | 'mistral' | 'ollama'
+
+const aiPrograms = new Map<string, ProcessIconKind>([
+  ['codex', 'codex'], ['devin', 'devin'], ['claude', 'claude'], ['gemini', 'gemini'],
+  ['copilot', 'copilot'], ['opencode', 'opencode'], ['cursor-agent', 'cursor'], ['qwen', 'qwen'],
+  ['cline', 'cline'], ['kilo', 'kilo'], ['kilocode', 'kilo'], ['amp', 'amp'], ['droid', 'droid'],
+  ['aider', 'aider'], ['vibe', 'mistral'], ['vibe-acp', 'mistral'], ['vibe-app-server', 'mistral'], ['ollama', 'ollama'],
+])
 
 const programs = new Map<string, ProcessIconKind>([
   ...['sh', 'bash', 'zsh', 'dash', 'ash', 'fish', 'ksh', 'csh', 'tcsh', 'ssh', 'sshd', 'sshd-session'].map(name => [name, 'shell'] as const),
@@ -13,7 +21,7 @@ const programs = new Map<string, ProcessIconKind>([
   ['postgres', 'postgresql'], ['postmaster', 'postgresql'],
   ['systemd', 'system'], ['init', 'system'],
   ['clickhouse', 'clickhouse'], ['clickhouse-server', 'clickhouse'], ['clickhouse-client', 'clickhouse'],
-  ['codex', 'codex'], ['pyrefly', 'pyrefly'], ['devin', 'devin'],
+  ['pyrefly', 'pyrefly'], ...aiPrograms,
   ['npm', 'npm'], ['npx', 'npm'], ['pnpm', 'pnpm'], ['pnpx', 'pnpm'], ['yarn', 'yarn'],
 ])
 
@@ -23,16 +31,28 @@ const nodeEntries = new Map<string, ProcessIconKind>([
   ['pnpm/bin/pnpm.cjs', 'pnpm'], ['pnpm/bin/pnpx.cjs', 'pnpm'],
   ['yarn/bin/yarn.js', 'yarn'],
   ['@openai/codex/bin/codex.js', 'codex'],
+  ['@anthropic-ai/claude-code/cli.js', 'claude'],
+  ['@google/gemini-cli/bundle/gemini.js', 'gemini'],
+  ['@github/copilot/npm-loader.js', 'copilot'],
+  ['opencode-ai/bin/opencode', 'opencode'],
+  ['@qwen-code/qwen-code/cli-entry.js', 'qwen'], ['@qwen-code/qwen-code/dist/index.js', 'qwen'],
+  ['cline/bin/cline', 'cline'], ['@kilocode/cli/bin/kilo', 'kilo'],
   ['vite/bin/vite.js', 'vite'],
   ['typescript/bin/tsc', 'typescript'], ['typescript/bin/tsserver', 'typescript'], ['typescript/lib/tsserver.js', 'typescript'],
   ['next/dist/bin/next', 'nextjs'],
 ])
 const binEntries = new Map<string, ProcessIconKind>([
   ['npm', 'npm'], ['npx', 'npm'], ['pnpm', 'pnpm'], ['pnpx', 'pnpm'], ['yarn', 'yarn'],
-  ['codex', 'codex'], ['vite', 'vite'], ['tsc', 'typescript'], ['tsserver', 'typescript'], ['next', 'nextjs'],
+  ...aiPrograms,
+  ['vite', 'vite'], ['tsc', 'typescript'], ['tsserver', 'typescript'], ['next', 'nextjs'],
 ])
 const nodeFlags = new Set(['--enable-source-maps', '--no-warnings', '--trace-warnings', '--experimental-strip-types'])
 const nodeValueFlags = new Set(['-r', '--require', '--import', '--loader', '--experimental-loader', '--inspect-port'])
+const pythonFlags = new Set(['-u', '-B', '-E', '-I', '-s', '-S'])
+const pythonModules = new Map<string, ProcessIconKind>([
+  ['aider', 'aider'], ['aider.main', 'aider'],
+  ['vibe', 'mistral'], ['vibe.cli.launcher', 'mistral'], ['vibe.acp.entrypoint', 'mistral'],
+])
 const basename = (path: string) => path.slice(path.lastIndexOf('/') + 1)
 
 function programKind(name: string): ProcessIconKind | undefined {
@@ -68,6 +88,14 @@ function entryKind(entry: string): ProcessIconKind | undefined {
   if (/^\/usr\/(?:local\/)?bin\/[^/]+$/.test(entry)) return binEntries.get(basename(entry))
 }
 
+function pythonKind(argv: string[]): ProcessIconKind | undefined {
+  let index = 1
+  while (pythonFlags.has(argv[index])) index++
+  if (argv[index] === '-m') return pythonModules.get(argv[index + 1])
+  const script = /(?:^|\/)bin\/(aider|vibe|vibe-acp|vibe-app-server)$/.exec(argv[index] ?? '')?.[1]
+  return script ? aiPrograms.get(script) : undefined
+}
+
 /** Icons identify this process, never its parent, arbitrary arguments or package manager. */
 export function processIconKind({ name, argv }: Pick<ProcessRow, 'name' | 'argv'>): ProcessIconKind {
   const executable = basename(argv[0] ?? '')
@@ -76,6 +104,10 @@ export function processIconKind({ name, argv }: Pick<ProcessRow, 'name' | 'argv'
   if (executable === 'node' || executable === 'nodejs') {
     const entry = nodeEntry(argv)
     const kind = entry && entryKind(entry)
+    if (kind) return kind
+  }
+  if (candidates[0] === 'python') {
+    const kind = pythonKind(argv)
     if (kind) return kind
   }
   return candidates.find(kind => kind !== undefined) ?? 'process'

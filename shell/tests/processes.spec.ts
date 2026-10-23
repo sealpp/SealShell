@@ -104,6 +104,33 @@ test('distinguishes explicit tools from launchers and runtime arguments with off
   await expect(page.locator('.process-detail')).toContainText('/usr/bin/pyrefly check')
 })
 
+test('labels AI CLIs across native, npm and Python launches while preserving runtime fallbacks', async ({ page }) => {
+  await page.evaluate(() => {
+    (window as any).monitorFixture.store.bottomPanelHeight = 650
+    const programs = [
+      ['claude', ['claude']],
+      ['node', ['node', '/srv/node_modules/@google/gemini-cli/bundle/gemini.js']],
+      ['node', ['node', '/srv/node_modules/@github/copilot/npm-loader.js']],
+      ['opencode', ['opencode']], ['cursor-agent', ['cursor-agent']],
+      ['node', ['node', '/srv/node_modules/@qwen-code/qwen-code/cli-entry.js']],
+      ['cline', ['cline']], ['kilo', ['kilo']], ['amp', ['amp']], ['droid', ['droid']],
+      ['python3', ['python3', '-m', 'aider']], ['python3', ['python3', '/srv/.venv/bin/vibe']],
+      ['ollama', ['ollama', 'serve']], ['agent', ['agent', '--model=claude']],
+    ]
+    ;(window as any).processTest.identities = Object.fromEntries(programs.map(([name, argv], i) => [i + 10, { name, argv }]))
+  })
+  await open(page)
+  const expected = ['claude', 'gemini', 'copilot', 'opencode', 'cursor', 'qwen', 'cline', 'kilo', 'amp', 'droid', 'aider', 'mistral', 'ollama', 'process']
+  for (let index = 0; index < expected.length; index++) {
+    await expect(page.locator('.process-row[data-pid="' + (10 + index) + '"] .process-icon')).toHaveAttribute('data-process-icon', expected[index])
+  }
+  await expect(page.locator('.process-row[data-pid="10"] .process-icon svg')).toHaveAttribute('fill-rule', 'evenodd')
+  await page.context().setOffline(true)
+  await page.getByRole('searchbox', { name: '搜索进程' }).fill('@google/gemini-cli')
+  await page.locator('.process-row').click()
+  await expect(page.locator('.process-detail .process-icon')).toHaveAttribute('title', 'Gemini CLI')
+})
+
 test('confirms a tree separately from its selection and supports cancel, forced action and partial failures', async ({ page }) => {
   await open(page)
   await page.getByRole('searchbox', { name: '搜索进程' }).fill('tree-root')
