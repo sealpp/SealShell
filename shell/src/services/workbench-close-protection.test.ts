@@ -31,7 +31,7 @@ afterEach(() => {
 })
 
 describe('workbench exit policy', () => {
-  it.each<TabKind>(['terminal', 'file', 'editor', 'monitor'])('protects %s sessions while connecting and online even with panels hidden', kind => {
+  it.each<TabKind>(['terminal', 'file', 'editor', 'monitor', 'process'])('protects %s sessions while connecting and online even with panels hidden', kind => {
     store.tabs = [tab(kind, 'idle')]
     store.bottomPanelOpen = false
     expect(blocked()).toBe(false)

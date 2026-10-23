@@ -3,11 +3,12 @@ import type { CommandContext } from '../services/context'
 import type { FileEndpoint } from '../services/files/types'
 import type { HostProxySettings, ProxyProfile, ProxySource } from '../services/proxy/types'
 import type { PortsState } from '../services/ports/types'
+import type { ProcessesState } from '../services/processes/types'
 
 export type View = 'welcome' | 'shell'
 export type ShellState = 'idle' | 'connecting' | 'online' | 'error'
-export type TabKind = 'terminal' | 'file' | 'editor' | 'monitor' | 'port'
-export type BottomPanelCategory = 'files' | 'editors' | 'monitors' | 'ports'
+export type TabKind = 'terminal' | 'file' | 'editor' | 'monitor' | 'port' | 'process'
+export type BottomPanelCategory = 'files' | 'editors' | 'monitors' | 'ports' | 'processes'
 export type FocusedDock = 'terminal' | 'bottomPanel'
 
 export type TerminalFontWeight = 400 | 500 | 600 | 700
@@ -177,6 +178,12 @@ export interface PortsTab extends Tab {
   ports: PortsState
 }
 
+export interface ProcessesTab extends Tab {
+  kind: 'process'
+  hostId: string
+  processes: ProcessesState
+}
+
 export interface SftpClipboardState {
   version: 1
   mode: 'copy' | 'cut'
@@ -224,6 +231,7 @@ export interface AppState {
   visibleFileTabIds: string[]
   activeEditorTabId: string
   activeMonitorTabId: string
+  activeProcessTabId: string
   activePortsTabId: string
   lastFilePanelCategory: 'files' | 'editors'
   bottomPanelCategory: BottomPanelCategory
@@ -306,6 +314,7 @@ export const store = reactive<AppState>({
   visibleFileTabIds: [],
   activeEditorTabId: '',
   activeMonitorTabId: '',
+  activeProcessTabId: '',
   activePortsTabId: '',
   lastFilePanelCategory: 'files',
   bottomPanelCategory: 'files',
@@ -365,7 +374,7 @@ export const store = reactive<AppState>({
 })
 
 export function getActiveBottomPanelTabId(category = store.bottomPanelCategory): string {
-  return category === 'files' ? store.activeFileTabId : category === 'editors' ? store.activeEditorTabId : category === 'monitors' ? store.activeMonitorTabId : store.activePortsTabId
+  return category === 'files' ? store.activeFileTabId : category === 'editors' ? store.activeEditorTabId : category === 'monitors' ? store.activeMonitorTabId : category === 'processes' ? store.activeProcessTabId : store.activePortsTabId
 }
 
 export function getFocusedTabId(): string {
@@ -376,6 +385,7 @@ export function setBottomPanelActiveTab(tabId: string, category: BottomPanelCate
   if (category === 'files') store.activeFileTabId = tabId
   else if (category === 'editors') store.activeEditorTabId = tabId
   else if (category === 'monitors') store.activeMonitorTabId = tabId
+  else if (category === 'processes') store.activeProcessTabId = tabId
   else store.activePortsTabId = tabId
   if (category === 'files' || category === 'editors') store.lastFilePanelCategory = category
   store.bottomPanelCategory = category
