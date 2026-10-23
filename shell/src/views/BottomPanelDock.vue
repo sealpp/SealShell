@@ -9,6 +9,7 @@ import { arrangeWorkspaceInstances, canDropWorkspaceInstance } from '../services
 import FilePanel from './FilePanel.vue'
 import MetricsPanel from './MetricsPanel.vue'
 import PortsPanel from './PortsPanel.vue'
+import ProcessPanel from './ProcessPanel.vue'
 import EditorPanel from './EditorPanel.vue'
 import CommandContextMenu from '../components/CommandContextMenu.vue'
 import { MenuId } from '../services/actions/menuIds'
@@ -43,9 +44,11 @@ const components = {
   editor: EditorPanel,
   monitor: MetricsPanel,
   port: PortsPanel,
+  process: ProcessPanel,
 }
 
-const tabs = computed(() => store.tabs.filter((tab): tab is Tab & { kind: 'file' | 'editor' | 'monitor' | 'port' } => tab.kind === props.category.slice(0, -1)))
+const tabKind = computed(() => props.category === 'processes' ? 'process' : props.category.slice(0, -1))
+const tabs = computed(() => store.tabs.filter(tab => tab.kind === tabKind.value))
 
 function newWorkspaceGroupId(tabId: string): string {
   return `${props.category}:${tabId}`
@@ -98,7 +101,9 @@ function workspaceGroupForPanel(panelId: string): string | undefined {
 function setCategoryActiveTab(tabId: string): void {
   if (props.category === 'files') store.activeFileTabId = tabId
   else if (props.category === 'editors') store.activeEditorTabId = tabId
-  else store.activeMonitorTabId = tabId
+  else if (props.category === 'monitors') store.activeMonitorTabId = tabId
+  else if (props.category === 'processes') store.activeProcessTabId = tabId
+  else store.activePortsTabId = tabId
 }
 
 function captureVisibleGroupSizes(currentApi: DockviewApi): Map<string, WorkspaceGroupSize> {
@@ -242,7 +247,7 @@ function groupHeadersHidden(): void {
 }
 
 function panelTitle(tab: Tab): string {
-  return tab.label || (tab.kind === 'file' ? '文件列表' : tab.kind === 'monitor' ? '性能监测' : '文件')
+  return tab.label || (tab.kind === 'file' ? '文件列表' : tab.kind === 'monitor' ? '性能监测' : tab.kind === 'process' ? '进程管理' : tab.kind === 'port' ? '端口转发' : '文件')
 }
 
 function restoreActivePanel(currentApi: ActivePanelApi): void {
@@ -257,7 +262,7 @@ function restoreActivePanel(currentApi: ActivePanelApi): void {
 
 function addPanel(tab: Tab): void {
   const currentApi = api.value
-  if (!currentApi || tab.kind !== props.category.slice(0, -1)) return
+  if (!currentApi || tab.kind !== tabKind.value) return
   if (currentApi.getPanel(tab.id)) return
 
   const preservedSizes = captureVisibleGroupSizes(currentApi)
@@ -477,7 +482,7 @@ function readWorkspaceDrag(event: DragEvent | PointerEvent): { tabId: string; ca
   if (!raw) return undefined
   try {
     const data = JSON.parse(raw) as { tabId?: string; category?: BottomPanelCategory }
-    if (!data.tabId || (data.category !== 'files' && data.category !== 'editors' && data.category !== 'monitors' && data.category !== 'ports')) return undefined
+    if (!data.tabId || (data.category !== 'files' && data.category !== 'editors' && data.category !== 'monitors' && data.category !== 'ports' && data.category !== 'processes')) return undefined
     return { tabId: data.tabId, category: data.category }
   } catch {
     return undefined
@@ -537,8 +542,9 @@ onBeforeUnmount(() => {
         <IconFolder v-if="props.category === 'files'" :size="22" aria-hidden="true" />
         <IconChartLine v-else-if="props.category === 'monitors'" :size="22" aria-hidden="true" />
         <span v-else-if="props.category === 'ports'" class="codicon codicon-plug" aria-hidden="true"></span>
+        <span v-else-if="props.category === 'processes'" class="codicon codicon-list-tree" aria-hidden="true"></span>
         <IconFile v-else :size="22" aria-hidden="true" />
-        <span>{{ props.category === 'files' ? '暂无文件列表' : props.category === 'editors' ? '暂无打开的文件' : props.category === 'monitors' ? '从终端或会话列表右键打开性能监测' : '从终端或会话列表右键打开端口转发' }}</span>
+        <span>{{ props.category === 'files' ? '暂无文件列表' : props.category === 'editors' ? '暂无打开的文件' : props.category === 'monitors' ? '从终端或会话列表右键打开性能监测' : props.category === 'processes' ? '从终端或会话列表右键打开进程管理' : '从终端或会话列表右键打开端口转发' }}</span>
       </div>
     </div>
     <CommandContextMenu :menu-id="MenuId.FileInstances" :context="{ area: 'global' }" :can-open="() => props.category === 'files'">
@@ -562,6 +568,7 @@ onBeforeUnmount(() => {
         <IconFolder v-if="tab.kind === 'file'" :size="14" aria-hidden="true" />
         <IconChartLine v-else-if="tab.kind === 'monitor'" :size="14" aria-hidden="true" />
         <span v-else-if="tab.kind === 'port'" class="codicon codicon-plug" aria-hidden="true"></span>
+        <span v-else-if="tab.kind === 'process'" class="codicon codicon-list-tree" aria-hidden="true"></span>
         <IconFile v-else :size="14" aria-hidden="true" />
         <span class="workspace-instance-label" :title="panelTitle(tab)">{{ panelTitle(tab) }}</span>
         <span class="workspace-instance-state" :class="tab.state" aria-hidden="true"></span>

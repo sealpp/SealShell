@@ -7,6 +7,8 @@ import { store } from '../stores/app'
 const filesOpen = computed(() => store.bottomPanelOpen && (store.bottomPanelCategory === 'files' || store.bottomPanelCategory === 'editors'))
 const monitorsOpen = computed(() => store.bottomPanelOpen && store.bottomPanelCategory === 'monitors')
 const portsOpen = computed(() => store.bottomPanelOpen && store.bottomPanelCategory === 'ports')
+const processesOpen = computed(() => store.bottomPanelOpen && store.bottomPanelCategory === 'processes')
+const processCount = computed(() => store.tabs.filter(tab => tab.kind === 'process').length)
 const portsCount = computed(() => store.tabs.filter(tab => tab.kind === 'port').length)
 const count = computed(() => store.tabs.filter(tab => tab.kind === 'monitor').length)
 </script>
@@ -33,6 +35,11 @@ const count = computed(() => store.tabs.filter(tab => tab.kind === 'monitor').le
     :aria-pressed="portsOpen" :aria-label="`端口转发 ${portsCount}`" :title="`${portsOpen ? '隐藏' : '显示'}端口转发 · ${portsCount} 个实例`"
     @click="commandService.execute('workbench.togglePorts', { area: 'global' })">
     <span class="codicon codicon-plug" aria-hidden="true"></span><span>端口转发</span><span class="monitor-count">{{ portsCount }}</span>
+  </button>
+  <button type="button" class="workspace-status" :class="{ active: processesOpen, monitoring: processCount > 0 }"
+    :aria-pressed="processesOpen" :aria-label="'进程管理 ' + processCount" :title="'进程管理 · ' + processCount + ' 个实例'"
+    @click="commandService.execute('workbench.toggleProcesses', { area: 'global' })">
+    <span class="codicon codicon-list-tree" aria-hidden="true"></span><span>进程管理</span><span class="monitor-count">{{ processCount }}</span>
   </button>
 </template>
 

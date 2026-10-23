@@ -68,6 +68,11 @@ registerAction({
 })
 
 registerAction({
+  id: 'workbench.toggleProcesses', title: '进程管理', description: '显示或隐藏进程管理视图', category: 'workbench',
+  run: () => toggleCategory('processes'),
+})
+
+registerAction({
   id: 'workbench.toggleBottomPanel',
   title: '面板',
   description: '显示或隐藏底部面板',

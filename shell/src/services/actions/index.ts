@@ -7,6 +7,7 @@ import '../tabCommands'
 import '../terminalCommands'
 import '../monitoring/commands'
 import '../ports/commands'
+import '../processes/commands'
 import '../sftp/file-commands'
 
 export { MenuId, HOST_MENU_ID, NODE_MENU_ID, TAB_MENU_ID, TERMINAL_MENU_ID } from './menuIds'

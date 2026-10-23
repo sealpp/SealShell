@@ -16,7 +16,6 @@
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.2.0",
-    "@verdigris/libssh2.js": "file:../vendor/libssh2.js",
     "@codemirror/commands": "^6.11.0",
     "@codemirror/lang-javascript": "^6.2.5",
     "@codemirror/lang-json": "^6.0.2",
@@ -27,6 +26,9 @@
     "@codemirror/state": "^6.7.4",
     "@codemirror/view": "^6.43.11",
     "@tabler/icons-vue": "3.45.0",
+    "@tanstack/vue-table": "9.3.1",
+    "@tanstack/vue-virtual": "3.13.48",
+    "@verdigris/libssh2.js": "file:../vendor/libssh2.js",
     "@vscode/codicons": "^0.0.45",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",

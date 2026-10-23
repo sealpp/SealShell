@@ -12,7 +12,7 @@ async function openFrom(page: Page, source: 'host' | 'terminal') {
 test('shares one bottom panel between two status entries and remembers the file category', async ({ page }) => {
   await page.getByRole('button', { name: '性能监测 0', exact: true }).click()
   await expect(page.getByText('从终端或会话列表右键打开性能监测')).toBeVisible()
-  await expect(page.getByRole('tab')).toHaveCount(4)
+  await expect(page.getByRole('tab')).toHaveCount(5)
   await page.getByRole('button', { name: '文件管理', exact: true }).click()
   await expect(page.getByRole('tab', { name: '文件列表', exact: true })).toHaveAttribute('aria-selected', 'true')
   await page.getByRole('tab', { name: '文件编辑', exact: true }).click()
@@ -70,8 +70,7 @@ test('fits four metrics horizontally and reflows when the workspace narrows', as
     tab.monitor.telemetry = { sampledAt: Date.now(), metrics: Object.fromEntries(['cpu.usage', 'memory.usage', 'disk.usage', 'process.count'].map(id => [id, { value: 42, unit: '', quality: 'valid' }])) }
   })
   await expect(page.locator('[data-metric-value]')).toHaveCount(4)
-  const boxes = await page.locator('[data-metric-value]').evaluateAll(items => items.map(item => item.getBoundingClientRect().top))
-  expect(new Set(boxes).size).toBe(1)
+  await expect.poll(() => page.locator('[data-metric-value]').evaluateAll(items => new Set(items.map(item => item.getBoundingClientRect().top)).size)).toBe(1)
   await page.setViewportSize({ width: 720, height: 720 })
   await expect.poll(() => page.locator('[data-metric-value]').evaluateAll(items => new Set(items.map(item => item.getBoundingClientRect().top)).size)).toBe(2)
   await expect(page.locator('.metrics-panel')).toBeVisible()
