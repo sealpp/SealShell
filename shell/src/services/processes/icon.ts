@@ -2,12 +2,27 @@ import type { ProcessRow } from './types'
 
 export type ProcessIconKind = 'process' | 'shell' | 'node' | 'python' | 'java' | 'php' | 'deno' | 'docker' | 'mysql' | 'nginx' | 'redis' | 'postgresql' | 'system' | 'clickhouse' | 'pyrefly' | 'npm' | 'pnpm' | 'yarn' | 'vite' | 'typescript' | 'nextjs'
   | 'codex' | 'devin' | 'claude' | 'gemini' | 'copilot' | 'opencode' | 'cursor' | 'qwen' | 'cline' | 'kilo' | 'amp' | 'droid' | 'aider' | 'mistral' | 'ollama'
+  | 'qq' | 'wechat' | 'dingtalk' | 'telegram' | 'discord' | 'slack' | 'zoom' | 'chrome' | 'chromium' | 'firefox' | 'edge' | 'opera' | 'vscode' | 'cursor-editor' | 'sublime' | 'wps' | 'libreoffice' | 'vlc' | 'steam' | 'spotify'
 
 const aiPrograms = new Map<string, ProcessIconKind>([
   ['codex', 'codex'], ['devin', 'devin'], ['claude', 'claude'], ['gemini', 'gemini'],
   ['copilot', 'copilot'], ['opencode', 'opencode'], ['cursor-agent', 'cursor'], ['qwen', 'qwen'],
   ['cline', 'cline'], ['kilo', 'kilo'], ['kilocode', 'kilo'], ['amp', 'amp'], ['droid', 'droid'],
   ['aider', 'aider'], ['vibe', 'mistral'], ['vibe-acp', 'mistral'], ['vibe-app-server', 'mistral'], ['ollama', 'ollama'],
+])
+
+const desktopPrograms = new Map<string, ProcessIconKind>([
+  ['qq', 'qq'], ['QQ', 'qq'], ['linuxqq', 'qq'],
+  ['wechat', 'wechat'], ['WeChat', 'wechat'], ['dingtalk', 'dingtalk'], ['DingTalk', 'dingtalk'],
+  ['telegram-desktop', 'telegram'], ['Telegram', 'telegram'], ['discord', 'discord'], ['Discord', 'discord'],
+  ['slack', 'slack'], ['Slack', 'slack'], ['zoom', 'zoom'],
+  ['chrome', 'chrome'], ['google-chrome', 'chrome'], ['google-chrome-stable', 'chrome'], ['google-chrome-beta', 'chrome'], ['google-chrome-unstable', 'chrome'],
+  ['chromium', 'chromium'], ['chromium-browser', 'chromium'],
+  ['firefox', 'firefox'], ['firefox-bin', 'firefox'], ['firefox-esr', 'firefox'],
+  ['msedge', 'edge'], ['microsoft-edge', 'edge'], ['microsoft-edge-stable', 'edge'], ['microsoft-edge-beta', 'edge'], ['microsoft-edge-dev', 'edge'],
+  ['opera', 'opera'], ['code', 'vscode'], ['code-insiders', 'vscode'], ['cursor', 'cursor-editor'], ['sublime_text', 'sublime'],
+  ['wps', 'wps'], ['wpspdf', 'wps'], ['libreoffice', 'libreoffice'],
+  ['vlc', 'vlc'], ['steam', 'steam'], ['steamwebhelper', 'steam'], ['spotify', 'spotify'],
 ])
 
 const programs = new Map<string, ProcessIconKind>([
@@ -21,7 +36,7 @@ const programs = new Map<string, ProcessIconKind>([
   ['postgres', 'postgresql'], ['postmaster', 'postgresql'],
   ['systemd', 'system'], ['init', 'system'],
   ['clickhouse', 'clickhouse'], ['clickhouse-server', 'clickhouse'], ['clickhouse-client', 'clickhouse'],
-  ['pyrefly', 'pyrefly'], ...aiPrograms,
+  ['pyrefly', 'pyrefly'], ...aiPrograms, ...desktopPrograms,
   ['npm', 'npm'], ['npx', 'npm'], ['pnpm', 'pnpm'], ['pnpx', 'pnpm'], ['yarn', 'yarn'],
 ])
 
@@ -96,8 +111,15 @@ function pythonKind(argv: string[]): ProcessIconKind | undefined {
   return script ? aiPrograms.get(script) : undefined
 }
 
+function desktopPathKind(executable: string): ProcessIconKind | undefined {
+  if (/\/wps-office\/office6\/(?:wps|et|wpp)$/.test(executable)) return 'wps'
+  if (/\/libreoffice[\d.]*\/program\/soffice(?:\.bin)?$/.test(executable)) return 'libreoffice'
+}
+
 /** Icons identify this process, never its parent, arbitrary arguments or package manager. */
 export function processIconKind({ name, argv }: Pick<ProcessRow, 'name' | 'argv'>): ProcessIconKind {
+  const desktop = desktopPathKind(argv[0] ?? '')
+  if (desktop) return desktop
   const executable = basename(argv[0] ?? '')
   const candidates = [programKind(executable), programKind(name)]
   for (const kind of candidates) if (kind && !runtimes.has(kind)) return kind

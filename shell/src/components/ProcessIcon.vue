@@ -1,7 +1,13 @@
 <script lang="ts">
 import type { Component } from 'vue'
-import { IconAppWindow, IconBrandDeno, IconBrandDocker, IconBrandMysql, IconBrandNodejs, IconBrandPhp, IconBrandPython, IconBrandNpm, IconBrandPnpm, IconBrandYarn, IconBrandVite, IconBrandTypescript, IconBrandNextjs, IconRobot, IconCoffee, IconSettings, IconTerminal2 } from '@tabler/icons-vue'
-import { clickhousePath, nginxPath, postgresqlPath, redisPath } from '../assets/process-icons/brand-paths'
+import {
+  IconAppWindow, IconBrandDeno, IconBrandDocker, IconBrandMysql, IconBrandNodejs, IconBrandPhp, IconBrandPython,
+  IconBrandNpm, IconBrandPnpm, IconBrandYarn, IconBrandVite, IconBrandTypescript, IconBrandNextjs,
+  IconBrandQq, IconBrandWechat, IconBrandDingtalk, IconBrandTelegram, IconBrandDiscord, IconBrandSlack, IconBrandZoom,
+  IconBrandChrome, IconBrandFirefox, IconBrandEdge, IconBrandOpera, IconBrandVscode, IconBrandSublimeText,
+  IconBrandVlc, IconBrandSteam, IconBrandSpotify, IconFileText, IconRobot, IconCoffee, IconSettings, IconTerminal2,
+} from '@tabler/icons-vue'
+import { clickhousePath, libreofficePath, nginxPath, postgresqlPath, redisPath } from '../assets/process-icons/brand-paths'
 import { pyreflyPaths, pyreflyViewBox } from '../assets/process-icons/pyrefly'
 import { aiBrandPaths } from '../assets/process-icons/ai-brand-paths'
 import { processIconKind, type ProcessIconKind } from '../services/processes/icon'
@@ -46,6 +52,26 @@ const icons: Record<ProcessIconKind, IconDefinition> = {
   vite: { label: 'Vite', component: IconBrandVite },
   typescript: { label: 'TypeScript', component: IconBrandTypescript },
   nextjs: { label: 'Next.js', component: IconBrandNextjs },
+  qq: { label: 'QQ', component: IconBrandQq },
+  wechat: { label: '微信', component: IconBrandWechat },
+  dingtalk: { label: '钉钉', component: IconBrandDingtalk },
+  telegram: { label: 'Telegram', component: IconBrandTelegram },
+  discord: { label: 'Discord', component: IconBrandDiscord },
+  slack: { label: 'Slack', component: IconBrandSlack },
+  zoom: { label: 'Zoom', component: IconBrandZoom },
+  chrome: { label: 'Google Chrome', component: IconBrandChrome },
+  chromium: { label: 'Chromium', component: IconBrandChrome },
+  firefox: { label: 'Firefox', component: IconBrandFirefox },
+  edge: { label: 'Microsoft Edge', component: IconBrandEdge },
+  opera: { label: 'Opera', component: IconBrandOpera },
+  vscode: { label: 'VS Code', component: IconBrandVscode },
+  'cursor-editor': aiIcon('Cursor', 'cursor'),
+  sublime: { label: 'Sublime Text', component: IconBrandSublimeText },
+  wps: { label: 'WPS Office', component: IconFileText },
+  libreoffice: { label: 'LibreOffice', paths: [libreofficePath] },
+  vlc: { label: 'VLC', component: IconBrandVlc },
+  steam: { label: 'Steam', component: IconBrandSteam },
+  spotify: { label: 'Spotify', component: IconBrandSpotify },
 }
 </script>
 

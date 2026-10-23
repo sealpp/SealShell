@@ -44,3 +44,12 @@ it('identifies Python AI console scripts and explicit modules, not eval code or 
     expect(processIconKind({ name: 'python', argv: ['python', ...args] })).toBe('python')
   }
 })
+
+it('requires an office installation path for ambiguous names and does not guess Electron or Wine applications', () => {
+  expect(processIconKind({ name: 'et', argv: ['/opt/kingsoft/wps-office/office6/et'] })).toBe('wps')
+  expect(processIconKind({ name: 'wpp', argv: ['/app/extra/wps-office/office6/wpp'] })).toBe('wps')
+  expect(processIconKind({ name: 'soffice.bin', argv: ['/usr/lib/libreoffice/program/soffice.bin'] })).toBe('libreoffice')
+  for (const [name, executable] of [['et', '/usr/bin/et'], ['soffice.bin', '/opt/openoffice4/program/soffice.bin'], ['electron', '/usr/bin/electron'], ['wine', '/usr/bin/wine']]) {
+    expect(processIconKind({ name, argv: [executable, 'QQ.exe', '--app=wechat'] })).toBe('process')
+  }
+})
