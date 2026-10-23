@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { SshWorkerClient } from './ssh-worker-client'
 
 function workerFixture() {
@@ -12,6 +12,19 @@ function workerFixture() {
   }
   return { worker, events, get terminated() { return terminated }, client: new SshWorkerClient(worker as unknown as Worker) }
 }
+
+it('terminates the owned worker and rejects pending commands when an exec deadline expires', async () => {
+  vi.useFakeTimers()
+  try {
+    const fixture = workerFixture()
+    const operation = fixture.client.exec('sleep 100', { timeoutMs: 100 })
+    const rejected = expect(operation).rejects.toThrow('超时')
+    await vi.advanceTimersByTimeAsync(100)
+    await rejected
+    expect(fixture.terminated).toBe(true)
+    await expect(fixture.client.exec('next')).rejects.toThrow('closed')
+  } finally { vi.useRealTimers() }
+})
 
 it('sends the close request and waits for resource cleanup before terminating the worker', async () => {
   const fixture = workerFixture()

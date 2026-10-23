@@ -270,11 +270,23 @@ export class Libssh2Session {
     return output
   }
 
-  async exec(command: string): Promise<{ stdout: Uint8Array; stderr: Uint8Array; exitCode: number }> {
+  async exec(command: string, maxOutputBytes = 8 * 1024 * 1024): Promise<{ stdout: Uint8Array; stderr: Uint8Array; exitCode: number }> {
     const channel = await this.pumpHandle(() => this.module.ssh2_channel_open_session(this.session))
     if (!channel) throw errorFor(this.module, this.session, 'SSH exec channel open failed')
-    const stdout: number[] = []
-    const stderr: number[] = []
+    const stdout: Uint8Array[] = []
+    const stderr: Uint8Array[] = []
+    let bytes = 0
+    const append = (chunks: Uint8Array[], chunk: Uint8Array) => {
+      bytes += chunk.length
+      if (bytes > maxOutputBytes) throw new Error('SSH 命令输出超过大小限制，未返回不完整结果')
+      if (chunk.length) chunks.push(chunk)
+    }
+    const join = (chunks: Uint8Array[]) => {
+      const result = new Uint8Array(chunks.reduce((sum, chunk) => sum + chunk.length, 0))
+      let offset = 0
+      for (const chunk of chunks) { result.set(chunk, offset); offset += chunk.length }
+      return result
+    }
     const buffer = this.module._malloc(BUFFER_SIZE)
     try {
       const started = await this.withStrings([command], ([commandPtr]) => this.pump(() => (this.module as any).ssh2_channel_exec(channel, commandPtr)))
@@ -283,20 +295,22 @@ export class Libssh2Session {
       while (idle < 2_000) {
         const read = this.readChannelNow(channel, buffer, false)
         const readErr = this.readChannelNow(channel, buffer, true)
-        if (read.length) stdout.push(...read)
-        if (readErr.length) stderr.push(...readErr)
+        append(stdout, read)
+        append(stderr, readErr)
         if (!read.length && !readErr.length) {
           if (this.module.ssh2_channel_eof(channel)) break
           idle += 1
           await this.transport.waitForData(25)
         } else idle = 0
       }
+      if (!this.module.ssh2_channel_eof(channel)) throw new Error('SSH 命令等待输出超时')
       const exitCode = this.module.ssh2_channel_get_exit_status(channel)
-      return { stdout: Uint8Array.from(stdout), stderr: Uint8Array.from(stderr), exitCode }
+      return { stdout: join(stdout), stderr: join(stderr), exitCode }
     } finally {
-      this.module.ssh2_channel_close(channel)
-      this.module.ssh2_channel_free(channel)
-      this.module._free(buffer)
+      try {
+        try { await this.pump(() => this.module.ssh2_channel_close(channel)) }
+        finally { await this.pump(() => (this.module as any).ssh2_channel_free(channel)) }
+      } finally { this.module._free(buffer) }
     }
   }
 

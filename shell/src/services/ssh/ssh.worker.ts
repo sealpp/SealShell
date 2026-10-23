@@ -6,7 +6,7 @@ type ConnectRequest = {
   options: { host: string; port: number; username: string; password: string; proxy?: ProxyConnection; columns?: number; rows?: number; knownHostKey?: ArrayBuffer; integrateShell?: boolean; shell?: boolean }
 }
 
-type Request = ConnectRequest | { type: 'hostKeyDecision'; accepted: boolean } | { type: 'input'; payload: ArrayBuffer } | { type: 'resize'; columns: number; rows: number } | { type: 'exec'; id: string; command: string } | { type: 'close' }
+type Request = ConnectRequest | { type: 'hostKeyDecision'; accepted: boolean } | { type: 'input'; payload: ArrayBuffer } | { type: 'resize'; columns: number; rows: number } | { type: 'exec'; id: string; command: string; maxOutputBytes?: number } | { type: 'close' }
   | { type: 'direct'; id: string; operation: 'open' | 'read' | 'write' | 'end' | 'close'; channel: number; host: string; port: number; payload: ArrayBuffer }
 
 const scope = globalThis as unknown as { onmessage?: (event: MessageEvent<Request>) => void; postMessage?: (value: unknown, transfer?: Transferable[]) => void }
@@ -95,7 +95,7 @@ scope.onmessage = (event) => {
       } else if (request.type === 'input') await session.write(new Uint8Array(request.payload))
       else if (request.type === 'resize') await session.resize(request.columns, request.rows)
       else if (request.type === 'exec') {
-        const result = await session.exec(request.command)
+        const result = await session.exec(request.command, request.maxOutputBytes)
         post({ type: 'execResult', id: request.id, stdout: result.stdout.buffer, stderr: result.stderr.buffer, exitCode: result.exitCode }, [result.stdout.buffer, result.stderr.buffer])
       } else if (request.type === 'close') {
         if (outputTimer) clearInterval(outputTimer)

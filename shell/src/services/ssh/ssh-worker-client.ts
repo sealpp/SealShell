@@ -97,12 +97,16 @@ export class SshWorkerClient {
     this.directPending.clear()
   }
 
-  exec(command: string): Promise<{ stdout: Uint8Array; stderr: Uint8Array; exitCode: number }> {
+  exec(command: string, options: { timeoutMs?: number; maxOutputBytes?: number } = {}): Promise<{ stdout: Uint8Array; stderr: Uint8Array; exitCode: number }> {
     if (this.closed) return Promise.reject(new Error('SSH worker closed'))
     const id = randomId()
     return new Promise((resolve, reject) => {
-      this.execPending.set(id, { resolve, reject })
-      this.post({ type: 'exec', id, command })
+      const timer = options.timeoutMs === undefined ? undefined : setTimeout(() => this.fail(new Error('SSH 命令超时，请重新连接后重试')), options.timeoutMs)
+      this.execPending.set(id, {
+        resolve: value => { clearTimeout(timer); resolve(value) },
+        reject: error => { clearTimeout(timer); reject(error) },
+      })
+      this.post({ type: 'exec', id, command, maxOutputBytes: options.maxOutputBytes })
     })
   }
 
