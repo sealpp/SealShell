@@ -51,6 +51,7 @@ export class TerminalCommandLine {
   private submitted?: PromptAnchor
   private edited = false
   private expectedCommand?: string
+  private awaitingEdit = false
 
   constructor(private terminal: Terminal, private onCommand: (command: string) => void) {}
 
@@ -62,16 +63,29 @@ export class TerminalCommandLine {
       this.anchor = undefined
       this.edited = false
       this.expectedCommand = undefined
+      this.awaitingEdit = false
     } else if (/[\r\n\x03\x04\x12\x1a]/.test(data) || data.includes('\x1b[200~')) {
       // Multiline paste, interrupt, EOF, reverse search and suspended jobs do
       // not have a reliably known single command line.
       this.reset()
     } else if (this.anchor) {
       this.edited = true
-      if (this.expectedCommand !== undefined) {
-        if (!/[\x00-\x1f\x7f]/.test(data)) this.expectedCommand += data
-        else if (data === '\x7f') this.expectedCommand = Array.from(this.expectedCommand).slice(0, -1).join('')
-        else this.expectedCommand = undefined
+      if (data === '\x1b[C' || data === '\x1bOC') {
+        const line = this.readLine()
+        // Right can accept a remote suggestion. Use the visible line end as
+        // a target; resume only after a new edit and its complete echo agree.
+        if (line && (this.expectedCommand === undefined || line.command === this.expectedCommand)) {
+          this.expectedCommand = line.command + line.tail.trimEnd()
+        }
+        this.awaitingEdit = true
+      } else if (this.expectedCommand !== undefined) {
+        if (!/[\x00-\x1f\x7f]/.test(data)) {
+          this.expectedCommand += data
+          this.awaitingEdit = false
+        } else if (data === '\x7f') {
+          this.expectedCommand = Array.from(this.expectedCommand).slice(0, -1).join('')
+          this.awaitingEdit = false
+        } else this.expectedCommand = undefined
       }
     }
   }
@@ -111,6 +125,16 @@ export class TerminalCommandLine {
   }
 
   snapshot(): CommandLineSnapshot | undefined {
+    if (this.awaitingEdit) return undefined
+    const line = this.readLine()
+    // A slow echo may still show an earlier prefix while newer input is in
+    // flight. Text after the cursor may be a remote autosuggestion; the local
+    // list uses only the echoed prefix that agrees with our known input.
+    if (!line || line.command !== this.expectedCommand) return undefined
+    return { command: line.command, row: line.row, column: line.column }
+  }
+
+  private readLine(): (CommandLineSnapshot & { tail: string }) | undefined {
     const buffer = this.terminal.buffer.active
     if (!this.anchor || buffer.type !== 'normal' || buffer.viewportY !== buffer.baseY) return undefined
     const cursorRow = buffer.baseY + buffer.cursorY
@@ -121,12 +145,12 @@ export class TerminalCommandLine {
     for (let row = this.anchor.marker.line; row < cursorRow; row++) beforeCursor += wrappedRowText(buffer, row, this.terminal.cols)
     beforeCursor += lastLine.translateToString(false, 0, buffer.cursorX)
     if (!beforeCursor.startsWith(this.anchor.prefix)) return undefined
-    const command = beforeCursor.slice(this.anchor.prefix.length)
-    // A slow echo may still show an earlier prefix while newer input is in
-    // flight. Text after the cursor may be a remote autosuggestion; the local
-    // list uses only the echoed prefix that agrees with our known input.
-    if (command !== this.expectedCommand) return undefined
-    return { command, row: buffer.cursorY, column: buffer.cursorX }
+    return {
+      command: beforeCursor.slice(this.anchor.prefix.length),
+      tail: line.text.slice(beforeCursor.length),
+      row: buffer.cursorY,
+      column: buffer.cursorX,
+    }
   }
 
   private clearAnchor(): void {
@@ -134,6 +158,7 @@ export class TerminalCommandLine {
     this.anchor = undefined
     this.edited = false
     this.expectedCommand = undefined
+    this.awaitingEdit = false
   }
 
   reset(): void {
