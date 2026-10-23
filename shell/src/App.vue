@@ -31,6 +31,7 @@ import EncodingStatusItem from './components/EncodingStatusItem.vue'
 import EncodingPickerDialog from './components/EncodingPickerDialog.vue'
 import { loadTransferConcurrency } from './services/sftp/transfer-runtime'
 import { loadTerminalPreferences } from './services/terminalPreferences'
+import { loadSuggestionPreferences } from './services/terminalSuggestions/runtime'
 
 const ACTIVITY_BAR_WIDTH = 48
 const MIN_SIDEBAR_WIDTH = 160
@@ -212,6 +213,7 @@ onMounted(async () => {
     await initializePwa()
     await loadTransferConcurrency()
     await loadTerminalPreferences()
+    await loadSuggestionPreferences()
     if (!store.paired) {
       store.pairingModalOpen = true
     } else {

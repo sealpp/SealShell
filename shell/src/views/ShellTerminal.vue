@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import ProxyErrorAction from '../components/ProxyErrorAction.vue'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch, type CSSProperties } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { store } from '../stores/app'
@@ -15,6 +15,11 @@ import type { CommandContext } from '../services/context'
 import { getTerminalFontFamily, getTerminalTheme } from '../services/terminalPreferences'
 import { encodingDecoder } from '../services/encodings'
 import { registerTerminalDirectoryHandlers } from '../services/terminalDirectory'
+import TerminalCommandHint from '../components/TerminalCommandHint.vue'
+import { attachCommandSuggestions, type TerminalSuggestionView } from '../services/terminalSuggestions/controller'
+import { commonCommandProvider } from '../services/terminalSuggestions/catalog'
+import { historyProvider } from '../services/terminalSuggestions/model'
+import { commandSuggestions, loadSuggestionHistory, rememberSuggestionCommand } from '../services/terminalSuggestions/runtime'
 import '@xterm/xterm/css/xterm.css'
 
 const props = defineProps<{ tabId: string }>()
@@ -24,6 +29,9 @@ const BACKEND_RESIZE_DEBOUNCE_MS = 80
 
 const termEl = ref<HTMLDivElement | null>(null)
 let terminal: Terminal | null = null
+let suggestions: ReturnType<typeof attachCommandSuggestions> | undefined
+const suggestion = shallowRef<TerminalSuggestionView>()
+const suggestionAppearance = shallowRef<CSSProperties>({})
 let fitAddon: FitAddon | null = null
 let resizeObserver: ResizeObserver | null = null
 let fitTimer: number | null = null
@@ -41,6 +49,32 @@ const tab = computed(() => store.tabs.find((t) => t.id === props.tabId))
 const isActive = computed(() => store.activeTerminalTabId === props.tabId)
 const encoder = new TextEncoder()
 
+function historyError(error: unknown): void {
+  commandSuggestions.error = error instanceof Error ? error.message : String(error)
+}
+
+function showSuggestion(value: TerminalSuggestionView | undefined): void {
+  suggestion.value = value
+  if (!value || !terminal || !termEl.value) return
+  const screen = terminal.element?.querySelector('.xterm-screen')
+  if (!screen) { suggestion.value = undefined; return }
+  const screenRect = screen.getBoundingClientRect()
+  const containerRect = termEl.value.getBoundingClientRect()
+  const cellWidth = screenRect.width / terminal.cols
+  const cellHeight = screenRect.height / terminal.rows
+  suggestionAppearance.value = {
+    left: `${screenRect.left - containerRect.left + value.column * cellWidth}px`,
+    top: `${screenRect.top - containerRect.top + value.row * cellHeight}px`,
+    maxWidth: `${Math.max(0, (terminal.cols - value.column) * cellWidth)}px`,
+    height: `${cellHeight}px`,
+    lineHeight: `${cellHeight}px`,
+    fontFamily: terminal.options.fontFamily,
+    fontSize: `${terminal.options.fontSize}px`,
+    fontWeight: terminal.options.fontWeight,
+    letterSpacing: `${terminal.options.letterSpacing}px`,
+  }
+}
+
 const activeState = computed(() => {
   const t = tab.value
   if (!t) return 'no-tab'
@@ -48,6 +82,8 @@ const activeState = computed(() => {
   if (t.state !== 'online') return 'not-online'
   return 'online'
 })
+
+watch(() => [commandSuggestions.enabled, commandSuggestions.rememberHistory, commandSuggestions.history[tab.value?.hostId ?? ''], activeState.value], () => suggestions?.refresh())
 
 function fitAndResize() {
   if (!terminal || !fitAddon) return
@@ -97,6 +133,7 @@ function resetDecoder(encoding: string) {
 
 function writeOutput(data: Uint8Array) {
   if (!terminal) return
+  suggestions?.beforeOutput()
   try {
     const text = decoder.decode(data, { stream: true })
     terminal.write(text)
@@ -168,6 +205,22 @@ function initTerminal() {
   terminal.loadAddon(fitAddon)
   terminal.open(termEl.value)
 
+  suggestions = attachCommandSuggestions(terminal, {
+    enabled: () => commandSuggestions.enabled && tab.value?.state === 'online',
+    active: () => isActive.value,
+    providers: () => [
+      commonCommandProvider,
+      historyProvider(commandSuggestions.rememberHistory ? commandSuggestions.history[tab.value?.hostId ?? ''] ?? [] : []),
+    ],
+    onCommand: command => {
+      const hostId = tab.value?.hostId
+      if (hostId) void rememberSuggestionCommand(hostId, command).catch(historyError)
+    },
+    onChange: showSuggestion,
+  })
+  const hostId = tab.value.hostId
+  if (hostId) void loadSuggestionHistory(hostId).catch(historyError)
+
   registerTerminalDirectoryHandlers(terminal, (directory) => {
     const currentTab = tab.value
     if (currentTab) currentTab.cwd = directory
@@ -195,6 +248,7 @@ function initTerminal() {
     () => tab.value?.state,
     (state) => {
       if (state === 'error') {
+        suggestions?.reset()
         terminal?.writeln(`\r\n[session error: ${tab.value?.error}]`)
       }
     },
@@ -265,6 +319,7 @@ onBeforeUnmount(() => {
   unwatchEncoding.value?.()
   unwatchPreferences.value?.()
   unwatchTerminalMount.value?.()
+  suggestions?.dispose()
   if (tab.value?.sessionId) {
     setTerminalOutputHandler(tab.value.sessionId, null)
   }
@@ -282,7 +337,9 @@ onBeforeUnmount(() => {
   >
     <div class="shell-terminal">
       <div v-if="tab.state === 'error' && tab.proxySource" class="connection-error"><span>{{ tab.error }}</span><ProxyErrorAction :source="tab.proxySource" :message="tab.error" /></div>
-      <div ref="termEl" class="shell-terminal-content" />
+      <div ref="termEl" class="shell-terminal-content">
+        <TerminalCommandHint v-if="suggestion" :suggestion="suggestion" :appearance="suggestionAppearance" />
+      </div>
     </div>
   </CommandContextMenu>
 </template>
@@ -298,6 +355,7 @@ onBeforeUnmount(() => {
 }
 
 .shell-terminal-content {
+  position: relative;
   min-height: 0;
   flex: 1;
   width: 100%;

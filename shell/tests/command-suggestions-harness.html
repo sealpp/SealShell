@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head><meta charset="UTF-8"><title>Command suggestions harness</title>
+    <style>html,body,#app{margin:0;height:100%;background:#0d0d0d;color:#ddd}.terminal{position:relative;width:760px;height:340px;margin:16px}.controls{display:flex;gap:12px;padding:12px}button{font:inherit}</style>
+  </head>
+  <body><div id="app"></div><script type="module">
+    import { createApp, h, ref, shallowRef, onMounted, onBeforeUnmount } from 'vue'
+    import { Terminal } from '@xterm/xterm'
+    import '@xterm/xterm/css/xterm.css'
+    import '/src/styles/workbench.css'
+    import TerminalCommandHint from '/src/components/TerminalCommandHint.vue'
+    import SettingsDialog from '/src/components/SettingsDialog.vue'
+    import InteractionDialog from '/src/components/InteractionDialog.vue'
+    import '/src/services/actions'
+    import { attachCommandSuggestions } from '/src/services/terminalSuggestions/controller'
+    import { commonCommandProvider } from '/src/services/terminalSuggestions/catalog'
+    import { historyProvider } from '/src/services/terminalSuggestions/model'
+    import { commandSuggestions, loadSuggestionPreferences, loadSuggestionHistory, rememberSuggestionCommand } from '/src/services/terminalSuggestions/runtime'
+    import { saveHost, readCommandHistory, recordCommandHistory, deleteHosts, deleteFolderTree, saveFolder } from '/src/services/storage'
+    import { store } from '/src/stores/app'
+    import { watch } from 'vue'
+
+    const sent = []
+    let echo = true
+    let adapter, terminal
+    const write = text => new Promise(resolve => { adapter.beforeOutput(); terminal.write(text, resolve) })
+    window.harness = {
+      sent, write,
+      echo: value => { echo = value },
+      readHistory: (id = 'suggestions-a') => readCommandHistory(id),
+      record: recordCommandHistory,
+      deleteHosts, deleteFolderTree, saveFolder, saveHost,
+      resize: (cols, rows) => terminal.resize(cols, rows),
+      select: () => terminal.select(0, terminal.buffer.active.baseY + terminal.buffer.active.cursorY, 3),
+      clearSelection: () => terminal.clearSelection(),
+      text: () => Array.from({ length: terminal.buffer.active.length }, (_, i) => terminal.buffer.active.getLine(i).translateToString(true)).join('\n'),
+      paste: text => terminal.paste(text),
+      reset: async (prompt = 'dev@host:~$ ') => { adapter.reset(); await write('\x1b[?1049l\x1b[?1l\x1b[?1000l\x1b[?2004l\x1b[2J\x1b[H' + prompt); terminal.focus() },
+    }
+    createApp({
+      setup() {
+        const container = ref(null)
+        const suggestion = shallowRef()
+        const appearance = shallowRef({})
+        const ready = ref(false)
+        watch(() => [commandSuggestions.enabled, commandSuggestions.rememberHistory, commandSuggestions.history['suggestions-a']], () => adapter?.refresh())
+        onMounted(async () => {
+          await loadSuggestionPreferences()
+          const host = id => ({ id, name: id, address: 'test.invalid', port: 22, username: 'dev', folderId: null })
+          await saveHost(host('suggestions-a'))
+          await saveHost(host('suggestions-b'))
+          await loadSuggestionHistory('suggestions-a')
+          terminal = new Terminal({ cols: 80, rows: 18, fontFamily: 'Consolas, monospace', fontSize: 14, theme: { background: '#0d0d0d' } })
+          terminal.open(container.value)
+          adapter = attachCommandSuggestions(terminal, {
+            enabled: () => commandSuggestions.enabled,
+            active: () => true,
+            providers: () => [commonCommandProvider, historyProvider(commandSuggestions.rememberHistory ? commandSuggestions.history['suggestions-a'] ?? [] : [])],
+            onCommand: command => { void rememberSuggestionCommand('suggestions-a', command) },
+            onChange: value => {
+              suggestion.value = value
+              if (!value) return
+              const screen = terminal.element.querySelector('.xterm-screen').getBoundingClientRect()
+              const outer = container.value.getBoundingClientRect()
+              const width = screen.width / terminal.cols, height = screen.height / terminal.rows
+              appearance.value = { left: `${screen.left - outer.left + value.column * width}px`, top: `${screen.top - outer.top + value.row * height}px`, maxWidth: `${(terminal.cols - value.column) * width}px`, height: `${height}px`, lineHeight: `${height}px`, fontFamily: terminal.options.fontFamily, fontSize: '14px' }
+            },
+          })
+          terminal.onData(data => {
+            sent.push(data)
+            if (!echo) return
+            if (data === '\r') void write('\r\n' + 'dev@host:~$ ')
+            else if (data === '\x7f') void write('\b \b')
+            else if (!data.includes('\x1b')) void write(data)
+          })
+          await window.harness.reset()
+          ready.value = true
+        })
+        onBeforeUnmount(() => { adapter?.dispose(); terminal?.dispose() })
+        return () => h('main', [
+          h('div', { class: 'terminal', ref: container }, suggestion.value ? h(TerminalCommandHint, { suggestion: suggestion.value, appearance: appearance.value }) : []),
+          h('div', { class: 'controls' }, [h('button', { onClick: () => { store.settingsSection = 'suggestions'; store.settingsModalOpen = true } }, '命令提示设置'), h('input', { 'aria-label': 'Other input' }), h('span', { id: 'ready' }, String(ready.value))]),
+          store.settingsModalOpen ? h(SettingsDialog) : null,
+          h(InteractionDialog),
+        ])
+      },
+    }).mount('#app')
+  </script></body>
+</html>

@@ -146,6 +146,8 @@ loopback 后用 SSH 隧道访问。容器 sshd 设置 `LANG=C.UTF-8`，并为测
 
 ## 选择器
 
+`shell/tests/command-suggestions.spec.ts` 使用真实 xterm、独立 IndexedDB 和可延迟的回显夹具验证本地命令提示；另用实际 `ShellTerminal` 组件接入受控会话输入/输出，确认灰字位置、接受后发送的 session 与历史落盘。覆盖断网词库、显式接受/执行、频率、连接隔离、刷新、密码无回显、原生 Tab/方向键、IME/选择/焦点、备用屏幕、多行粘贴、并发计数与删除清理、中文跨软换行和 resize。此 UI 套件不启动 Node，不操作用户远端；截图保存在系统临时目录 `seal-e2e/command-suggestions/`，不能把夹具通过解释为任意自定义 shell 提示符或真实 SSH 的完整验收。
+
 `配对`、`登录`、`新建连接` 文字可能出现在菜单和弹窗中，必须限定作用域：
 
 - Dialog 内容：`.workbench-dialog-content`
