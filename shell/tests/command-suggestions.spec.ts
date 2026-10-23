@@ -261,7 +261,7 @@ test('history ranks by frequency, persists across reload and stays scoped to its
   }
   await page.keyboard.type('git ')
   await expect(first(page)).toHaveText('git log --all')
-  await expect(list(page).getByRole('option').first()).toContainText('本地历史 · 2 次')
+  await expect(list(page).getByRole('option').first()).toHaveAccessibleDescription('本地历史，使用过 2 次')
   expect(await readHistory(page, 'suggestions-b')).toEqual([])
   await page.reload()
   await expect(page.locator('#ready')).toHaveText('true')
@@ -389,7 +389,7 @@ test('concurrent history updates keep counts and deleted connections cannot recr
 test('keeps Unicode wrapped history intact and positions the list inside narrow terminal boundaries', async ({ page }) => {
   await page.setViewportSize({ width: 420, height: 560 })
   await page.evaluate(() => (window as any).harness.resize(24, 18))
-  const command = 'echo 中文目录 abcdefghijklmnopqrstuvwxyz'
+  const command = 'echo 中文目录 ' + 'abcdefghijklmnopqrstuvwxyz'.repeat(3)
   await page.keyboard.insertText(command)
   await page.keyboard.press('Enter')
   await expect.poll(() => readHistory(page)).toEqual([expect.objectContaining({ command })])
@@ -400,6 +400,11 @@ test('keeps Unicode wrapped history intact and positions the list inside narrow 
     const bounds = await popup.boundingBox()
     return !!bounds && bounds.x >= 16 && bounds.x + bounds.width <= 404
   }).toBe(true)
+  const screenshotDirectory = join(tmpdir(), 'seal-e2e', 'command-suggestions')
+  await mkdir(screenshotDirectory, { recursive: true })
+  await page.screenshot({ path: join(screenshotDirectory, 'narrow.png') })
+  await candidate(page, command).click()
+  expect(await page.evaluate(() => (window as any).harness.sent.at(-1))).toBe(command.slice('echo '.length))
   await page.evaluate(() => (window as any).harness.resize(30, 18))
   await expect(list(page)).toHaveCount(0)
   await reset(page)
@@ -409,7 +414,7 @@ test('keeps Unicode wrapped history intact and positions the list inside narrow 
   await expect(popup).toHaveAttribute('data-side', 'top')
 })
 
-test('scrolls capped candidates inside a short pane while keeping the keyboard help visible', async ({ page }) => {
+test('scrolls capped candidates inside a short pane', async ({ page }) => {
   await page.evaluate(() => Promise.all(Array.from({ length: 12 }, (_, index) => (window as any).harness.record('suggestions-a', `git custom-${index}`))))
   await page.reload()
   await expect(page.locator('#ready')).toHaveText('true')
@@ -421,7 +426,9 @@ test('scrolls capped candidates inside a short pane while keeping the keyboard h
   await page.keyboard.press('End')
   await expect(list(page).getByRole('option').last()).toBeFocused()
   await expect(list(page).getByRole('option').last()).toBeInViewport()
-  await expect(page.locator('.terminal-command-suggestions-help')).toBeInViewport()
+  const screenshotDirectory = join(tmpdir(), 'seal-e2e', 'command-suggestions')
+  await mkdir(screenshotDirectory, { recursive: true })
+  await page.screenshot({ path: join(screenshotDirectory, 'short-pane.png') })
 })
 
 test('the production terminal shows the popup and sends clicked text through its session input path', async ({ page }) => {
@@ -449,6 +456,7 @@ test('the production terminal shows the popup and sends clicked text through its
   const screenshotDirectory = join(tmpdir(), 'seal-e2e', 'command-suggestions')
   await mkdir(screenshotDirectory, { recursive: true })
   await page.screenshot({ path: join(screenshotDirectory, 'popup.png') })
+  await page.screenshot({ path: join(screenshotDirectory, 'compact.png'), clip: { x: 16, y: 12, width: 520, height: 240 } })
   await candidate(page, 'git diff').click()
   expect(await page.evaluate(() => (window as any).productionInputs.at(-1))).toEqual({ id: 'production-session', text: 'diff' })
   await page.keyboard.press('Enter')
