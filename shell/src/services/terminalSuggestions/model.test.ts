@@ -4,11 +4,18 @@ import { COMMAND_HISTORY_LIMIT, COMMAND_SUGGESTION_LIMIT, findCommandSuggestions
 
 describe('local command suggestions', () => {
   it('offers bundled commands without any history or network request', () => {
+    expect(findCommandSuggestions('g', [commonCommandProvider])[0]?.command).toBe('git status')
     expect(findCommandSuggestions('gi', [commonCommandProvider])[0]?.command).toBe('git status')
     expect(findCommandSuggestions('docker p', [commonCommandProvider])[0]?.command).toBe('docker ps')
-    for (const prefix of ['', 'g', 'Git', ' git', 'git\n', 'unknown-command']) {
+    for (const prefix of ['', 'Git', ' git', 'git\n', 'unknown-command']) {
       expect(findCommandSuggestions(prefix, [commonCommandProvider])).toEqual([])
     }
+  })
+
+  it('remembers single-character commands and matches a single Unicode character', () => {
+    const history = rememberCommand(rememberCommand([], 'q', 1), '查询日志', 2)
+    expect(history).toEqual(expect.arrayContaining([{ command: 'q', uses: 1, lastUsed: 1 }]))
+    expect(findCommandSuggestions('查', [historyProvider(history)])[0]?.command).toBe('查询日志')
   })
 
   it('prioritizes local frequency, then recency, over bundled defaults', () => {

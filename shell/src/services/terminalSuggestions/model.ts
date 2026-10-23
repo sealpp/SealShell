@@ -21,7 +21,7 @@ export const COMMAND_LENGTH_LIMIT = 2048
 export const COMMAND_SUGGESTION_LIMIT = 8
 
 export function canRememberCommand(command: string): boolean {
-  return command.length >= 2 && command.length <= COMMAND_LENGTH_LIMIT
+  return command.length >= 1 && command.length <= COMMAND_LENGTH_LIMIT
     && !/^\s/.test(command) && !/[\x00-\x1f\x7f]/.test(command)
 }
 

@@ -19,7 +19,10 @@ test.beforeEach(async ({ page }) => {
 
 test('shows multiple offline candidates and sources without changing the terminal buffer or focus', async ({ page, context }) => {
   await context.setOffline(true)
-  await page.keyboard.type('git ')
+  await expect(list(page)).toHaveCount(0)
+  await page.keyboard.type('g')
+  await expect(first(page)).toHaveText('git status')
+  await page.keyboard.type('it ')
   await expect(first(page)).toHaveText('git status')
   await expect(list(page).getByRole('option')).toHaveCount(6)
   await expect(candidate(page, 'git diff')).toHaveAttribute('data-source', 'common')

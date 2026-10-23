@@ -30,7 +30,7 @@ defineExpose({ flush: autosave.flush })
     <p v-if="autosave.error.value || commandSuggestions.error" class="error" role="alert">{{ autosave.error.value || commandSuggestions.error }}</p>
     <p v-else class="settings-save-status" role="status">{{ autosave.status.value }}</p>
     <label><input v-model="draft.enabled" type="checkbox">启用本地命令提示</label>
-    <p>输入至少两个字符后，从常用命令和本地历史中匹配。列表出现时仍可使用远端方向键和 Tab；进入列表后用 ↑↓ 选择、Enter 补入、Escape 关闭。补入后回到终端，按 Enter 才执行。</p>
+    <p>输入首个字符后，从常用命令和本地历史中匹配。列表出现时仍可使用远端方向键和 Tab；进入列表后用 ↑↓ 选择、Enter 补入、Escape 关闭。补入后回到终端，按 Enter 才执行。</p>
     <label><input v-model="draft.rememberHistory" type="checkbox">记住当前浏览器的命令历史</label>
     <p>每个保存的连接保留最近 200 条不同命令，优先提示使用频率高的命令。历史仅保存在本机浏览器；命令参数也会保留，可在命令前加空格跳过记录。</p>
     <p>关闭历史后停止记录并仅使用常用命令提示；已有历史保留到手动清除。密码输入、多行粘贴、全屏程序和无法识别的提示符暂停提示。</p>
