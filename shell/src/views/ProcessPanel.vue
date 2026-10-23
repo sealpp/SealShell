@@ -196,7 +196,7 @@ onBeforeUnmount(() => {
                       <span v-if="tree" class="process-indent" :style="{ width: rows[item.index].depth * 14 + 'px' }"></span>
                       <button v-if="tree && rows[item.index].getCanExpand()" type="button" class="process-expand" :aria-label="(rows[item.index].getIsExpanded() ? '收起进程 ' : '展开进程 ') + rows[item.index].original.pid" :aria-expanded="rows[item.index].getIsExpanded()" @click.stop="rows[item.index].toggleExpanded()"><IconChevronDown v-if="rows[item.index].getIsExpanded()" :size="12" /><IconChevronRight v-else :size="12" /></button>
                       <span v-else-if="tree" class="process-tree-spacer" aria-hidden="true"></span>
-                      <ProcessIcon :name="rows[item.index].original.name" />
+                      <ProcessIcon :process="rows[item.index].original" />
                       <span class="process-text" :title="rows[item.index].original.name">{{ rows[item.index].original.name }}</span>
                     </template>
                     <span v-else class="process-text" :title="display(rows[item.index].original, cell.column.id)">{{ display(rows[item.index].original, cell.column.id) }}</span>
@@ -211,7 +211,7 @@ onBeforeUnmount(() => {
           </ContextMenuContent></ContextMenuPortal>
         </ContextMenuRoot>
         <aside v-if="detail" class="process-detail" aria-label="进程详情">
-          <header><strong class="process-detail-name"><ProcessIcon :name="detail.name" /><span class="process-text">{{ detail.name }}</span></strong><button type="button" aria-label="关闭进程详情" @click="detail = undefined"><IconX :size="14" /></button></header>
+          <header><strong class="process-detail-name"><ProcessIcon :process="detail" /><span class="process-text">{{ detail.name }}</span></strong><button type="button" aria-label="关闭进程详情" @click="detail = undefined"><IconX :size="14" /></button></header>
           <p v-if="!detailCurrent" class="process-gone">进程已退出或当前不可见</p>
           <dl><dt>PID / 父 PID</dt><dd>{{ detail.pid }} / {{ detail.ppid }}</dd><dt>用户 / UID</dt><dd>{{ detail.user }} / {{ detail.uid }}</dd>
             <dt>状态</dt><dd>{{ processStateLabels[detail.state] ?? detail.state }}</dd><dt>CPU（单核 100%）</dt><dd>{{ display(detail, 'cpu') }}</dd>

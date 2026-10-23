@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 const connectionMock = `
-window.processTest = { samples:0, commands:[], opened:0, closed:0, reuse:false, denied:false };
+window.processTest = { samples:0, commands:[], opened:0, closed:0, reuse:false, denied:false, identities:{} };
 const f = window.processTest;
 export async function connectMonitor(options, signal) {
   f.opened++;
@@ -17,9 +17,11 @@ export async function connectMonitor(options, signal) {
     f.samples++;
     const rows=[];
     for(let i=10;i<1510;i++) {
-      const name=i===10?'tree-root':i===11?'tree-child':i===12?'tree-leaf':'worker-'+i;
+      const identity=f.identities[i];
+      const name=identity?.name ?? (i===10?'tree-root':i===11?'tree-child':i===12?'tree-leaf':'worker-'+i);
       const parent=i===11?10:i===12?11:1;
-      rows.push([i,parent,1000,'alice','S',1048576,i,100+f.samples*10,2,name,'/usr/bin/'+name+'%00--argument=中文%00'].join('\\t'));
+      const argv=identity?.argv ?? ['/usr/bin/'+name,'--argument=中文'];
+      rows.push([i,parent,1000,'alice','S',1048576,i,100+f.samples*10,2,name,argv.map(arg=>arg.replaceAll('%','%25')).join('%00')+'%00'].join('\\t'));
     }
     return result('SEAL_PROCESS_V2\\tboot\\t100\\t'+(10+f.samples*2)+'\\t1700000000\\n'+rows.join('\\n')+'\\nSEAL_PROCESS_END\\t'+rows.length+'\\n');
   }};
@@ -75,6 +77,31 @@ test('pauses hidden polling, resumes on reveal and releases the owned connection
   await expect.poll(() => page.evaluate(() => (window as any).processTest.samples)).toBeGreaterThan(samples)
   await page.locator('.workspace-category-view.active .workspace-instance-close').click()
   expect(await page.evaluate(() => (window as any).processTest.closed)).toBe(1)
+})
+
+test('distinguishes explicit tools from launchers and runtime arguments with offline icons', async ({ page }) => {
+  await page.evaluate(() => {
+    (window as any).processTest.identities = {
+      10: { name: 'clickhouse-serv', argv: ['/usr/bin/clickhouse-server'] },
+      11: { name: 'codex', argv: ['/usr/bin/codex'] },
+      12: { name: 'pyrefly', argv: ['/usr/bin/pyrefly', 'check'] },
+      13: { name: 'devin', argv: ['/usr/bin/devin'] },
+      14: { name: 'npm run dev', argv: ['npm run dev'] },
+      15: { name: 'node', argv: ['/usr/bin/node', '/srv/项目 with spaces/node_modules/vite/bin/vite.js'] },
+      16: { name: 'node', argv: ['node', '-e', 'console.log("vite")', '/srv/node_modules/vite/bin/vite.js'] },
+      17: { name: 'custom-worker', argv: ['custom-worker', '--application=codex'] },
+    }
+  })
+  await open(page)
+  const expected = ['clickhouse', 'codex', 'pyrefly', 'devin', 'npm', 'vite', 'node', 'process']
+  for (let index = 0; index < expected.length; index++) {
+    await expect(page.locator('.process-row[data-pid="' + (10 + index) + '"] .process-icon')).toHaveAttribute('data-process-icon', expected[index])
+  }
+  await page.context().setOffline(true)
+  await page.getByRole('searchbox', { name: '搜索进程' }).fill('pyrefly')
+  await page.locator('.process-row').click()
+  await expect(page.locator('.process-detail .process-icon')).toHaveAttribute('data-process-icon', 'pyrefly')
+  await expect(page.locator('.process-detail')).toContainText('/usr/bin/pyrefly check')
 })
 
 test('confirms a tree separately from its selection and supports cancel, forced action and partial failures', async ({ page }) => {
