@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 
-test('shares themed icons across endpoints and retains link identity, selection and offline rendering', async ({ page, context }) => {
+test('shares color icons across endpoints and retains original colors through selection and offline rendering', async ({ page, context }) => {
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))
   await page.goto('/tests/file-navigation-harness.html')
@@ -32,12 +32,28 @@ test('shares themed icons across endpoints and retains link identity, selection 
     await expect(link.locator('[data-file-icon="rust"]')).toBeVisible()
     await expect(link.locator('.file-decoration')).toHaveText('⤷')
     await expect(link.locator('span').last()).toHaveText('符号链接')
+    const original = await link.locator('.file-icon').evaluate(icon => getComputedStyle(icon).backgroundImage)
     await link.click()
-    const style = await link.evaluate(row => {
+    const style = await link.evaluate(async row => {
       const icon = row.querySelector('.file-icon')!
-      return { text: getComputedStyle(row).color, icon: getComputedStyle(icon).backgroundColor, width: icon.getBoundingClientRect().width }
+      const css = getComputedStyle(icon)
+      const image = new Image()
+      image.src = css.backgroundImage.slice(5, -2)
+      await image.decode()
+      const canvas = document.createElement('canvas')
+      canvas.width = canvas.height = 16
+      const context = canvas.getContext('2d')!
+      context.drawImage(image, 0, 0, 16, 16)
+      const pixels = context.getImageData(0, 0, 16, 16).data
+      let colored = false
+      for (let i = 0; i < pixels.length; i += 4) {
+        if (pixels[i + 3] > 128 && Math.max(pixels[i], pixels[i + 1], pixels[i + 2]) - Math.min(pixels[i], pixels[i + 1], pixels[i + 2]) > 30) colored = true
+      }
+      return { source: css.backgroundImage, mask: css.maskImage, colored, width: icon.getBoundingClientRect().width }
     })
-    expect(style.icon).toBe(style.text)
+    expect(style.source).toBe(original)
+    expect(style.mask).toBe('none')
+    expect(style.colored).toBe(true)
     expect(style.width).toBe(16)
   }
   await context.setOffline(true)
@@ -49,7 +65,7 @@ test('shares themed icons across endpoints and retains link identity, selection 
   })
   const icon = page.locator('[data-file-tab="remote"] [data-file-icon="go"]')
   await expect(icon).toBeVisible()
-  expect(await icon.evaluate(el => getComputedStyle(el).maskImage)).toContain('data:image/svg+xml,')
+  expect(await icon.evaluate(el => getComputedStyle(el).backgroundImage)).toContain('data:image/svg+xml,')
   expect(await page.evaluate(() => (window as unknown as { fileIconQueries: number }).fileIconQueries)).toBe(0)
   expect(errors).toEqual([])
 })

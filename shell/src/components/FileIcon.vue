@@ -14,12 +14,9 @@ defineProps<{ icon: string; label: string }>()
   width: 16px;
   height: 16px;
   flex: 0 0 16px;
-  color: inherit;
-  background-color: currentColor;
-  mask-image: var(--file-icon-mask);
-  mask-mode: luminance;
-  mask-size: contain;
-  mask-position: center;
-  mask-repeat: no-repeat;
+  background-image: var(--file-icon-image);
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 </style>

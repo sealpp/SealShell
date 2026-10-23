@@ -1,4 +1,4 @@
-"""Generate offline, monochrome file icons from a pinned Material Icon Theme release.
+"""Generate offline file icons in their original Material Icon Theme colors.
 
 Run: python scripts/generate_file_icons.py [--archive refs/material-icon-theme-5.39.0.tgz]
 Source: https://github.com/material-extensions/vscode-material-icon-theme (MIT).
@@ -20,30 +20,6 @@ VERSION = "5.39.0"
 INTEGRITY = "6dUQXJgNBlklaILIOlCZXhSBTsBmLkt11XMoTY7Uyb4ZikelGgZHOY4AdOWBA+SXz51cVWfOVnTHrTwGM91eYw=="
 URL = f"https://registry.npmjs.org/material-icon-theme/-/material-icon-theme-{VERSION}.tgz"
 OUTPUT = Path(__file__).resolve().parents[1] / "shell/src/assets/file-icons"
-PAINT = re.compile(r'((?:fill|stroke|stop-color|color)(?:="|:\s*))(#[\da-fA-F]{6}|#[\da-fA-F]{3})(?=[";\s])')
-
-
-def monochrome(svg: str) -> str:
-    """Preserve overlapping shapes using luminance, instead of merging all fills."""
-    colors = {match[2].lower() for match in PAINT.finditer(svg)}
-
-    def luminance(color: str) -> float:
-        digits = color[1:]
-        if len(digits) == 3:
-            digits = "".join(char * 2 for char in digits)
-        red, green, blue = (int(digits[index:index + 2], 16) for index in (0, 2, 4))
-        return .2126 * red + .7152 * green + .0722 * blue
-
-    levels = sorted({luminance(color) for color in colors})
-    shades = {}
-    for color in colors:
-        level = 255 if len(levels) == 1 else round(115 + 140 * levels.index(luminance(color)) / (len(levels) - 1))
-        shades[color] = f"#{level:02x}{level:02x}{level:02x}"
-    svg = PAINT.sub(lambda match: match[1] + shades[match[2].lower()], svg)
-    # SVG's implicit black fill must remain visible in a luminance mask.
-    if not re.search(r'\bfill=', svg[:svg.index(">")]):
-        svg = svg.replace("<svg ", '<svg fill="#fff" ', 1)
-    return svg
 
 
 def main() -> None:
@@ -70,8 +46,8 @@ def main() -> None:
             assert re.fullmatch(r"[\w-]+", icon), icon
             name = posixpath.basename(manifest["iconDefinitions"][icon]["iconPath"])
             svg = package.extractfile("package/icons/" + name).read().decode()
-            data = urllib.parse.quote(monochrome(svg), safe="/=:,.-_")
-            css.append(f'.file-icon[data-file-icon="{icon}"]{{--file-icon-mask:url("data:image/svg+xml,{data}")}}')
+            data = urllib.parse.quote(svg, safe="/=:,.-_")
+            css.append(f'.file-icon[data-file-icon="{icon}"]{{--file-icon-image:url("data:image/svg+xml,{data}")}}')
         files = {
             "associations.json": json.dumps(rules, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
             "icons.css": "\n".join(css) + "\n",
