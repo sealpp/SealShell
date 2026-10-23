@@ -1,95 +1,114 @@
 <script setup lang="ts">
-import ProxyErrorAction from '../components/ProxyErrorAction.vue'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { EditorState } from '@codemirror/state'
-import { EditorView, keymap } from '@codemirror/view'
-import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
-import { openSearchPanel, search, searchKeymap } from '@codemirror/search'
-import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language'
-import { javascript } from '@codemirror/lang-javascript'
-import { json } from '@codemirror/lang-json'
-import { markdown } from '@codemirror/lang-markdown'
-import { python } from '@codemirror/lang-python'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import type { editor } from 'monaco-editor/editor/editor.api'
 import { IconDeviceFloppy, IconSearch, IconX } from '@tabler/icons-vue'
-import { store, type EditorTab } from '../stores/app'
+import ProxyErrorAction from '../components/ProxyErrorAction.vue'
+import { setBottomPanelActiveTab, store, type EditorTab } from '../stores/app'
 import { saveEditorTab } from '../services/sftp/editor-tabs'
 import { alertDialog } from '../services/dialogs'
 import { commandService } from '../services/commands'
+import type { getEditorDocument } from '../services/editor/documents'
 
 const props = defineProps<{ params: { params: { tabId: string; [key: string]: unknown }; [key: string]: unknown } }>()
 const tabId = computed(() => String(props.params?.params?.tabId ?? ''))
-const tab = computed(() => store.tabs.find((candidate) => candidate.id === tabId.value && candidate.kind === 'editor') as EditorTab | undefined)
+const tab = computed(() => store.tabs.find((candidate): candidate is EditorTab => candidate.id === tabId.value && candidate.kind === 'editor'))
 const editorEl = ref<HTMLDivElement | null>(null)
-let view: EditorView | undefined
+const loading = ref(false)
+const loadError = ref('')
+const ready = ref(false)
+const saving = ref(false)
+let view: editor.IStandaloneCodeEditor | undefined
+let document: ReturnType<typeof getEditorDocument> | undefined
+let disposed = false
 
-function languageExtension(language: string) {
-  if (language === 'javascript' || language === 'typescript') return javascript({ typescript: language === 'typescript' })
-  if (language === 'json') return json()
-  if (language === 'markdown') return markdown()
-  if (language === 'python') return python()
-  return []
-}
-
-function mountEditor(): void {
+function focusPane(): void { setBottomPanelActiveTab(tabId.value, 'editors') }
+async function mountEditor(): Promise<void> {
   const current = tab.value
-  if (!current || current.state !== 'online' || !editorEl.value || view) return
-  const state = EditorState.create({
-    doc: current.editor.content,
-    extensions: [
-      history(),
-      keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
-      search({ top: true }),
-      syntaxHighlighting(defaultHighlightStyle),
-      languageExtension(current.editor.language),
-      EditorView.lineWrapping,
-      EditorView.updateListener.of((update) => {
-        if (!update.docChanged) return
-        const reactive = tab.value
-        if (reactive) {
-          reactive.editor.content = update.state.doc.toString()
-          reactive.editor.dirty = true
-        }
-      }),
-    ],
-  })
-  view = new EditorView({ state, parent: editorEl.value })
+  if (!current || current.state !== 'online' || !editorEl.value || view || loading.value) return
+  loading.value = true
+  loadError.value = ''
+  try {
+    const { monaco, getEditorDocument } = await import('../services/editor/documents')
+    if (disposed || !editorEl.value || tab.value !== current || current.state !== 'online') return
+    document = getEditorDocument(current)
+    view = monaco.editor.create(editorEl.value, {
+      model: document.model,
+      theme: 'vs-dark',
+      automaticLayout: true,
+      fontFamily: 'Consolas, "Cascadia Mono", "SFMono-Regular", monospace',
+      fontSize: 13,
+      lineHeight: 20,
+      lineNumbers: 'on',
+      lineNumbersMinChars: 3,
+      minimap: { enabled: false },
+      stickyScroll: { enabled: false },
+      folding: true,
+      guides: { indentation: true, bracketPairs: true },
+      matchBrackets: 'always',
+      renderLineHighlight: 'line',
+      wordWrap: document.wordWrap,
+      scrollBeyondLastLine: false,
+      padding: { top: 8, bottom: 8 },
+      quickSuggestions: false,
+      wordBasedSuggestions: 'off',
+      suggestOnTriggerCharacters: false,
+      'semanticHighlighting.enabled': false,
+      ariaLabel: `文件内容：${current.label}`,
+    })
+    if (document.viewState) view.restoreViewState(document.viewState)
+    view.onDidFocusEditorText(focusPane)
+    view.addAction({ id: 'sealshell.save', label: '保存文件', keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS], run: save })
+    view.addAction({ id: 'sealshell.toggleWordWrap', label: '切换自动换行', keybindings: [monaco.KeyMod.Alt | monaco.KeyCode.KeyZ], run: () => {
+      document!.wordWrap = document!.wordWrap === 'on' ? 'off' : 'on'
+      view!.updateOptions({ wordWrap: document!.wordWrap })
+    } })
+    ready.value = true
+  } catch (error) { loadError.value = error instanceof Error ? error.message : String(error) }
+  finally { loading.value = false }
 }
 
 async function save(): Promise<void> {
-  try {
-    await saveEditorTab(tabId.value)
-  } catch (error) {
-    await alertDialog('保存失败', error instanceof Error ? error.message : String(error))
-  }
+  if (!tab.value?.editor.dirty || saving.value) return
+  saving.value = true
+  try { await saveEditorTab(tabId.value) }
+  catch (error) { await alertDialog('保存失败', error instanceof Error ? error.message : String(error)) }
+  finally { saving.value = false }
 }
-function openFind(): void { if (view) void openSearchPanel(view) }
+function openFind(): void { view?.focus(); void view?.getAction('actions.find')?.run() }
 
-onMounted(mountEditor)
-watch(() => tab.value?.state, (state) => {
-  if (state === 'online') mountEditor()
-})
-watch(() => tab.value?.editor.contentVersion, () => {
-  view?.destroy()
+watch([() => tab.value?.state, editorEl], () => { void mountEditor() }, { flush: 'post' })
+onBeforeUnmount(() => {
+  disposed = true
+  if (view && document && !document.model.isDisposed()) document.viewState = view.saveViewState()
+  view?.dispose()
   view = undefined
-  mountEditor()
+  document = undefined
 })
-onBeforeUnmount(() => { view?.destroy(); view = undefined })
 </script>
 
 <template>
-  <div v-if="tab" class="editor-panel">
-    <header class="editor-toolbar">
+  <section v-if="tab" class="editor-panel" :data-editor-tab="tabId" @pointerdown="focusPane" @focusin="focusPane">
+    <header class="editor-toolbar workbench-list-toolbar">
       <span class="editor-title" :title="tab.editor.path">{{ tab.label }}{{ tab.editor.dirty ? ' *' : '' }}</span>
-      <span class="editor-path">{{ tab.editor.path }}</span>
-      <button type="button" title="查找/替换" @click="openFind"><IconSearch :size="15" /></button>
-      <button type="button" title="保存" :disabled="!tab.editor.dirty" @click="save"><IconDeviceFloppy :size="15" /></button>
-      <button type="button" title="关闭" @click="commandService.execute('tab.close', { area: 'tab', tabId })"><IconX :size="15" /></button>
+      <span class="editor-path" :title="tab.editor.path">{{ tab.editor.path }}</span>
+      <button type="button" title="查找/替换" :disabled="!ready" @click="openFind"><IconSearch :size="16" /></button>
+      <button type="button" :title="saving ? '正在保存' : '保存'" :disabled="!tab.editor.dirty || saving" @click="save"><IconDeviceFloppy :size="16" /></button>
+      <button type="button" title="关闭" @click="commandService.execute('tab.close', { area: 'tab', tabId })"><IconX :size="16" /></button>
     </header>
-    <div v-if="tab.error" class="connection-error">{{ tab.error }} <ProxyErrorAction :source="tab.proxySource" :message="tab.error" /></div>
+    <div v-if="tab.error" class="editor-error" role="alert">{{ tab.error }} <ProxyErrorAction :source="tab.proxySource" :message="tab.error" /></div>
+    <div v-if="loadError" class="editor-error" role="alert">编辑器加载失败：{{ loadError }} <button class="workbench-list-action" @click="mountEditor">重试</button></div>
+    <div v-else-if="loading || tab.state === 'connecting'" class="editor-loading" role="status">{{ loading ? '正在加载编辑器…' : '正在读取文件…' }}</div>
     <div ref="editorEl" class="editor-host" />
-  </div>
+  </section>
 </template>
 
 <style scoped>
-.editor-panel{width:100%;height:100%;display:flex;flex-direction:column;background:#1e1e1e;color:#ccc}.editor-toolbar{height:38px;display:flex;align-items:center;gap:8px;padding:0 10px;background:#252526;border-bottom:1px solid #333}.editor-title{color:#fff;white-space:nowrap}.editor-path{flex:1;min-width:0;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.editor-toolbar button{display:inline-flex;align-items:center;justify-content:center;width:27px;height:27px;border:1px solid #444;background:#333;color:#ddd;cursor:pointer}.editor-toolbar button:hover{background:#0e639c;color:#fff}.editor-toolbar button:disabled{opacity:.4;cursor:default}.editor-host{min-height:0;flex:1;overflow:auto}.editor-host :deep(.cm-editor){height:100%;font-size:13px}.editor-host :deep(.cm-scroller){font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+.editor-panel { width: 100%; height: 100%; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--workbench-bg); color: var(--workbench-text); font: 400 var(--workbench-font-size)/20px var(--workbench-font-family); }
+.editor-toolbar { flex-wrap: nowrap; }
+.editor-title { color: var(--workbench-text-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
+.editor-path { flex: 1; min-width: 0; color: var(--workbench-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.editor-toolbar button { width: 26px; padding: 0; }
+.editor-host { min-height: 0; min-width: 0; flex: 1; overflow: hidden; }
+.editor-error { padding: 8px 12px; color: #f48771; }
+.editor-loading { padding: 8px 12px; color: var(--workbench-text-muted); }
 </style>

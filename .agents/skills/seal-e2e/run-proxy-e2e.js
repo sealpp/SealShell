@@ -138,7 +138,7 @@ const proxyState = () => JSON.parse(fs.readFileSync(statePath, 'utf8'));
       const editor = await openEditorTab(fileId, file.file.entries.find(item => item.name === 'note.txt'));
       return editor.id;
     }, fileId);
-    await page.locator('.editor-panel .cm-content').waitFor();
+    await page.locator('.editor-panel .monaco-editor .view-lines').waitFor();
     await page.evaluate(async id => {
       const { store } = await import('/src/stores/app.ts');
       const { saveEditorTab } = await import('/src/services/sftp/editor-tabs.ts');

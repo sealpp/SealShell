@@ -9,11 +9,6 @@ import { readFileContents } from '../files/read'
 
 const MAX_EDIT_SIZE = 10 * 1024 * 1024
 
-function detectLanguage(name: string): string {
-  const extension = name.slice(name.lastIndexOf('.') + 1).toLowerCase()
-  return ({ ts: 'typescript', js: 'javascript', json: 'json', md: 'markdown', py: 'python', sh: 'shell' } as Record<string, string>)[extension] ?? 'text'
-}
-
 function bomSignature(bytes: Uint8Array): { encoding: 'utf-8' | 'utf-16le' | 'utf-16be'; offset: number } | null {
   if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) return { encoding: 'utf-8', offset: 3 }
   if (bytes[0] === 0xff && bytes[1] === 0xfe) return { encoding: 'utf-16le', offset: 2 }
@@ -80,7 +75,7 @@ export async function openEditorTab(fileTabId: string, entry: FileEntry): Promis
     cwd: source.file.cwd,
     editor: {
       path: entry.path,
-      language: detectLanguage(entry.name),
+      language: 'plaintext',
       dirty: false,
       encoding: 'utf-8',
       bom: false,

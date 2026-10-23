@@ -1,0 +1,147 @@
+import { expect, test, type Page } from '@playwright/test'
+
+const pane = (page: Page, id = 'python') => page.locator(`[data-editor-tab="${id}"]`)
+async function content(page: Page, id = 'python') {
+  return page.evaluate(id => (window as any).editorFixture.store.tabs.find((tab: any) => tab.id === id)?.editor.content, id)
+}
+async function replace(page: Page, text: string, id = 'python') {
+  await pane(page, id).locator('.view-lines').click()
+  await page.keyboard.press('Control+a')
+  await page.keyboard.insertText(text)
+  await expect.poll(() => content(page, id)).toBe(text)
+}
+test.beforeEach(async ({ page }) => {
+  await page.goto('/tests/editor-harness.html')
+  await expect(pane(page).locator('.monaco-editor')).toBeVisible()
+})
+
+test('renders dark local syntax, line numbers, folding, Chinese find/replace and wrap controls', async ({ page }) => {
+  const errors: string[] = []
+  page.on('pageerror', error => errors.push(error.message))
+  await expect(pane(page).locator('.line-numbers').first()).toHaveText('1')
+  await expect.poll(() => page.evaluate(() => (window as any).editorFixture.store.tabs[0].editor.language)).toBe('python')
+  await expect.poll(() => pane(page).locator('.view-lines span[class^="mtk"]').evaluateAll(spans => new Set(spans.map(span => getComputedStyle(span).color)).size)).toBeGreaterThan(2)
+  await pane(page).getByRole('button', { name: '查找/替换', exact: true }).click()
+  const find = pane(page).locator('.find-widget')
+  await expect(find).toBeVisible()
+  await expect(find).toHaveCSS('background-color', 'rgb(37, 37, 38)')
+  await find.getByRole('textbox', { name: '查找', exact: true }).fill('message')
+  await expect(pane(page).locator('.matchesCount')).toContainText('2')
+  await page.keyboard.press('Escape')
+  await pane(page).locator('.view-lines').click()
+  await page.keyboard.press('Control+h')
+  await expect(find.getByRole('textbox', { name: '替换', exact: true })).toBeVisible()
+  await find.getByRole('textbox', { name: '替换', exact: true }).fill('greeting')
+  await find.getByRole('button', { name: /全部替换/ }).click()
+  await expect.poll(() => content(page)).toContain('return greeting')
+  await page.keyboard.press('Escape')
+  await page.evaluate(async () => {
+    const { monaco } = await import('/src/services/editor/runtime.ts')
+    await monaco.editor.getEditors()[0].getAction('editor.foldAll')!.run()
+  })
+  await expect(pane(page).locator('.view-line').filter({ hasText: 'return greeting' })).toHaveCount(0)
+  await page.evaluate(async () => {
+    const { monaco } = await import('/src/services/editor/runtime.ts')
+    await monaco.editor.getEditors()[0].getAction('editor.unfoldAll')!.run()
+  })
+  await pane(page).locator('.view-lines').click()
+  await page.keyboard.press('Alt+z')
+  expect(await page.evaluate(async () => { const { monaco } = await import('/src/services/editor/runtime.ts'); return monaco.editor.getEditors()[0].getOption(monaco.editor.EditorOption.wordWrap) })).toBe('off')
+  expect(errors).toEqual([])
+})
+
+test('keeps same-path files isolated, retains undo through hiding and releases models on close', async ({ page }) => {
+  await replace(page, 'first_draft')
+  await page.evaluate(() => (window as any).editorFixture.add('second', '/etc/setup.py', 'second host'))
+  await expect(pane(page, 'second').locator('.monaco-editor')).toBeVisible()
+  await replace(page, 'second_draft', 'second')
+  await page.getByRole('button', { name: '切换底栏', exact: true }).click()
+  await page.getByRole('button', { name: '切换底栏', exact: true }).click()
+  const source = (await page.locator('.workspace-instance[data-tab-id="python"]').boundingBox())!
+  const dock = (await page.locator('.workspace-category-view.active .workspace-dock').boundingBox())!
+  await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(source.x - 30, source.y + source.height / 2, { steps: 4 })
+  await page.mouse.move(dock.x + 10, dock.y + dock.height / 2, { steps: 12 })
+  await page.mouse.up()
+  await expect(page.locator('.editor-panel:visible')).toHaveCount(2)
+  await expect.poll(() => pane(page).evaluate(el => Math.abs(el.querySelector('.monaco-editor')!.getBoundingClientRect().width - el.querySelector('.editor-host')!.getBoundingClientRect().width))).toBeLessThan(2)
+  await expect(pane(page)).toBeVisible()
+  await pane(page).locator('.view-lines').click()
+  await page.keyboard.press('Control+z')
+  await expect.poll(() => content(page)).toContain('def hello():')
+  expect(await content(page, 'second')).toBe('second_draft')
+  await pane(page).getByRole('button', { name: '关闭', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: '文件有未保存修改' })).toBeVisible()
+  await page.getByRole('button', { name: '取消', exact: true }).click()
+  await expect(pane(page)).toBeVisible()
+  await pane(page).getByRole('button', { name: '关闭', exact: true }).click()
+  await page.getByRole('button', { name: '不保存', exact: true }).click()
+  await expect.poll(() => page.evaluate(async () => { const { monaco } = await import('/src/services/editor/runtime.ts'); return monaco.editor.getModels().length })).toBe(1)
+  await page.evaluate(() => (window as any).editorFixture.closeTabs(['second'], true))
+  await expect.poll(() => page.evaluate(async () => { const { monaco } = await import('/src/services/editor/runtime.ts'); return monaco.editor.getModels().length })).toBe(0)
+})
+
+test('can close a tab while the editor chunk is still loading without creating an orphan model', async ({ page }) => {
+  // Use a fresh navigation so the dynamic module is not already evaluated.
+  let release!: () => void
+  const blocked = new Promise<void>(resolve => { release = resolve })
+  await page.route('**/src/services/editor/documents.ts', async route => { await blocked; await route.continue() })
+  await page.goto('/tests/editor-harness.html')
+  await expect(pane(page).getByRole('status')).toHaveText('正在加载编辑器…')
+  await pane(page).getByRole('button', { name: '关闭', exact: true }).click()
+  await expect(pane(page)).toHaveCount(0)
+  release()
+  await expect.poll(() => page.evaluate(async () => { const { monaco } = await import('/src/services/editor/runtime.ts'); return monaco.editor.getModels().length })).toBe(0)
+  await page.evaluate(() => (window as any).editorFixture.add('next', '/data.yaml', 'enabled: true'))
+  await expect(pane(page, 'next').locator('.monaco-editor')).toBeVisible()
+  await expect.poll(() => page.evaluate(() => (window as any).editorFixture.store.tabs[0].editor.language)).toBe('yaml')
+})
+
+test('saves through Ctrl+S with BOM and line endings, and keeps failed saves editable', async ({ page }) => {
+  await page.evaluate(() => { Object.assign((window as any).editorFixture.store.tabs[0].editor, { bom: true, lineEnding: '\r\n' }) })
+  await replace(page, '你好\nsecond line\n')
+  await page.keyboard.press('Control+s')
+  await expect.poll(() => page.evaluate(() => (window as any).editorFixture.writes.length)).toBe(1)
+  const saved = await page.evaluate(() => (window as any).editorFixture.writes[0].bytes)
+  expect(saved).toEqual([0xef, 0xbb, 0xbf, ...new TextEncoder().encode('你好\r\nsecond line\r\n')])
+  await expect(pane(page).getByRole('button', { name: '保存', exact: true })).toBeDisabled()
+  await replace(page, 'unsaved')
+  await page.evaluate(() => { (window as any).editorFixture.fail = true })
+  await page.keyboard.press('Control+s')
+  await expect(page.getByRole('dialog', { name: '保存失败', exact: true })).toContainText('fixture save rejected')
+  await page.getByRole('button', { name: '确定', exact: true }).click()
+  await expect(pane(page).getByRole('button', { name: '保存', exact: true })).toBeEnabled()
+  expect(await content(page)).toBe('unsaved')
+})
+
+test('reopens with another encoding and clears the discarded undo history', async ({ page }) => {
+  await replace(page, 'discard this draft')
+  await page.evaluate(() => {
+    const f = (window as any).editorFixture
+    f.files.get('python').set('/etc/setup.py', new Uint8Array([0xff, 0xfe, 65, 0, 13, 0, 10, 0, 66, 0]))
+    void f.reopenEditorTab('python', 'utf-16le')
+  })
+  await page.getByRole('button', { name: '丢弃修改并重新打开', exact: true }).click()
+  await expect.poll(() => content(page)).toBe('A\r\nB')
+  await expect(pane(page).locator('.view-line').first()).toHaveText('A')
+  await pane(page).locator('.view-lines').click()
+  await page.keyboard.press('Control+z')
+  expect(await content(page)).toBe('A\r\nB')
+  await expect(pane(page).getByRole('button', { name: '保存', exact: true })).toBeDisabled()
+})
+
+test('preserves edits made during an in-flight save', async ({ page }) => {
+  await replace(page, 'saved_snapshot')
+  await page.evaluate(() => { (window as any).editorFixture.hold = true })
+  await page.keyboard.press('Control+s')
+  await expect.poll(() => page.evaluate(() => !!(window as any).editorFixture.release)).toBe(true)
+  await replace(page, 'new_unsaved_changes')
+  await page.evaluate(() => { const f = (window as any).editorFixture; f.hold = false; f.release() })
+  await expect.poll(() => page.evaluate(() => (window as any).editorFixture.writes.length)).toBe(1)
+  await expect(pane(page).getByRole('button', { name: '保存', exact: true })).toBeEnabled()
+  expect(await content(page)).toBe('new_unsaved_changes')
+  await page.keyboard.press('Control+s')
+  await expect.poll(() => page.evaluate(() => (window as any).editorFixture.writes.length)).toBe(2)
+  expect(await page.evaluate(() => new TextDecoder().decode(new Uint8Array((window as any).editorFixture.writes[1].bytes)))).toBe('new_unsaved_changes')
+})

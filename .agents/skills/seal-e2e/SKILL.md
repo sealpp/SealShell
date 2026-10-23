@@ -223,6 +223,14 @@ unshare --net -- bash -c 'ip link set lo up; node .agents/skills/seal-e2e/run-fi
 
 `shell/tests/transfer-status.spec.ts` 使用真实传输队列与可控完成/失败回调，验证状态栏预览、关闭详情后连续进度不重开、排队取消、失败重试、完成后的保留项警示、编码入口共存和减少动态效果。此 UI 回归不启动 Node，也不操作真实文件。
 
+## Monaco 文件编辑器
+
+`shell/tests/editor.spec.ts` 使用实际 Dockview 与内存文件后端，验证中文深色查找替换、行号/高亮/折叠、Alt+Z、Ctrl+S、BOM/换行符、失败保留、保存期间编辑、编码重开清空旧撤销、同路径隔离、移动/隐藏恢复和关闭释放模型。加载未完成就关闭时，不得留下孤儿模型。
+
+生产离线检查：先在 shell 执行 `npm run build`，再运行 `node tests/editor-offline.mjs`。使用独立 9325 预览端口和新浏览器上下文，安装 PWA 缓存后断网，首次打开真实编辑面板，确认高亮、中文查找栏、CSS/图标字体和基础 Worker 已缓存；产物不应包含语言服务 Worker。测试自动关闭预览服务器。
+
+Monaco 使用 EditContext 时，textarea 可能只是只读的 IME 辅助节点。端到端输入先点击 `.monaco-editor .view-lines`，再发送键盘事件；查找/替换输入使用可访问名称「查找」「替换」，不强制点击隐藏 textarea。
+
 ## 远端进程管理
 
 shell/tests/processes.spec.ts 使用真实底部工作区和可控 exec 响应，覆盖 1500 行虚拟化、

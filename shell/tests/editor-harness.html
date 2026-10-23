@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><style>html,body,#app{margin:0;height:100%;background:#1e1e1e;color:#ccc;font:13px 'Segoe UI',sans-serif}.harness{height:100%;display:flex;flex-direction:column}.workspace{position:relative;flex:1;min-height:0}.controls{height:28px;display:flex;gap:8px}</style></head>
+<body><div id="app"></div><script type="module">
+import { createApp, h } from 'vue'
+import 'dockview-vue/dist/styles/dockview.css'
+import '/src/styles/workbench.css'
+import '/src/services/actions'
+import { store, setBottomPanelActiveTab } from '/src/stores/app'
+import { registerFileSession } from '/src/services/sftp/file-tabs'
+import { createFilePaths } from '/src/services/files/path'
+import { FileOperationError } from '/src/services/files/types'
+import { reopenEditorTab } from '/src/services/sftp/editor-tabs'
+import { closeTabs } from '/src/services/ws'
+import BottomPanel from '/src/views/BottomPanel.vue'
+import DirtyCloseDialog from '/src/components/DirtyCloseDialog.vue'
+import InteractionDialog from '/src/components/InteractionDialog.vue'
+import EncodingStatusItem from '/src/components/EncodingStatusItem.vue'
+
+store.view = 'shell'
+store.bottomPanelOpen = true
+store.bottomPanelCategory = 'editors'
+store.bottomPanelHeight = 550
+const fixture = { store, writes: [], hold: false, release: null, fail: false, closed: 0, files: new Map(), add, closeTabs, reopenEditorTab }
+window.editorFixture = fixture
+function add(id, path, content, options = {}) {
+  const bytes = new TextEncoder().encode(content)
+  const files = new Map([[path, bytes]])
+  fixture.files.set(id, files)
+  registerFileSession(id, {
+    paths: createFilePaths(), atomicReplace: true,
+    async disconnect() { fixture.closed++ },
+    async list(path) { return { path, entries: [] } },
+    async stat(path) { const data = files.get(path); if (!data) throw new FileOperationError('not_found', path); return { path, name: path.split('/').pop(), kind: 'file', size: data.length, modifiedAt: 0 } },
+    async read(path, offset = 0, length = files.get(path).length) { return files.get(path).slice(offset, offset + length).buffer },
+    async write(path, data, offset = 0) { const old = files.get(path) ?? new Uint8Array(); const next = new Uint8Array(Math.max(old.length, offset + data.byteLength)); next.set(old); next.set(new Uint8Array(data), offset); files.set(path, next) },
+    async rename(from, to) { if (fixture.hold) await new Promise(resolve => { fixture.release = resolve }); if (fixture.fail) throw new Error('fixture save rejected'); files.set(to, files.get(from)); files.delete(from); fixture.writes.push({ id, path: to, bytes: Array.from(files.get(to)) }); return { atomic: true } },
+    async remove(path) { files.delete(path) }, async mkdir() {},
+  })
+  store.tabs.push({ id, kind: 'editor', endpoint: { kind: 'sftp', hostId: id }, hostId: id, label: path.split('/').pop(), state: 'online', error: '', sessionId: id, terminalId: '', encoding: 'utf-8', cwd: '/',
+    editor: { path, content, language: 'plaintext', encoding: 'utf-8', bom: false, lineEnding: '\n', size: bytes.length, contentVersion: 0, dirty: false, largeFileConfirmed: false, ...options } })
+  setBottomPanelActiveTab(id, 'editors')
+}
+add('python', '/etc/setup.py', '#!/usr/bin/env python3\nimport os\n\ndef hello():\n    message = "你好 SealShell"\n    return message\n\nhello()\n')
+createApp({ render: () => h('main', { class: 'harness' }, [
+  h('div', { class: 'controls' }, [h('button', { onClick: () => { store.bottomPanelOpen = !store.bottomPanelOpen } }, '切换底栏'), h('button', { onClick: () => { store.focusedDock = 'terminal' } }, '终端焦点')]),
+  h('div', { class: 'workspace' }, [h(BottomPanel)]), h(EncodingStatusItem), h(DirtyCloseDialog), h(InteractionDialog),
+]) }).mount('#app')
+</script></body></html>

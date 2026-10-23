@@ -15,6 +15,7 @@ describe('editor language detection', () => {
     expect(detectEditorLanguage(definitions, '/app/client.TEST.TS', '')).toBe('test')
     expect(detectEditorLanguage(definitions, '/app/.bashrc', '')).toBe('shell')
     expect(detectEditorLanguage(definitions, '/app/view.tsx', '')).toBe('typescript')
+    expect(detectEditorLanguage(definitions, '/app/prefix\\Dockerfile', '')).toBe('plaintext')
   })
   it('uses a shebang for extensionless scripts and falls back to plain text', () => {
     expect(detectEditorLanguage(definitions, '/usr/bin/setup', '#!/usr/bin/env python3\nprint(1)')).toBe('python')

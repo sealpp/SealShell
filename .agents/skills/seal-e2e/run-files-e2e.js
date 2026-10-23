@@ -162,8 +162,8 @@ async function until(predicate, message, timeout = 45000) {
     await navigate(localPane, '本地路径', local);
     await row(localPane, 'note.txt').dblclick();
     const editor = page.locator('.editor-panel:visible');
-    await editor.locator('.cm-content').waitFor();
-    await editor.locator('.cm-content').click();
+    await editor.locator('.monaco-editor .view-lines').waitFor();
+    await editor.locator('.monaco-editor .view-lines').click();
     await page.keyboard.press('Control+a');
     await page.keyboard.type('edited in PWA');
     await editor.getByRole('button', { name: '保存', exact: true }).click();
