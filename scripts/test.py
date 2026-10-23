@@ -49,16 +49,16 @@ def ssh_e2e() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("suite", nargs="?", default="all", choices=("all", "node", "unit", "ui", "files", "transfers", "ssh", "ssh-real", "proxy", "ports", "build"))
+    parser.add_argument("suite", nargs="?", default="all", choices=("all", "node", "unit", "ui", "files", "transfers", "ssh", "ssh-real", "proxy", "ports", "processes", "build"))
     options = parser.parse_args()
     npm = "npm.cmd" if os.name == "nt" else "npm"
     suites = ("node", "unit", "ui", "files", "ssh", "proxy", "ports", "build") if options.suite == "all" else (options.suite,)
     for suite in suites:
-        ports = {"node": (17374,), "ui": (9324,), "files": (8081, 17373), "transfers": (8081, 17373), "ssh": (8081, 17373), "ssh-real": (8081, 17373), "ports": (8081, 17373), "proxy": (8081, 17373)}.get(suite, ())
+        ports = {"node": (17374,), "ui": (9324,), "files": (8081, 17373), "transfers": (8081, 17373), "ssh": (8081, 17373), "ssh-real": (8081, 17373), "ports": (8081, 17373), "processes": (8081, 17373), "proxy": (8081, 17373)}.get(suite, ())
         for port in ports:
             with socket.socket() as listener:
                 try:
-                    test_host = os.environ.get("SEAL_E2E_HOST", "127.0.0.1") if suite in ("files", "transfers", "ssh", "ssh-real", "proxy", "ports") else "127.0.0.1"
+                    test_host = os.environ.get("SEAL_E2E_HOST", "127.0.0.1") if suite in ("files", "transfers", "ssh", "ssh-real", "proxy", "ports", "processes") else "127.0.0.1"
                     listener.bind((test_host, port))
                 except OSError:
                     parser.error(f"Port {port} is occupied. Stop its service before running {suite} tests.")
@@ -74,6 +74,8 @@ def main() -> None:
             run(["node", str(E2E / "run-transfer-stress.js")])
         elif suite == "ports":
             run(["node", str(E2E / "run-ports-e2e.js")])
+        elif suite == "processes":
+            run(["node", str(E2E / "run-processes-e2e.js")])
         elif suite == "proxy":
             run(["node", str(E2E / "run-proxy-e2e.js")])
         elif suite == "ssh-real":

@@ -219,6 +219,23 @@ unshare --net -- bash -c 'ip link set lo up; node .agents/skills/seal-e2e/run-fi
 
 `shell/tests/transfer-status.spec.ts` 使用真实传输队列与可控完成/失败回调，验证状态栏预览、关闭详情后连续进度不重开、排队取消、失败重试、完成后的保留项警示、编码入口共存和减少动态效果。此 UI 回归不启动 Node，也不操作真实文件。
 
+## 远端进程管理
+
+shell/tests/processes.spec.ts 使用真实底部工作区和可控 exec 响应，覆盖 1500 行虚拟化、
+双入口去重、窗格详情、多选/树、确认取消、部分失败和隐藏暂停/恢复。
+
+完整链路按需执行 python scripts/test.py processes。先将 SEAL_PROCESS_DOCKER_HOST
+设为已获授权且可免密 SSH 的 Docker 主机；本机服务可用 SEAL_E2E_HOST=127.0.0.2 隔离。
+此项不加入默认 all，因为依赖外部 Docker 环境。可用 SEAL_PROCESS_DOCKER_IMAGE
+指定带 apt 的 Linux 基础镜像；默认使用 Playwright Noble 镜像。
+
+runner 创建唯一命名的临时容器，在其中安装 OpenSSH 并创建非 root 测试账户；只对该容器内
+自行启动的父子进程、忽略 TERM 的进程和 root 所有的拒绝目标执行控制测试。不操作宿主进程。
+本机 PWA/WASM 经真实 Node 和 SSH 隧道连接容器，验证 TERM/KILL、进程树去重、
+启动身份变化、权限不足不弹密码框、隐藏暂停、恢复采集和关闭后的 SSH 回收。
+确认框须等待 fresh snapshot 请求完成后再核对目标数量，不用 DOM 尚未挂载时的 count 作结果。
+退出时删除容器、隧道、配对 fixture 和所有自启服务；截图保存在系统临时目录 seal-e2e/processes/。
+
 ## 大文件、慢传输与取消
 
 按需运行 `python scripts/test.py transfers`（不加入日常 `all`，避免每次执行大文件压力测试）。
