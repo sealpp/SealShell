@@ -1,19 +1,34 @@
 <script setup lang="ts">
 import { computed, ref, type CSSProperties } from 'vue'
-import { ListboxContent, ListboxItem, ListboxRoot, PopoverAnchor, PopoverContent, PopoverPortal, PopoverRoot } from 'reka-ui'
+import { ListboxContent, ListboxItem, ListboxRoot, PopoverAnchor, PopoverContent, PopoverPortal, PopoverRoot, type FocusOutsideEvent } from 'reka-ui'
 import type { TerminalSuggestionView } from '../services/terminalSuggestions/controller'
 import { usePortalTarget } from '../ui/portal'
 
 const props = defineProps<{ suggestion: TerminalSuggestionView; appearance: CSSProperties; boundary: HTMLElement | null }>()
-const emit = defineEmits<{ accept: [command: string]; dismiss: [] }>()
+const emit = defineEmits<{ accept: [command: string]; dismiss: []; terminalKey: [event: KeyboardEvent] }>()
 const panel = ref<HTMLDivElement | null>(null)
 const listbox = ref<{ highlightFirstItem(): void; highlightItem(command: string): void } | null>(null)
 const portalTarget = usePortalTarget(computed(() => props.boundary))
 
 defineExpose({
-  focus: () => listbox.value?.highlightFirstItem(),
+  focus: (edge: 'first' | 'last') => {
+    if (edge === 'last') listbox.value?.highlightItem(props.suggestion.candidates[props.suggestion.candidates.length - 1]!.command)
+    else listbox.value?.highlightFirstItem()
+  },
   contains: (target: EventTarget | null) => target instanceof Node && !!panel.value?.contains(target),
 })
+
+function onKeydown(event: KeyboardEvent): void {
+  if (!event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey
+    && ['ArrowUp', 'ArrowDown', 'Home', 'End', 'Enter', 'Escape'].includes(event.key)) return
+  emit('terminalKey', event)
+}
+
+function onFocusOutside(event: FocusOutsideEvent): void {
+  const target = event.detail.originalEvent.target
+  // Returning to the owning terminal continues the same editing interaction.
+  if (target instanceof Node && props.boundary?.contains(target)) event.preventDefault()
+}
 </script>
 
 <template>
@@ -25,8 +40,9 @@ defineExpose({
         side="bottom" align="start" :side-offset="4" :collision-padding="8"
         :collision-boundary="boundary" :prioritize-position="true"
         @open-auto-focus.prevent @close-auto-focus.prevent
+        @focus-outside="onFocusOutside"
       >
-        <div ref="panel" class="terminal-command-suggestions-panel">
+        <div ref="panel" class="terminal-command-suggestions-panel" @keydown.capture="onKeydown">
           <div class="terminal-command-suggestions-heading">本地命令提示<span>{{ suggestion.candidates.length }} 项</span></div>
           <ListboxRoot ref="listbox" class="terminal-command-suggestions-body" selection-behavior="replace" :highlight-on-hover="true">
             <ListboxContent aria-label="命令候选" class="terminal-command-suggestions-list">
@@ -42,7 +58,7 @@ defineExpose({
               </ListboxItem>
             </ListboxContent>
           </ListboxRoot>
-          <div class="terminal-command-suggestions-help"><span>Alt+↓ 进入 · ↑↓ 选择</span><span>Enter 补入 · Esc 关闭</span></div>
+          <div class="terminal-command-suggestions-help"><span>↑↓ 选中后 Enter 补入</span><span>Esc 关闭 · Tab 远端补全</span></div>
         </div>
       </PopoverContent>
     </PopoverPortal>

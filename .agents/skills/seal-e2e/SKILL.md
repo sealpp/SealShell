@@ -146,7 +146,7 @@ loopback 后用 SSH 隧道访问。容器 sshd 设置 `LANG=C.UTF-8`，并为测
 
 ## 选择器
 
-`shell/tests/command-suggestions.spec.ts` 使用真实 xterm、独立 IndexedDB 和可延迟的回显夹具验证本地命令提示；另用实际 `ShellTerminal` 组件接入受控会话输入/输出，确认悬浮列表、鼠标/Alt+Down 主动进入、选择只补入、session 与历史落盘。覆盖受控远端灰字共存、默认 Right/Up/Down/Tab/Enter 保留、断网词库、频率、连接隔离、刷新、密码无回显、IME/选择/焦点、备用屏幕、多行粘贴、并发计数与删除清理、中文跨软换行、窄窗格边缘翻转和 resize。此 UI 套件不启动 Node，不操作用户远端；截图保存在系统临时目录 `seal-e2e/command-suggestions/`，不能把受控 ANSI 回显通过解释为任意插件、自定义提示符或真实 SSH 的完整验收。
+`shell/tests/command-suggestions.spec.ts` 使用真实 xterm、独立 IndexedDB 和可延迟的回显夹具验证本地命令提示；另用实际 `ShellTerminal` 组件接入受控会话输入/输出，确认悬浮列表、首字符触发、鼠标与直接上下键选择、选中后 Enter 只补入、session 与历史落盘。覆盖导航后继续输入/退格/Tab、Esc 关闭后远端上下键恢复、Right/Tab/未选中 Enter 保留、受控远端灰字共存、断网词库、单字符历史、频率、连接隔离、刷新、密码无回显、IME/选择/焦点、备用屏幕、多行粘贴、并发计数与删除清理、中文跨软换行、窄窗格边缘翻转和 resize。此 UI 套件不启动 Node，不操作用户远端；截图保存在系统临时目录 `seal-e2e/command-suggestions/`，不能把受控 ANSI 回显通过解释为任意插件、自定义提示符或真实 SSH 的完整验收。
 
 `配对`、`登录`、`新建连接` 文字可能出现在菜单和弹窗中，必须限定作用域：
 

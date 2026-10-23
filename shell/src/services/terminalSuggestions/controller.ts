@@ -15,7 +15,7 @@ interface SuggestionOptions {
   providers(): readonly CommandSuggestionProvider[]
   onCommand(command: string): void
   onChange(view: TerminalSuggestionView | undefined): void
-  focusList(): void
+  focusList(edge: 'first' | 'last'): void
   listContains(target: EventTarget | null): boolean
 }
 
@@ -69,6 +69,16 @@ export function attachCommandSuggestions(terminal: Terminal, options: Suggestion
     show()
   }
 
+  function forwardKey(event: KeyboardEvent): void {
+    event.stopPropagation()
+    terminal.focus()
+    // Let xterm encode control keys. For text keys, the browser delivers the
+    // following keypress/input to the now-focused terminal textarea.
+    const forwarded = new KeyboardEvent('keydown', event)
+    terminal.textarea?.dispatchEvent(forwarded)
+    if (forwarded.defaultPrevented) event.preventDefault()
+  }
+
   const subscriptions: IDisposable[] = [
     terminal.onData(data => {
       dismissedPrefix = undefined
@@ -88,11 +98,12 @@ export function attachCommandSuggestions(terminal: Terminal, options: Suggestion
   ]
 
   terminal.attachCustomKeyEventHandler(event => {
-    if (event.type !== 'keydown' || event.isComposing || composing || !event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.key !== 'ArrowDown') return true
+    if (event.type !== 'keydown' || event.isComposing || composing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || !['ArrowDown', 'ArrowUp', 'Escape'].includes(event.key)) return true
     if (!view) return true
     refresh()
     if (!view) return true
-    options.focusList()
+    if (event.key === 'Escape') dismiss()
+    else options.focusList(event.key === 'ArrowUp' ? 'last' : 'first')
     event.preventDefault()
     return false
   })
@@ -109,6 +120,7 @@ export function attachCommandSuggestions(terminal: Terminal, options: Suggestion
   return {
     refresh,
     accept,
+    forwardKey,
     dismiss,
     beforeOutput,
     reset() { tracker.reset(); dismissedPrefix = undefined; show() },

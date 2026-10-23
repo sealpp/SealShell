@@ -212,7 +212,7 @@ function initTerminal() {
       if (hostId) void rememberSuggestionCommand(hostId, command).catch(historyError)
     },
     onChange: showSuggestion,
-    focusList: () => suggestionList.value?.focus(),
+    focusList: edge => suggestionList.value?.focus(edge),
     listContains: target => suggestionList.value?.contains(target) ?? false,
   })
   const hostId = tab.value.hostId
@@ -337,7 +337,7 @@ onBeforeUnmount(() => {
       <div ref="termEl" class="shell-terminal-content">
         <TerminalCommandSuggestions
           v-if="suggestion" ref="suggestionList" :suggestion="suggestion" :appearance="suggestionAppearance" :boundary="termEl"
-          @accept="suggestions?.accept($event)" @dismiss="suggestions?.dismiss()"
+          @accept="suggestions?.accept($event)" @dismiss="suggestions?.dismiss()" @terminal-key="suggestions?.forwardKey($event)"
         />
       </div>
     </div>
