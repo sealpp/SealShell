@@ -1,6 +1,7 @@
 import type { FolderProfile, HostProfile, TerminalPreferences } from '../stores/app'
 import type { ProxyProfile } from './proxy/types'
 import type { PortRule, PortBindHost } from './ports/types'
+import { rememberCommand, type CommandHistoryEntry } from './terminalSuggestions/model'
 
 const DB_NAME = 'seal-shell'
 const DB_VERSION = 3
@@ -168,6 +169,7 @@ export async function deleteFolderTree(rootFolderIds: string[]): Promise<{ folde
     hosts.delete(id)
     credentials.delete(id)
     transaction.objectStore('meta').delete(`ports:${id}`)
+    transaction.objectStore('meta').delete(`commandHistory:${id}`)
   })
   await new Promise<void>((resolve, reject) => {
     transaction.onerror = () => reject(transaction.error ?? new Error('failed to delete folder tree'))
@@ -216,6 +218,7 @@ export async function deleteHosts(ids: string[]): Promise<void> {
     hosts.delete(id)
     credentials.delete(id)
     transaction.objectStore('meta').delete(`ports:${id}`)
+    transaction.objectStore('meta').delete(`commandHistory:${id}`)
   }
   await new Promise<void>((resolve, reject) => {
     transaction.onerror = () => reject(transaction.error ?? new Error('failed to delete hosts'))
@@ -283,4 +286,46 @@ export async function readPortBindHost(): Promise<PortBindHost> {
 }
 export async function savePortBindHost(host: PortBindHost): Promise<void> {
   await putInStore('meta', { key: 'portBindHost', host })
+}
+
+export async function readCommandHistory(hostId: string): Promise<CommandHistoryEntry[]> {
+  return (await readMeta<{ key: string; items: CommandHistoryEntry[] }>(`commandHistory:${hostId}`))?.items ?? []
+}
+
+export async function recordCommandHistory(hostId: string, command: string): Promise<CommandHistoryEntry[]> {
+  const db = await openDatabase()
+  const transaction = db.transaction(['hosts', 'meta'], 'readwrite')
+  const meta = transaction.objectStore('meta')
+  const key = `commandHistory:${hostId}`
+  const host = transaction.objectStore('hosts').get(hostId)
+  let items: CommandHistoryEntry[] = []
+  host.onsuccess = () => {
+    if (!host.result) return
+    const history = meta.get(key)
+    history.onsuccess = () => {
+      items = rememberCommand(history.result?.items ?? [], command, Date.now())
+      meta.put({ key, items })
+    }
+  }
+  await new Promise<void>((resolve, reject) => {
+    transaction.oncomplete = () => resolve()
+    transaction.onabort = () => reject(transaction.error ?? new Error('命令历史保存失败'))
+    transaction.onerror = () => reject(transaction.error ?? new Error('命令历史保存失败'))
+  })
+  return items
+}
+
+export async function clearCommandHistory(): Promise<void> {
+  const db = await openDatabase()
+  const transaction = db.transaction('meta', 'readwrite')
+  const meta = transaction.objectStore('meta')
+  const keys = meta.getAllKeys()
+  keys.onsuccess = () => {
+    for (const key of keys.result) if (typeof key === 'string' && key.startsWith('commandHistory:')) meta.delete(key)
+  }
+  await new Promise<void>((resolve, reject) => {
+    transaction.oncomplete = () => resolve()
+    transaction.onabort = () => reject(transaction.error ?? new Error('命令历史清除失败'))
+    transaction.onerror = () => reject(transaction.error ?? new Error('命令历史清除失败'))
+  })
 }
