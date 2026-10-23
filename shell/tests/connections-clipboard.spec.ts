@@ -44,6 +44,8 @@ test('copied host carries the encrypted credential under its new id', async ({ p
   await row(page, 'Root host').click({ button: 'right' })
   await menuItem(page, '复制').click()
   await pasteOnRoot(page)
+  // Paste selects the copy after its encrypted credential has been saved.
+  await expect(row(page, 'Root host-copy')).toHaveClass(/selected/)
   const password = await page.evaluate(async () => {
     const { store } = await import('/src/stores/app.ts')
     const { loadCredentialRecord } = await import('/src/services/vault.ts')
