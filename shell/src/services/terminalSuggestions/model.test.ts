@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { commonCommandProvider } from './catalog'
-import { COMMAND_HISTORY_LIMIT, findCommandSuggestion, historyProvider, rememberCommand } from './model'
+import { COMMAND_HISTORY_LIMIT, COMMAND_SUGGESTION_LIMIT, findCommandSuggestions, historyProvider, rememberCommand } from './model'
 
 describe('local command suggestions', () => {
   it('offers bundled commands without any history or network request', () => {
-    expect(findCommandSuggestion('gi', [commonCommandProvider])?.command).toBe('git status')
-    expect(findCommandSuggestion('docker p', [commonCommandProvider])?.command).toBe('docker ps')
+    expect(findCommandSuggestions('gi', [commonCommandProvider])[0]?.command).toBe('git status')
+    expect(findCommandSuggestions('docker p', [commonCommandProvider])[0]?.command).toBe('docker ps')
     for (const prefix of ['', 'g', 'Git', ' git', 'git\n', 'unknown-command']) {
-      expect(findCommandSuggestion(prefix, [commonCommandProvider])).toBeUndefined()
+      expect(findCommandSuggestions(prefix, [commonCommandProvider])).toEqual([])
     }
   })
 
@@ -15,17 +15,28 @@ describe('local command suggestions', () => {
     let history = rememberCommand([], 'git log --all', 1)
     history = rememberCommand(history, 'git log --all', 2)
     history = rememberCommand(history, 'git diff --stat', 3)
-    const suggest = () => findCommandSuggestion('git ', [commonCommandProvider, historyProvider(history)])
+    const suggest = () => findCommandSuggestions('git ', [commonCommandProvider, historyProvider(history)])[0]
     expect(suggest()).toMatchObject({ command: 'git log --all', source: 'history', uses: 2 })
     history = rememberCommand(history, 'git diff --stat', 4)
     expect(suggest()?.command).toBe('git diff --stat')
-    expect(findCommandSuggestion('git diff --stat', [historyProvider(history)])).toBeUndefined()
+    expect(findCommandSuggestions('git diff --stat', [historyProvider(history)])).toEqual([])
   })
 
   it('deduplicates sources and leaves room for another local provider', () => {
     const history = historyProvider(rememberCommand([], 'git status', 1))
-    expect(findCommandSuggestion('git s', [commonCommandProvider, history])?.source).toBe('history')
-    expect(findCommandSuggestion('my', [{ suggestions: () => [{ command: 'my-tool check', source: 'custom', priority: 2, uses: 0, lastUsed: 0 }] }])?.command).toBe('my-tool check')
+    expect(findCommandSuggestions('git s', [commonCommandProvider, history])[0]?.source).toBe('history')
+    expect(findCommandSuggestions('my', [{ suggestions: () => [{ command: 'my-tool check', source: 'custom', priority: 2, uses: 0, lastUsed: 0 }] }])[0]?.command).toBe('my-tool check')
+  })
+
+  it('returns distinct ranked candidates and bounds the visible list', () => {
+    const history = historyProvider(rememberCommand([], 'git status', 1))
+    const candidates = findCommandSuggestions('git ', [commonCommandProvider, history])
+    expect(candidates[0]).toMatchObject({ command: 'git status', source: 'history' })
+    expect(candidates.filter(candidate => candidate.command === 'git status')).toHaveLength(1)
+    expect(candidates.map(candidate => candidate.command)).toEqual(expect.arrayContaining(['git diff', 'git log --oneline']))
+    const many = historyProvider(Array.from({ length: 20 }, (_, index) => ({ command: `echo ${index}`, uses: index + 1, lastUsed: index })))
+    expect(findCommandSuggestions('echo ', [many])).toHaveLength(COMMAND_SUGGESTION_LIMIT)
+    expect(findCommandSuggestions('echo ', [many])[0].command).toBe('echo 19')
   })
 
   it('does not store leading-space opt-outs, multiline input or control sequences', () => {

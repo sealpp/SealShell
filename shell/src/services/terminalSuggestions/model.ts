@@ -18,6 +18,7 @@ export interface CommandSuggestionProvider {
 
 export const COMMAND_HISTORY_LIMIT = 200
 export const COMMAND_LENGTH_LIMIT = 2048
+export const COMMAND_SUGGESTION_LIMIT = 8
 
 export function canRememberCommand(command: string): boolean {
   return command.length >= 2 && command.length <= COMMAND_LENGTH_LIMIT
@@ -46,8 +47,8 @@ function compare(a: CommandSuggestion, b: CommandSuggestion): number {
     || a.command.length - b.command.length || a.command.localeCompare(b.command)
 }
 
-export function findCommandSuggestion(prefix: string, providers: readonly CommandSuggestionProvider[]): CommandSuggestion | undefined {
-  if (!canRememberCommand(prefix)) return undefined
+export function findCommandSuggestions(prefix: string, providers: readonly CommandSuggestionProvider[]): CommandSuggestion[] {
+  if (!canRememberCommand(prefix)) return []
   const candidates = new Map<string, CommandSuggestion>()
   for (const provider of providers) {
     for (const candidate of provider.suggestions(prefix)) {
@@ -56,5 +57,5 @@ export function findCommandSuggestion(prefix: string, providers: readonly Comman
       if (!previous || compare(candidate, previous) < 0) candidates.set(candidate.command, candidate)
     }
   }
-  return [...candidates.values()].sort(compare)[0]
+  return [...candidates.values()].sort(compare).slice(0, COMMAND_SUGGESTION_LIMIT)
 }

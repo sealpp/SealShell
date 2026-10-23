@@ -1,6 +1,6 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
 import { TerminalCommandLine } from './commandLine'
-import { findCommandSuggestion, type CommandSuggestionProvider } from './model'
+import { findCommandSuggestions, type CommandSuggestionProvider } from './model'
 
 export interface TerminalSuggestionView {
   prefix: string
@@ -41,7 +41,7 @@ export function attachCommandSuggestions(terminal: Terminal, options: Suggestion
     }
     const line = tracker.snapshot()
     if (!line || line.column >= terminal.cols || line.command === dismissedPrefix) { show(); return }
-    const suggestion = findCommandSuggestion(line.command, options.providers())
+    const suggestion = findCommandSuggestions(line.command, options.providers())[0]
     show(suggestion ? {
       ...line, prefix: line.command, command: suggestion.command,
       suffix: suggestion.command.slice(line.command.length), source: suggestion.source,
