@@ -227,6 +227,8 @@ unshare --net -- bash -c 'ip link set lo up; node .agents/skills/seal-e2e/run-fi
 
 `shell/tests/editor.spec.ts` 使用实际 Dockview 与内存文件后端，验证中文深色查找替换、行号/高亮/折叠、Alt+Z、Ctrl+S、BOM/换行符、失败保留、保存期间编辑、编码重开清空旧撤销、同路径隔离、移动/隐藏恢复和关闭释放模型。加载未完成就关闭时，不得留下孤儿模型。
 
+查找栏 tooltip 回归覆盖普通窗口和 150% DPI 窄窗口：鼠标静止跨越多个移出延迟周期，检查同一提示节点持续存在、不与按钮重叠、按钮持续命中，并在原位置点击关闭。查找栏通过位移收起，关闭状态检查 `aria-hidden`，不能仅用 Playwright 的可见性判断。
+
 生产离线检查：先在 shell 执行 `npm run build`，再运行 `node tests/editor-offline.mjs`。使用独立 9325 预览端口和新浏览器上下文，安装 PWA 缓存后断网，首次打开真实编辑面板，确认高亮、中文查找栏、CSS/图标字体和基础 Worker 已缓存；产物不应包含语言服务 Worker。测试自动关闭预览服务器。
 
 Monaco 使用 EditContext 时，textarea 可能只是只读的 IME 辅助节点。端到端输入先点击 `.monaco-editor .view-lines`，再发送键盘事件；查找/替换输入使用可访问名称「查找」「替换」，不强制点击隐藏 textarea。

@@ -109,6 +109,9 @@ onBeforeUnmount(() => {
 .editor-path { flex: 1; min-width: 0; color: var(--workbench-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .editor-toolbar button { width: 26px; padding: 0; }
 .editor-host { min-height: 0; min-width: 0; flex: 1; overflow: hidden; }
+/* Keep Monaco's measured hover size after positioning near a pane edge. Shrinking
+   it there wraps the label, increases its height and covers the hovered button. */
+.editor-host :deep(.workbench-hover-container) { width: max-content; }
 .editor-error { padding: 8px 12px; color: #f48771; }
 .editor-loading { padding: 8px 12px; color: var(--workbench-text-muted); }
 </style>

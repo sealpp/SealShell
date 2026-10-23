@@ -50,6 +50,50 @@ test('renders dark local syntax, line numbers, folding, Chinese find/replace and
   expect(errors).toEqual([])
 })
 
+for (const [name, viewport, deviceScaleFactor] of [
+  ['desktop', { width: 1500, height: 900 }, 1],
+  ['narrow at 150% DPI', { width: 780, height: 850 }, 1.5],
+] as const) {
+  test.describe(`find tooltips: ${name}`, () => {
+    test.use({ viewport, deviceScaleFactor })
+
+    test('keeps the close tooltip stable without covering its button', async ({ page }) => {
+      await pane(page).getByRole('button', { name: '查找/替换', exact: true }).click()
+      const find = pane(page).locator('.find-widget')
+      const close = find.getByRole('button', { name: '关闭 (Escape)', exact: true })
+      await close.hover()
+      const tooltip = page.locator('.workbench-hover', { hasText: '关闭 (Escape)' })
+      await expect(tooltip).toBeVisible()
+      const stable = await tooltip.evaluate(async element => {
+        const button = document.querySelector('.find-widget [aria-label="关闭 (Escape)"]')!
+        const target = button.getBoundingClientRect()
+        const start = performance.now()
+        // Observe multiple mouse-out debounce intervals with the pointer stationary.
+        while (performance.now() - start < 800) {
+          await new Promise(requestAnimationFrame)
+          const bounds = element.getBoundingClientRect()
+          const hit = document.elementFromPoint(target.x + target.width / 2, target.y + target.height / 2)
+          if (!element.isConnected || !button.contains(hit)) return false
+          if (bounds.bottom > target.top && bounds.top < target.bottom
+            && bounds.right > target.left && bounds.left < target.right) return false
+        }
+        return true
+      })
+      expect(stable).toBe(true)
+      // Click where the pointer has stayed; do not wait for a gap in a flickering tooltip.
+      await page.mouse.down()
+      await page.mouse.up()
+      await expect(find).toHaveAttribute('aria-hidden', 'true')
+      await expect(tooltip).toHaveCount(0)
+      await pane(page).locator('.view-lines').click()
+      await page.keyboard.press('Control+f')
+      await expect(find).toHaveAttribute('aria-hidden', 'false')
+      await page.keyboard.press('Escape')
+      await expect(find).toHaveAttribute('aria-hidden', 'true')
+    })
+  })
+}
+
 test('keeps same-path files isolated, retains undo through hiding and releases models on close', async ({ page }) => {
   await replace(page, 'first_draft')
   await page.evaluate(() => (window as any).editorFixture.add('second', '/etc/setup.py', 'second host'))
