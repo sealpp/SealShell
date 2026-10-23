@@ -11,6 +11,7 @@ import type { ProcessPlan, ProcessRow, ProcessScope, ProcessSignal } from '../se
 import UiDialog from '../components/UiDialog.vue'
 import UiDropdownMenu from '../components/UiDropdownMenu.vue'
 import ProxyErrorAction from '../components/ProxyErrorAction.vue'
+import ProcessIcon from '../components/ProcessIcon.vue'
 
 const props = defineProps<{ params: { params: { tabId: string } } }>()
 function formatFileSize(bytes: number): string {
@@ -194,6 +195,8 @@ onBeforeUnmount(() => {
                     <template v-else-if="cell.column.id === 'name'">
                       <span v-if="tree" class="process-indent" :style="{ width: rows[item.index].depth * 14 + 'px' }"></span>
                       <button v-if="tree && rows[item.index].getCanExpand()" type="button" class="process-expand" :aria-label="(rows[item.index].getIsExpanded() ? '收起进程 ' : '展开进程 ') + rows[item.index].original.pid" :aria-expanded="rows[item.index].getIsExpanded()" @click.stop="rows[item.index].toggleExpanded()"><IconChevronDown v-if="rows[item.index].getIsExpanded()" :size="12" /><IconChevronRight v-else :size="12" /></button>
+                      <span v-else-if="tree" class="process-tree-spacer" aria-hidden="true"></span>
+                      <ProcessIcon :name="rows[item.index].original.name" />
                       <span class="process-text" :title="rows[item.index].original.name">{{ rows[item.index].original.name }}</span>
                     </template>
                     <span v-else class="process-text" :title="display(rows[item.index].original, cell.column.id)">{{ display(rows[item.index].original, cell.column.id) }}</span>
@@ -208,7 +211,7 @@ onBeforeUnmount(() => {
           </ContextMenuContent></ContextMenuPortal>
         </ContextMenuRoot>
         <aside v-if="detail" class="process-detail" aria-label="进程详情">
-          <header><strong>{{ detail.name }}</strong><button type="button" aria-label="关闭进程详情" @click="detail = undefined"><IconX :size="14" /></button></header>
+          <header><strong class="process-detail-name"><ProcessIcon :name="detail.name" /><span class="process-text">{{ detail.name }}</span></strong><button type="button" aria-label="关闭进程详情" @click="detail = undefined"><IconX :size="14" /></button></header>
           <p v-if="!detailCurrent" class="process-gone">进程已退出或当前不可见</p>
           <dl><dt>PID / 父 PID</dt><dd>{{ detail.pid }} / {{ detail.ppid }}</dd><dt>用户 / UID</dt><dd>{{ detail.user }} / {{ detail.uid }}</dd>
             <dt>状态</dt><dd>{{ processStateLabels[detail.state] ?? detail.state }}</dd><dt>CPU（单核 100%）</dt><dd>{{ display(detail, 'cpu') }}</dd>
@@ -232,6 +235,8 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.process-tree-spacer { width: 12px; flex: 0 0 12px; }
+.process-detail-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .process-panel{height:100%;min-width:0;min-height:0;display:flex;flex-direction:column;background:#1e1e1e;color:#ccc;font-size:12px}
 .process-toolbar{display:flex;align-items:center;gap:6px;padding:6px 8px;background:#252526;flex-wrap:wrap;border-bottom:1px solid #333}.process-host{max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.process-toolbar input[type=search]{flex:1;min-width:150px}.process-panel input,.process-panel button{font:inherit}.process-panel input{background:#1e1e1e;color:#ddd;border:1px solid #555;padding:4px}.process-panel button{background:#2d2d2d;border:1px solid #444;color:inherit;padding:4px 7px;cursor:pointer}.process-panel button:hover,.process-panel button[aria-pressed=true]{background:#37373d;color:#fff}.process-panel button:disabled{opacity:.45;cursor:default}.process-connection{padding:20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}.process-workspace{display:flex;flex:1;min-height:0;min-width:0}.process-table-scroll{position:relative;flex:1;min-width:0;overflow:auto;outline:none}.process-table-head{display:flex;position:sticky;top:0;z-index:2;background:#252526;height:32px;border-bottom:1px solid #444;box-sizing:border-box}.process-cell{position:relative;box-sizing:border-box;flex-shrink:0;display:flex;align-items:center;gap:4px;padding:0 7px;overflow:hidden}.process-cell input[type=checkbox]{width:14px;height:14px;accent-color:#3794ff;flex-shrink:0}.process-cell>button{border:0;background:transparent;padding:0;white-space:nowrap}.process-column-resizer{position:absolute;right:0;top:0;height:100%;width:6px;cursor:col-resize;touch-action:none}.process-column-resizer:hover{background:#3794ff}.process-virtual-body{position:relative;min-width:100%}.process-row{display:flex;position:absolute;left:0;right:0;top:0;height:30px;box-sizing:border-box;border-bottom:1px solid #292929}.process-row:hover{background:#2a2d2e}.process-row.selected{background:#094771;color:#fff}.process-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}.process-indent,.process-expand{flex-shrink:0}.process-empty{padding:22px;text-align:center;color:#888}.process-detail{box-sizing:border-box;width:320px;max-width:46%;min-width:200px;border-left:1px solid #444;overflow:auto;padding:10px 12px;background:#252526}.process-detail header{display:flex;align-items:center;justify-content:space-between;gap:8px}.process-detail header strong{overflow:hidden;text-overflow:ellipsis}.process-detail header button{padding:2px;display:flex}.process-detail dl{margin:12px 0}.process-detail dt{color:#999;margin-top:10px}.process-detail dd{margin:3px 0;color:#ddd;overflow-wrap:anywhere}.process-command{white-space:pre-wrap;font-family:ui-monospace,monospace}.process-footer{display:flex;justify-content:space-between;padding:5px 10px;color:#999;border-top:1px solid #333;font-variant-numeric:tabular-nums}.process-error,.process-gone{padding:7px;color:#f48771}.process-results{padding:6px 10px;border-bottom:1px solid #444}.process-results summary{cursor:pointer}.process-result-list{max-height:95px;overflow:auto;margin:6px 0}.process-result-list .failed,.process-danger{color:#f48771}.process-confirm-list{max-height:35vh;overflow:auto;border:1px solid #444;padding:8px}.process-confirm-list>div{padding:4px}.process-confirm-list strong{display:inline-block;min-width:70px}.process-confirm-list span{color:#999;margin-left:8px}
 </style>
