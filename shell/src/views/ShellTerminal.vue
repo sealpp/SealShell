@@ -15,7 +15,7 @@ import type { CommandContext } from '../services/context'
 import { getTerminalFontFamily, getTerminalTheme } from '../services/terminalPreferences'
 import { encodingDecoder } from '../services/encodings'
 import { registerTerminalDirectoryHandlers } from '../services/terminalDirectory'
-import TerminalCommandHint from '../components/TerminalCommandHint.vue'
+import TerminalCommandSuggestions from '../components/TerminalCommandSuggestions.vue'
 import { attachCommandSuggestions, type TerminalSuggestionView } from '../services/terminalSuggestions/controller'
 import { commonCommandProvider } from '../services/terminalSuggestions/catalog'
 import { historyProvider } from '../services/terminalSuggestions/model'
@@ -32,6 +32,7 @@ let terminal: Terminal | null = null
 let suggestions: ReturnType<typeof attachCommandSuggestions> | undefined
 const suggestion = shallowRef<TerminalSuggestionView>()
 const suggestionAppearance = shallowRef<CSSProperties>({})
+const suggestionList = ref<InstanceType<typeof TerminalCommandSuggestions> | null>(null)
 let fitAddon: FitAddon | null = null
 let resizeObserver: ResizeObserver | null = null
 let fitTimer: number | null = null
@@ -65,13 +66,7 @@ function showSuggestion(value: TerminalSuggestionView | undefined): void {
   suggestionAppearance.value = {
     left: `${screenRect.left - containerRect.left + value.column * cellWidth}px`,
     top: `${screenRect.top - containerRect.top + value.row * cellHeight}px`,
-    maxWidth: `${Math.max(0, (terminal.cols - value.column) * cellWidth)}px`,
     height: `${cellHeight}px`,
-    lineHeight: `${cellHeight}px`,
-    fontFamily: terminal.options.fontFamily,
-    fontSize: `${terminal.options.fontSize}px`,
-    fontWeight: terminal.options.fontWeight,
-    letterSpacing: `${terminal.options.letterSpacing}px`,
   }
 }
 
@@ -217,6 +212,8 @@ function initTerminal() {
       if (hostId) void rememberSuggestionCommand(hostId, command).catch(historyError)
     },
     onChange: showSuggestion,
+    focusList: () => suggestionList.value?.focus(),
+    listContains: target => suggestionList.value?.contains(target) ?? false,
   })
   const hostId = tab.value.hostId
   if (hostId) void loadSuggestionHistory(hostId).catch(historyError)
@@ -338,7 +335,10 @@ onBeforeUnmount(() => {
     <div class="shell-terminal">
       <div v-if="tab.state === 'error' && tab.proxySource" class="connection-error"><span>{{ tab.error }}</span><ProxyErrorAction :source="tab.proxySource" :message="tab.error" /></div>
       <div ref="termEl" class="shell-terminal-content">
-        <TerminalCommandHint v-if="suggestion" :suggestion="suggestion" :appearance="suggestionAppearance" />
+        <TerminalCommandSuggestions
+          v-if="suggestion" ref="suggestionList" :suggestion="suggestion" :appearance="suggestionAppearance" :boundary="termEl"
+          @accept="suggestions?.accept($event)" @dismiss="suggestions?.dismiss()"
+        />
       </div>
     </div>
   </CommandContextMenu>

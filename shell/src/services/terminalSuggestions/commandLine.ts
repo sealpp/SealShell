@@ -115,16 +115,16 @@ export class TerminalCommandLine {
     if (!this.anchor || buffer.type !== 'normal' || buffer.viewportY !== buffer.baseY) return undefined
     const cursorRow = buffer.baseY + buffer.cursorY
     const line = readAnchoredLine(buffer, this.anchor, this.terminal.cols)
-    if (!line || cursorRow !== line.endRow) return undefined
+    if (!line || cursorRow < this.anchor.marker.line || cursorRow > line.endRow) return undefined
     const lastLine = buffer.getLine(cursorRow)!
-    if (lastLine.translateToString(true, buffer.cursorX).trimEnd()) return undefined
     let beforeCursor = ''
     for (let row = this.anchor.marker.line; row < cursorRow; row++) beforeCursor += wrappedRowText(buffer, row, this.terminal.cols)
     beforeCursor += lastLine.translateToString(false, 0, buffer.cursorX)
     if (!beforeCursor.startsWith(this.anchor.prefix)) return undefined
     const command = beforeCursor.slice(this.anchor.prefix.length)
     // A slow echo may still show an earlier prefix while newer input is in
-    // flight. Only offer a suffix after all locally typed text is visible.
+    // flight. Text after the cursor may be a remote autosuggestion; the local
+    // list uses only the echoed prefix that agrees with our known input.
     if (command !== this.expectedCommand) return undefined
     return { command, row: buffer.cursorY, column: buffer.cursorX }
   }

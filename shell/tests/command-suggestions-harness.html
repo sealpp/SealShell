@@ -1,14 +1,14 @@
 <!doctype html>
 <html lang="zh-CN">
   <head><meta charset="UTF-8"><title>Command suggestions harness</title>
-    <style>html,body,#app{margin:0;height:100%;background:#0d0d0d;color:#ddd}.terminal{position:relative;width:760px;height:340px;margin:16px}.controls{display:flex;gap:12px;padding:12px}button{font:inherit}</style>
+    <style>html,body,#app{margin:0;height:100%;background:#0d0d0d;color:#ddd}.terminal{position:relative;width:min(760px,calc(100vw - 32px));height:340px;margin:16px}.controls{display:flex;gap:12px;padding:12px}button{font:inherit}</style>
   </head>
   <body><div id="app"></div><script type="module">
     import { createApp, h, ref, shallowRef, onMounted, onBeforeUnmount } from 'vue'
     import { Terminal } from '@xterm/xterm'
     import '@xterm/xterm/css/xterm.css'
     import '/src/styles/workbench.css'
-    import TerminalCommandHint from '/src/components/TerminalCommandHint.vue'
+    import TerminalCommandSuggestions from '/src/components/TerminalCommandSuggestions.vue'
     import SettingsDialog from '/src/components/SettingsDialog.vue'
     import InteractionDialog from '/src/components/InteractionDialog.vue'
     import '/src/services/actions'
@@ -26,6 +26,7 @@
     const write = text => new Promise(resolve => { adapter.beforeOutput(); terminal.write(text, resolve) })
     window.harness = {
       sent, write,
+      accept: command => adapter.accept(command),
       echo: value => { echo = value },
       readHistory: (id = 'suggestions-a') => readCommandHistory(id),
       record: recordCommandHistory,
@@ -42,6 +43,7 @@
         const container = ref(null)
         const suggestion = shallowRef()
         const appearance = shallowRef({})
+        const list = ref(null)
         const ready = ref(false)
         watch(() => [commandSuggestions.enabled, commandSuggestions.rememberHistory, commandSuggestions.history['suggestions-a']], () => adapter?.refresh())
         onMounted(async () => {
@@ -55,6 +57,8 @@
           adapter = attachCommandSuggestions(terminal, {
             enabled: () => commandSuggestions.enabled,
             active: () => true,
+            focusList: () => list.value?.focus(),
+            listContains: target => list.value?.contains(target) ?? false,
             providers: () => [commonCommandProvider, historyProvider(commandSuggestions.rememberHistory ? commandSuggestions.history['suggestions-a'] ?? [] : [])],
             onCommand: command => { void rememberSuggestionCommand('suggestions-a', command) },
             onChange: value => {
@@ -63,7 +67,7 @@
               const screen = terminal.element.querySelector('.xterm-screen').getBoundingClientRect()
               const outer = container.value.getBoundingClientRect()
               const width = screen.width / terminal.cols, height = screen.height / terminal.rows
-              appearance.value = { left: `${screen.left - outer.left + value.column * width}px`, top: `${screen.top - outer.top + value.row * height}px`, maxWidth: `${(terminal.cols - value.column) * width}px`, height: `${height}px`, lineHeight: `${height}px`, fontFamily: terminal.options.fontFamily, fontSize: '14px' }
+              appearance.value = { left: `${screen.left - outer.left + value.column * width}px`, top: `${screen.top - outer.top + value.row * height}px`, height: `${height}px` }
             },
           })
           terminal.onData(data => {
@@ -78,7 +82,7 @@
         })
         onBeforeUnmount(() => { adapter?.dispose(); terminal?.dispose() })
         return () => h('main', [
-          h('div', { class: 'terminal', ref: container }, suggestion.value ? h(TerminalCommandHint, { suggestion: suggestion.value, appearance: appearance.value }) : []),
+          h('div', { class: 'terminal', ref: container }, suggestion.value ? h(TerminalCommandSuggestions, { ref: list, suggestion: suggestion.value, appearance: appearance.value, boundary: container.value, onAccept: command => adapter.accept(command), onDismiss: () => adapter.dismiss() }) : []),
           h('div', { class: 'controls' }, [h('button', { onClick: () => { store.settingsSection = 'suggestions'; store.settingsModalOpen = true } }, '命令提示设置'), h('input', { 'aria-label': 'Other input' }), h('span', { id: 'ready' }, String(ready.value))]),
           store.settingsModalOpen ? h(SettingsDialog) : null,
           h(InteractionDialog),

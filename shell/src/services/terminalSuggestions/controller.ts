@@ -1,12 +1,10 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
 import { TerminalCommandLine } from './commandLine'
-import { findCommandSuggestions, type CommandSuggestionProvider } from './model'
+import { findCommandSuggestions, type CommandSuggestion, type CommandSuggestionProvider } from './model'
 
 export interface TerminalSuggestionView {
   prefix: string
-  command: string
-  suffix: string
-  source: string
+  candidates: readonly CommandSuggestion[]
   row: number
   column: number
 }
@@ -17,6 +15,8 @@ interface SuggestionOptions {
   providers(): readonly CommandSuggestionProvider[]
   onCommand(command: string): void
   onChange(view: TerminalSuggestionView | undefined): void
+  focusList(): void
+  listContains(target: EventTarget | null): boolean
 }
 
 export function attachCommandSuggestions(terminal: Terminal, options: SuggestionOptions) {
@@ -30,22 +30,38 @@ export function attachCommandSuggestions(terminal: Terminal, options: Suggestion
   let dismissedPrefix: string | undefined
 
   function show(next?: TerminalSuggestionView): void {
+    const restoreFocus = !next && options.listContains(document.activeElement)
     view = next
     options.onChange(next)
+    if (restoreFocus) terminal.focus()
   }
 
   function refresh(): void {
-    if (!options.enabled() || !options.active() || pendingOutput || composing || terminal.hasSelection() || !element.contains(document.activeElement)) {
+    if (!options.enabled() || !options.active() || pendingOutput || composing || terminal.hasSelection()
+      || (!element.contains(document.activeElement) && !options.listContains(document.activeElement))) {
       show()
       return
     }
     const line = tracker.snapshot()
-    if (!line || line.column >= terminal.cols || line.command === dismissedPrefix) { show(); return }
-    const suggestion = findCommandSuggestions(line.command, options.providers())[0]
-    show(suggestion ? {
-      ...line, prefix: line.command, command: suggestion.command,
-      suffix: suggestion.command.slice(line.command.length), source: suggestion.source,
-    } : undefined)
+    if (!line || line.command === dismissedPrefix) { show(); return }
+    const candidates = findCommandSuggestions(line.command, options.providers())
+    show(candidates.length ? { prefix: line.command, candidates, row: line.row, column: Math.min(line.column, terminal.cols - 1) } : undefined)
+  }
+
+  function dismiss(): void {
+    dismissedPrefix = view?.prefix
+    show()
+  }
+
+  function accept(command: string): void {
+    const previous = view
+    refresh()
+    if (!view || view.prefix !== previous?.prefix || !view.candidates.some(candidate => candidate.command === command)) return
+    const suffix = command.slice(view.prefix.length)
+    dismiss()
+    terminal.focus()
+    // Selecting a candidate inserts text through the normal session input path.
+    terminal.input(suffix, true)
   }
 
   function beforeOutput(): void {
@@ -72,28 +88,17 @@ export function attachCommandSuggestions(terminal: Terminal, options: Suggestion
   ]
 
   terminal.attachCustomKeyEventHandler(event => {
-    if (event.type !== 'keydown' || event.isComposing || composing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return true
+    if (event.type !== 'keydown' || event.isComposing || composing || !event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.key !== 'ArrowDown') return true
     if (!view) return true
-    const previous = view
     refresh()
-    if (!view || previous.prefix !== view.prefix || previous.command !== view.command) return true
-    if (event.key === 'Escape') {
-      dismissedPrefix = view.prefix
-      show()
-      event.preventDefault()
-      return false
-    }
-    if (event.key !== 'ArrowRight') return true
-    const suffix = view.suffix
-    show()
-    // Use the normal input path so accepting a suggestion cannot execute it.
-    terminal.input(suffix, true)
+    if (!view) return true
+    options.focusList()
     event.preventDefault()
     return false
   })
 
   const focus = () => refresh()
-  const blur = () => show()
+  const blur = () => queueMicrotask(refresh)
   const compositionStart = () => { composing = true; show() }
   const compositionEnd = () => { composing = false; refresh() }
   element.addEventListener('focusin', focus)
@@ -103,6 +108,8 @@ export function attachCommandSuggestions(terminal: Terminal, options: Suggestion
 
   return {
     refresh,
+    accept,
+    dismiss,
     beforeOutput,
     reset() { tracker.reset(); dismissedPrefix = undefined; show() },
     dispose() {
