@@ -139,11 +139,23 @@ export function setEditorEncoding(tabId: string, encoding: string, bom: boolean)
   tab.editor.dirty = true
 }
 
-export async function saveEditorTab(tabId: string): Promise<void> {
+const saves = new Map<string, Promise<void>>()
+
+export function saveEditorTab(tabId: string): Promise<void> {
+  // Toolbar, shortcut and save-and-close requests share one per-file queue.
+  const previous = saves.get(tabId) ?? Promise.resolve()
+  const operation = previous.catch(() => undefined).then(() => writeEditorTab(tabId))
+  const pending = operation.finally(() => { if (saves.get(tabId) === pending) saves.delete(tabId) })
+  saves.set(tabId, pending)
+  return pending
+}
+
+async function writeEditorTab(tabId: string): Promise<void> {
   const tab = store.tabs.find((candidate) => candidate.id === tabId) as EditorTab | undefined
   const backend = getFileBackend(tabId)
   if (!tab || !backend) throw new Error('Editor session is unavailable')
-  const payload = encodeFile(tab.editor)
+  const snapshot = { ...tab.editor }
+  const payload = encodeFile(snapshot)
   const memorySource: FileBackend = {
     paths: backend.paths,
     disconnect: async () => undefined,
@@ -156,6 +168,8 @@ export async function saveEditorTab(tabId: string): Promise<void> {
     rename: async () => ({ atomic: true }),
   }
   await transferFile(memorySource, backend, tab.editor.path, tab.editor.path, { })
-  tab.editor.dirty = false
-  tab.editor.size = payload.byteLength
+  const current = tab.editor
+  current.dirty = current.content !== snapshot.content || current.encoding !== snapshot.encoding
+    || current.bom !== snapshot.bom || current.lineEnding !== snapshot.lineEnding || current.contentVersion !== snapshot.contentVersion
+  current.size = payload.byteLength
 }
