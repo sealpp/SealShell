@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { DockviewVue, themeDark } from 'dockview-vue'
 import type { DockviewApi, DockviewPanelApi, DockviewReadyEvent } from 'dockview-vue'
-import { IconFile, IconFolder, IconChartLine, IconX } from '@tabler/icons-vue'
+import { IconFile, IconFolder, IconChartLine, IconX } from '../ui/icons'
 import { store, getActiveBottomPanelTabId, setBottomPanelActiveTab, type Tab, type BottomPanelCategory } from '../stores/app'
 import { commandService } from '../services/commands'
 import { arrangeWorkspaceInstances, canDropWorkspaceInstance } from '../services/workspace-docking'
@@ -565,14 +565,14 @@ onBeforeUnmount(() => {
         @dragend="onDragEnd"
       >
         <span class="workspace-instance-marker" aria-hidden="true">{{ instanceMarker(tab.id) }}</span>
-        <IconFolder v-if="tab.kind === 'file'" :size="14" aria-hidden="true" />
-        <IconChartLine v-else-if="tab.kind === 'monitor'" :size="14" aria-hidden="true" />
+        <IconFolder v-if="tab.kind === 'file'" :size="16" aria-hidden="true" />
+        <IconChartLine v-else-if="tab.kind === 'monitor'" :size="16" aria-hidden="true" />
         <span v-else-if="tab.kind === 'port'" class="codicon codicon-plug" aria-hidden="true"></span>
         <span v-else-if="tab.kind === 'process'" class="codicon codicon-list-tree" aria-hidden="true"></span>
-        <IconFile v-else :size="14" aria-hidden="true" />
+        <IconFile v-else :size="16" aria-hidden="true" />
         <span class="workspace-instance-label" :title="panelTitle(tab)">{{ panelTitle(tab) }}</span>
         <span class="workspace-instance-state" :class="tab.state" aria-hidden="true"></span>
-        <span class="workspace-instance-close" role="button" title="关闭" @click.stop="closeInstance(tab.id)"><IconX :size="13" /></span>
+        <span class="workspace-instance-close" role="button" title="关闭" @click.stop="closeInstance(tab.id)"><IconX :size="16" /></span>
       </button>
     </aside>
     </CommandContextMenu>

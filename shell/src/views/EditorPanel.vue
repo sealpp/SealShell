@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { editor } from 'monaco-editor/editor/editor.api'
-import { IconDeviceFloppy, IconSearch, IconX } from '@tabler/icons-vue'
+import { IconDeviceFloppy, IconSearch, IconX } from '../ui/icons'
 import ProxyErrorAction from '../components/ProxyErrorAction.vue'
 import { setBottomPanelActiveTab, store, type EditorTab } from '../stores/app'
 import { saveEditorTab } from '../services/sftp/editor-tabs'

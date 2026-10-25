@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { columnSizingFeature, createSortedRowModel, createExpandedRowModel, rowSortingFeature, rowSelectionFeature, rowExpandingFeature, sortFns, tableFeatures, useTable, type ColumnDef, type RowSelectionState, type ExpandedState } from '@tanstack/vue-table'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { ContextMenuContent, ContextMenuItem, ContextMenuPortal, ContextMenuRoot, ContextMenuTrigger, DropdownMenuItem } from 'reka-ui'
-import { IconChevronDown, IconChevronRight, IconRefresh, IconX } from '@tabler/icons-vue'
+import { IconChevronDown, IconChevronRight, IconRefresh, IconX } from '../ui/icons'
 import { store, setBottomPanelActiveTab, type ProcessesTab } from '../stores/app'
 import { prepareProcessAction, executeProcessAction, cancelProcessAction, refreshProcesses, retryProcesses, setProcessVisible } from '../services/processes/runtime'
 import { processViewRows, processStateLabels, outcomeLabels, type ProcessTreeRow } from '../services/processes/view-model'
@@ -160,7 +160,7 @@ onBeforeUnmount(() => {
       <input v-model="query" type="search" aria-label="搜索进程" placeholder="搜索进程、PID、用户或命令" />
       <button type="button" :aria-pressed="tree" @click="tree = !tree">{{ tree ? '树视图' : '列表视图' }}</button>
       <button type="button" :disabled="tab.state !== 'online' || state.busy" :aria-pressed="state.paused" @click="state.paused = !state.paused">{{ state.paused ? '继续刷新' : '暂停刷新' }}</button>
-      <button type="button" aria-label="刷新进程" title="刷新进程" :disabled="state.loading || state.busy || tab.state !== 'online'" @click="refreshProcesses(tab.id)"><IconRefresh :size="15" /></button>
+      <button type="button" aria-label="刷新进程" title="刷新进程" :disabled="state.loading || state.busy || tab.state !== 'online'" @click="refreshProcesses(tab.id)"><IconRefresh :size="16" /></button>
       <UiDropdownMenu align="end" content-class="command-menu-content">
         <template #trigger><button type="button" :disabled="actionDisabled">结束操作{{ selectedCount ? ' · ' + selectedCount : '' }}</button></template>
         <DropdownMenuItem v-for="action in actions" :key="action.title" class="command-menu-item" @select="prepare(action.signal, action.scope)">{{ action.title }}</DropdownMenuItem>
@@ -221,7 +221,7 @@ onBeforeUnmount(() => {
           </ContextMenuContent></ContextMenuPortal>
         </ContextMenuRoot>
         <aside v-if="detail" class="process-detail" aria-label="进程详情">
-          <header><strong class="process-detail-name"><ProcessIcon :process="detail" /><span class="process-text">{{ detail.name }}</span></strong><button type="button" class="workbench-list-action" aria-label="关闭进程详情" @click="detail = undefined"><IconX :size="14" /></button></header>
+          <header><strong class="process-detail-name"><ProcessIcon :process="detail" /><span class="process-text">{{ detail.name }}</span></strong><button type="button" class="workbench-list-action" aria-label="关闭进程详情" @click="detail = undefined"><IconX :size="16" /></button></header>
           <p v-if="!detailCurrent" class="process-gone">进程已退出或当前不可见</p>
           <dl><dt>PID / 父 PID</dt><dd>{{ detail.pid }} / {{ detail.ppid }}</dd><dt>用户 / UID</dt><dd>{{ detail.user }} / {{ detail.uid }}</dd>
             <dt>状态</dt><dd>{{ processStateLabels[detail.state] ?? detail.state }}</dd><dt>CPU（单核 100%）</dt><dd>{{ display(detail, 'cpu') }}</dd>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { IconAlertTriangle, IconArrowsUpDown, IconCheck, IconCircleMinus, IconClock, IconLoader2 } from '@tabler/icons-vue'
+import { IconAlertTriangle, IconArrowsUpDown, IconCheck, IconCircleMinus, IconClock, IconLoader2 } from '../ui/icons'
 import { PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from 'reka-ui'
 import { transferRuntime } from '../services/sftp/transfer-runtime'
 import TransferPanel from '../views/TransferPanel.vue'
@@ -42,9 +42,9 @@ const preview = computed(() => {
   <PopoverRoot v-model:open="transferRuntime.panelOpen">
     <PopoverTrigger as-child>
       <button type="button" class="transfer-status" :class="{ active: transferRuntime.panelOpen, attention: preview.attention }" aria-label="传输详情" :aria-description="preview.text" :title="preview.title">
-        <component :is="preview.icon" :size="14" :class="{ spinning: preview.busy }" aria-hidden="true" />
+        <component :is="preview.icon" :size="16" :class="{ spinning: preview.busy }" aria-hidden="true" />
         <span>{{ preview.text }}</span>
-        <IconAlertTriangle v-if="preview.busy && preview.attention" :size="14" aria-hidden="true" />
+        <IconAlertTriangle v-if="preview.busy && preview.attention" :size="16" aria-hidden="true" />
       </button>
     </PopoverTrigger>
     <PopoverPortal :to="portalTarget">

@@ -1,4 +1,4 @@
-import { IconLinkOff, IconPlug } from '@tabler/icons-vue'
+import { IconLinkOff, IconPlug } from '../ui/icons'
 import { store } from '../stores/app'
 import { disconnectNode } from './ws'
 import { registerAction } from './commands'

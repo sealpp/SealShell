@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
-import { IconChevronDown, IconChevronRight, IconFolder, IconFolderOpen, IconPlug } from '@tabler/icons-vue'
+import { IconChevronDown, IconChevronRight, IconFolder, IconFolderOpen, IconPlug } from '../ui/icons'
 import { store } from '../stores/app'
 import CommandContextMenu from '../components/CommandContextMenu.vue'
 import type { CommandContext } from '../services/context'
@@ -206,13 +206,13 @@ onBeforeUnmount(() => {
               :aria-label="store.expandedFolderIds.has(node.id) ? '收起文件夹' : '展开文件夹'"
               @click.stop="toggleFolder(node.id)"
             >
-              <IconChevronDown v-if="store.expandedFolderIds.has(node.id)" :size="14" />
-              <IconChevronRight v-else :size="14" />
+              <IconChevronDown v-if="store.expandedFolderIds.has(node.id)" :size="16" />
+              <IconChevronRight v-else :size="16" />
             </button>
             <span v-else class="tree-toggle-spacer" aria-hidden="true"></span>
             <span v-if="node.kind === 'folder'" class="node-icon" aria-hidden="true">
-              <IconFolderOpen v-if="store.expandedFolderIds.has(node.id)" :size="15" />
-              <IconFolder v-else :size="15" />
+              <IconFolderOpen v-if="store.expandedFolderIds.has(node.id)" :size="16" />
+              <IconFolder v-else :size="16" />
             </span>
             <span class="conn-label">{{ node.label }}</span>
             <span
@@ -227,7 +227,7 @@ onBeforeUnmount(() => {
               title="连接"
               @click.stop="openConnect(node.host.id)"
             >
-              <IconPlug :size="14" />
+              <IconPlug :size="16" />
             </button>
           </div>
         </CommandContextMenu>

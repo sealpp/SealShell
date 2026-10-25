@@ -4,7 +4,7 @@ import FileIcon from '../components/FileIcon.vue'
 import WorkbenchColumnHeader from '../components/WorkbenchColumnHeader.vue'
 import { nextColumnSort } from '../components/table-sort'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { IconArrowBackUp, IconArrowForwardUp, IconArrowUp, IconEye, IconRefresh } from '@tabler/icons-vue'
+import { IconArrowBackUp, IconArrowForwardUp, IconArrowUp, IconEye, IconRefresh } from '../ui/icons'
 import CommandContextMenu from '../components/CommandContextMenu.vue'
 import { FILE_MENU_ID } from '../services/actions/menuIds'
 import type { CommandContext } from '../services/context'
@@ -232,7 +232,7 @@ onBeforeUnmount(onDragLeave)
           title="返回上一级目录"
           @dblclick="goToParent"
         >
-          <span class="file-name workbench-table-cell" role="gridcell"><IconArrowBackUp class="file-parent-icon" :size="16" :stroke-width="1.75" aria-hidden="true" /><span>..</span></span>
+          <span class="file-name workbench-table-cell" role="gridcell"><IconArrowBackUp class="file-parent-icon" :size="16" aria-hidden="true" /><span>..</span></span>
           <span class="workbench-table-cell" role="gridcell">—</span>
           <span class="workbench-table-cell" role="gridcell">—</span>
           <span class="workbench-table-cell" role="gridcell">目录</span>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { IconDeviceDesktopPlus, IconFile, IconFolder, IconChartLine, IconFocus2, IconMaximize, IconMaximizeOff, IconX } from '@tabler/icons-vue'
+import { IconDeviceDesktopPlus, IconFile, IconFolder, IconChartLine, IconFocus2, IconMaximize, IconMaximizeOff, IconX } from '../ui/icons'
 import { getActiveBottomPanelTabId, setBottomPanelActiveTab, store, type BottomPanelCategory } from '../stores/app'
 import {
   BOTTOM_PANEL_DEFAULT_HEIGHT_RATIO,
@@ -291,7 +291,7 @@ watch(
         :aria-selected="store.bottomPanelCategory === 'files'"
         @click="selectCategory('files')"
       >
-        <IconFolder :size="14" aria-hidden="true" />
+        <IconFolder :size="16" aria-hidden="true" />
         <span>文件列表</span>
       </button>
       <button
@@ -302,13 +302,13 @@ watch(
         :aria-selected="store.bottomPanelCategory === 'editors'"
         @click="selectCategory('editors')"
       >
-        <IconFile :size="14" aria-hidden="true" />
+        <IconFile :size="16" aria-hidden="true" />
         <span>文件编辑</span>
       </button>
       <button type="button" role="tab" class="workspace-category"
         :class="{ active: store.bottomPanelCategory === 'monitors' }"
         :aria-selected="store.bottomPanelCategory === 'monitors'" @click="selectCategory('monitors')">
-        <IconChartLine :size="14" aria-hidden="true" /><span>性能监测</span>
+        <IconChartLine :size="16" aria-hidden="true" /><span>性能监测</span>
       </button>
       <button type="button" role="tab" class="workspace-category"
         :class="{ active: store.bottomPanelCategory === 'ports' }"
@@ -323,19 +323,19 @@ watch(
       <div class="workspace-actions">
         <button v-if="store.bottomPanelCategory === 'files'" type="button" class="workspace-action" :disabled="!canOpenTerminalFiles"
           aria-label="打开或定位当前终端的文件列表" :title="canOpenTerminalFiles ? '打开或定位当前终端的文件列表' : '当前没有可用的终端会话'"
-          @click="commandService.execute('terminal.revealFiles', terminalContext)"><IconFocus2 :size="15" aria-hidden="true" /></button>
+          @click="commandService.execute('terminal.revealFiles', terminalContext)"><IconFocus2 :size="16" aria-hidden="true" /></button>
         <button v-if="store.bottomPanelCategory === 'processes'" type="button" class="workspace-action" :disabled="!canOpenTerminalProcesses"
           aria-label="打开或定位当前终端的进程管理" title="打开或定位当前终端的进程管理"
-          @click="commandService.execute('processes.open', terminalContext)"><IconFocus2 :size="15" aria-hidden="true" /></button>
+          @click="commandService.execute('processes.open', terminalContext)"><IconFocus2 :size="16" aria-hidden="true" /></button>
         <button v-if="store.bottomPanelCategory === 'ports'" type="button" class="workspace-action" :disabled="!canOpenTerminalPorts"
           aria-label="打开或定位当前终端的端口转发" :title="canOpenTerminalPorts ? '打开或定位当前终端的端口转发' : '当前没有可用的终端会话'"
-          @click="commandService.execute('ports.open', terminalContext)"><IconFocus2 :size="15" aria-hidden="true" /></button>
+          @click="commandService.execute('ports.open', terminalContext)"><IconFocus2 :size="16" aria-hidden="true" /></button>
         <button v-if="store.bottomPanelCategory === 'monitors'" type="button" class="workspace-action" :disabled="!canOpenTerminalMonitor"
           aria-label="打开或定位当前终端的性能监测" :title="canOpenTerminalMonitor ? '打开或定位当前终端的性能监测' : '当前没有可用的终端会话'"
-          @click="commandService.execute('monitor.open', terminalContext)"><IconFocus2 :size="15" aria-hidden="true" /></button>
+          @click="commandService.execute('monitor.open', terminalContext)"><IconFocus2 :size="16" aria-hidden="true" /></button>
         <button v-if="store.bottomPanelCategory === 'files'" type="button" class="workspace-action" :disabled="!store.paired"
           aria-label="新建本地窗口并分栏" title="新建本地窗口并分栏 (Alt+L)"
-          @click="commandService.execute('file.newLocalSplit', { area: 'global' })"><IconDeviceDesktopPlus :size="15" /></button>
+          @click="commandService.execute('file.newLocalSplit', { area: 'global' })"><IconDeviceDesktopPlus :size="16" /></button>
         <button
           type="button"
           class="workspace-action"
@@ -343,8 +343,8 @@ watch(
           :title="store.bottomPanelMaximized ? '恢复面板大小' : '最大化面板'"
           @click="toggleMaximized"
         >
-          <IconMaximizeOff v-if="store.bottomPanelMaximized" :size="15" aria-hidden="true" />
-          <IconMaximize v-else :size="15" aria-hidden="true" />
+          <IconMaximizeOff v-if="store.bottomPanelMaximized" :size="16" aria-hidden="true" />
+          <IconMaximize v-else :size="16" aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -353,7 +353,7 @@ watch(
           title="关闭面板"
           @click="closePanel"
         >
-          <IconX :size="15" aria-hidden="true" />
+          <IconX :size="16" aria-hidden="true" />
         </button>
       </div>
     </nav>

@@ -66,3 +66,17 @@ test('keeps portal menus and dock tabs on the workbench palette when the termina
   expect(inset).toBeGreaterThanOrEqual(4)
   await page.keyboard.press('Escape')
 })
+
+test('renders local Codicons in the workbench and a newly opened offline dialog', async ({ page, context }) => {
+  await openWorkbench(page)
+  await page.evaluate(() => document.fonts.ready)
+  const icon = page.locator('.activity .codicon-list-tree')
+  await expect(icon).toBeVisible()
+  await expect(icon).toHaveCSS('font-family', 'codicon')
+  expect(await icon.evaluate(element => getComputedStyle(element, '::before').content)).not.toBe('none')
+  await context.setOffline(true)
+  await page.locator('.workbench-menu-trigger').click()
+  await page.getByRole('menuitem', { name: '设置', exact: true }).click()
+  await expect(page.getByRole('dialog').locator('.workbench-dialog-close .codicon-close')).toBeVisible()
+  await expect(page.locator('.activity svg, .workbench-dialog-close svg')).toHaveCount(0)
+})

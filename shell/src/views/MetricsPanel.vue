@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { IconRefresh } from '@tabler/icons-vue'
+import { IconRefresh } from '../ui/icons'
 import { retryMonitor } from '../services/monitoring/runtime'
 import { setBottomPanelActiveTab, store, type MonitorTab } from '../stores/app'
 import MetricGauge from '../components/MetricGauge.vue'
@@ -125,7 +125,7 @@ function statusText(metric: MetricCard): string {
       </div>
       <div class="metrics-actions">
         <span class="connection-status" :data-state="tab.state"><span class="status-dot" aria-hidden="true"></span>{{ connectionLabel }}</span>
-        <button v-if="tab.state === 'error' && !tab.monitor.needsPassword" type="button" class="panel-action" aria-label="重试监测" title="使用原配置重试" @click="retryMonitor(tab.id)"><IconRefresh :size="15" /></button>
+        <button v-if="tab.state === 'error' && !tab.monitor.needsPassword" type="button" class="panel-action" aria-label="重试监测" title="使用原配置重试" @click="retryMonitor(tab.id)"><IconRefresh :size="16" /></button>
       </div>
     </div>
     <div class="metrics-content">

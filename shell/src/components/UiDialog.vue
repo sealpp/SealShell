@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { DialogClose, DialogContent, DialogDescription, DialogOverlay, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui'
 import { usePortalTarget } from '../ui/portal'
-import { IconX } from '@tabler/icons-vue'
+import { IconX } from '../ui/icons'
 
 const props = withDefaults(defineProps<{
   open: boolean

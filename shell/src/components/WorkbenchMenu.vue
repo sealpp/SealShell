@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IconSettings } from '@tabler/icons-vue'
+import { IconSettings } from '../ui/icons'
 import CommandDropdownMenu from './CommandDropdownMenu.vue'
 import { MenuId } from '../services/actions/menuIds'
 </script>
@@ -21,7 +21,7 @@ import { MenuId } from '../services/actions/menuIds'
         aria-label="设置和关于"
         title="设置和关于"
       >
-        <IconSettings :size="20" stroke-width="1.8" aria-hidden="true" />
+        <IconSettings :size="24"  aria-hidden="true" />
       </button>
     </template>
 

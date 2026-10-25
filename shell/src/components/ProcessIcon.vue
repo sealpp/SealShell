@@ -1,12 +1,12 @@
 <script lang="ts">
 import type { Component } from 'vue'
+import { IconAppWindow, IconTerminal2, IconSettings, IconFileText, IconRobot } from '../ui/icons'
 import {
-  IconAppWindow, IconBrandDeno, IconBrandDocker, IconBrandMysql, IconBrandNodejs, IconBrandPhp, IconBrandPython,
+  IconBrandDeno, IconBrandDocker, IconBrandMysql, IconBrandNodejs, IconBrandPhp, IconBrandPython,
   IconBrandNpm, IconBrandPnpm, IconBrandYarn, IconBrandVite, IconBrandTypescript, IconBrandNextjs,
   IconBrandQq, IconBrandWechat, IconBrandDingtalk, IconBrandTelegram, IconBrandDiscord, IconBrandSlack, IconBrandZoom,
   IconBrandChrome, IconBrandFirefox, IconBrandEdge, IconBrandOpera, IconBrandVscode, IconBrandSublimeText,
-  IconBrandVlc, IconBrandSteam, IconBrandSpotify, IconFileText, IconRobot, IconCoffee, IconSettings, IconTerminal2,
-} from '@tabler/icons-vue'
+  IconBrandVlc, IconBrandSteam, IconBrandSpotify, IconCoffee, } from '@tabler/icons-vue'
 import { clickhousePath, libreofficePath, nginxPath, postgresqlPath, redisPath } from '../assets/process-icons/brand-paths'
 import { pyreflyPaths, pyreflyViewBox } from '../assets/process-icons/pyrefly'
 import { aiBrandPaths } from '../assets/process-icons/ai-brand-paths'

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { IconPencil, IconPlayerPlay, IconPlus, IconTrash } from '@tabler/icons-vue'
+import { IconPencil, IconPlayerPlay, IconPlus, IconTrash } from '../ui/icons'
 import { store } from '../stores/app'
 import { defaultProxy, type ProxyProfile } from '../services/proxy/types'
 import { deleteProxyProfile, editProxySource, proxyPassword, proxyReferences } from '../services/proxy/profiles'
@@ -50,7 +50,7 @@ defineExpose({ flush })
 
 <template>
   <main class="settings-main">
-    <div class="settings-heading"><div><h2>代理服务器</h2><p>维护可供多个主机复用的代理，修改后自动保存。</p></div><button type="button" class="settings-reset-all proxy-add" @click="add"><IconPlus :size="15" />添加代理</button></div>
+    <div class="settings-heading"><div><h2>代理服务器</h2><p>维护可供多个主机复用的代理，修改后自动保存。</p></div><button type="button" class="settings-reset-all proxy-add" @click="add"><IconPlus :size="16" />添加代理</button></div>
     <div class="proxy-list" aria-label="代理服务器列表">
       <p v-if="!store.proxies.length" class="proxy-empty">尚未添加代理服务器。</p>
       <div v-for="profile in store.proxies" :key="profile.id" class="proxy-row" :class="{ selected: selected?.id === profile.id }">

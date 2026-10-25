@@ -5,7 +5,7 @@ import { commandService } from '../services/commands'
 import CommandContextMenu from '../components/CommandContextMenu.vue'
 import type { CommandContext } from '../services/context'
 import { TAB_MENU_ID } from '../services/actions/menuIds'
-import { IconFileText, IconFolder, IconTerminal2, IconX } from '@tabler/icons-vue'
+import { IconFileText, IconFolder, IconTerminal2, IconX } from '../ui/icons'
 
 const props = defineProps<{
   params: {
@@ -71,7 +71,7 @@ function onDoubleClick() {
     :context="tabContext"
   >
     <div class="terminal-tab" @dblclick="onDoubleClick">
-      <component :is="icon" :size="14" class="terminal-tab-icon" />
+      <component :is="icon" :size="16" class="terminal-tab-icon" />
       <span :class="dotClass" />
       <span class="terminal-tab-label" :title="title">{{ title }}</span>
       <button
@@ -81,7 +81,7 @@ function onDoubleClick() {
         @click.stop="onClose"
         @dblclick.stop
       >
-        <IconX :size="14" />
+        <IconX :size="16" />
       </button>
     </div>
   </CommandContextMenu>

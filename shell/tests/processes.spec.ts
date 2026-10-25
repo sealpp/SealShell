@@ -200,7 +200,7 @@ test('uses the shared three-state headers, restores CPU priority and retains sel
     if (label === 'CPU') await expect.poll(ids).toEqual(['12', '10', '11'])
     await button.press('Enter')
     await expect(header).toHaveAttribute('aria-sort', 'none')
-    await expect(header.locator('svg')).toHaveCount(0)
+    await expect(header.locator('.workbench-sort-direction')).toHaveCount(0)
     await expect.poll(ids).toEqual(['12', '10', '11'])
     await expect(page.locator('.process-footer')).toContainText('已选 2 项')
     await expect(page.locator('.process-detail')).toContainText('tree-child')

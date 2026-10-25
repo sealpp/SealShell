@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import ProxyErrorAction from '../components/ProxyErrorAction.vue'
-import { IconRefresh, IconTrash, IconX } from '@tabler/icons-vue'
+import { IconRefresh, IconTrash, IconX } from '../ui/icons'
 import { PopoverClose } from 'reka-ui'
 import type { TransferTaskState } from '../services/sftp/transfer'
 import { transferRuntime, cancelTransfer, dismissTransfer, retryTransfer, setTransferConcurrency } from '../services/sftp/transfer-runtime'
@@ -10,7 +10,7 @@ const stateLabels: Record<TransferTaskState, string> = { queued: '等待中', ru
 
 <template>
   <aside class="transfer-panel">
-    <header><strong>传输详情</strong><PopoverClose as-child><button type="button" title="关闭传输详情" aria-label="关闭传输详情"><IconX :size="14" /></button></PopoverClose></header>
+    <header><strong>传输详情</strong><PopoverClose as-child><button type="button" title="关闭传输详情" aria-label="关闭传输详情"><IconX :size="16" /></button></PopoverClose></header>
     <label>并发<select :value="transferRuntime.concurrency" @change="setTransferConcurrency(Number(($event.target as HTMLSelectElement).value))"><option v-for="value in [1, 2, 3, 4]" :key="value" :value="value">{{ value }}</option></select></label>
     <div class="transfer-task-list">
     <div v-if="!transferRuntime.tasks.length" class="transfer-empty">暂无传输任务</div>
@@ -18,7 +18,7 @@ const stateLabels: Record<TransferTaskState, string> = { queued: '等待中', ru
       <div class="task-head"><span :title="task.label">{{ task.label }}</span><span>{{ stateLabels[task.state] }}<template v-if="task.state === 'running'"> {{ Math.floor(task.progress * 100) }}%</template></span></div>
       <progress max="1" :value="task.progress" :aria-label="task.label" />
       <div v-if="task.error" class="task-error">{{ task.error }} <ProxyErrorAction :source="task.proxySource" :message="task.error" /></div><div v-if="task.orphanPath" class="task-error">保留项：{{ task.orphanPath }}</div>
-      <div class="task-actions"><button v-if="task.state === 'running' || task.state === 'queued'" type="button" title="取消" @click="cancelTransfer(task.id)"><IconX :size="13" /></button><button v-if="task.state === 'failed' || task.state === 'cancelled'" type="button" title="重试" @click="retryTransfer(task.id)"><IconRefresh :size="13" /></button><button v-if="task.state === 'completed' || task.state === 'failed' || task.state === 'cancelled'" type="button" title="移除记录" @click="dismissTransfer(task.id)"><IconTrash :size="13" /></button></div>
+      <div class="task-actions"><button v-if="task.state === 'running' || task.state === 'queued'" type="button" title="取消" @click="cancelTransfer(task.id)"><IconX :size="16" /></button><button v-if="task.state === 'failed' || task.state === 'cancelled'" type="button" title="重试" @click="retryTransfer(task.id)"><IconRefresh :size="16" /></button><button v-if="task.state === 'completed' || task.state === 'failed' || task.state === 'cancelled'" type="button" title="移除记录" @click="dismissTransfer(task.id)"><IconTrash :size="16" /></button></div>
     </div>
     </div>
   </aside>

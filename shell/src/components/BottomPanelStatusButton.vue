@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { IconFolder, IconChartLine } from '@tabler/icons-vue'
+import { IconFolder, IconChartLine } from '../ui/icons'
 import { commandService } from '../services/commands'
 import { store } from '../stores/app'
 
@@ -22,14 +22,14 @@ const count = computed(() => store.tabs.filter(tab => tab.kind === 'monitor').le
     :title="filesOpen ? '隐藏文件管理' : '显示文件管理'"
     @click="commandService.execute('workbench.toggleFileManager', { area: 'global' })"
   >
-    <IconFolder :size="14" aria-hidden="true" />
+    <IconFolder :size="16" aria-hidden="true" />
     <span>文件管理</span>
   </button>
   <button type="button" class="workspace-status" :class="{ active: monitorsOpen, monitoring: count > 0 }"
     :aria-pressed="monitorsOpen" :aria-label="`性能监测 ${count}`"
     :title="`${monitorsOpen ? '隐藏' : '显示'}性能监测 · ${count} 个实例`"
     @click="commandService.execute('workbench.toggleMonitoring', { area: 'global' })">
-    <IconChartLine :size="14" aria-hidden="true" /><span>性能监测</span><span class="monitor-count">{{ count }}</span>
+    <IconChartLine :size="16" aria-hidden="true" /><span>性能监测</span><span class="monitor-count">{{ count }}</span>
   </button>
   <button type="button" class="workspace-status" :class="{ active: portsOpen, monitoring: portsCount > 0 }"
     :aria-pressed="portsOpen" :aria-label="`端口转发 ${portsCount}`" :title="`${portsOpen ? '隐藏' : '显示'}端口转发 · ${portsCount} 个实例`"

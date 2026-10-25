@@ -63,7 +63,7 @@ test('cycles every header through ascending, descending and default without chan
       await expect(names).toHaveText(['z-folder', ...ascending[index].slice(1).reverse()])
       await button.press('Enter')
       await expect(header).toHaveAttribute('aria-sort', 'none')
-      await expect(header.locator('svg')).toHaveCount(0)
+      await expect(header.locator('.workbench-sort-direction')).toHaveCount(0)
       await expect(names).toHaveText(defaultNames)
       await expect(pane.locator('.file-row.selected .file-name-text')).toHaveText('file2.txt')
     }

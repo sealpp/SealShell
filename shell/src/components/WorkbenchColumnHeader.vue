@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
-import { IconChevronDown, IconChevronUp } from '@tabler/icons-vue'
+import { IconChevronDown, IconChevronUp } from '../ui/icons'
 import type { SortDirection } from './table-sort'
 
 const props = withDefaults(defineProps<{
@@ -54,7 +54,7 @@ onBeforeUnmount(() => observer?.disconnect())
 <template>
   <component :is="as" ref="root" class="workbench-column-header" role="columnheader" :aria-sort="sortable ? (direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none') : undefined">
     <button v-if="sortable" type="button" class="workbench-sort-button" :aria-label="`按${label}排序`" :title="hint" @click="emit('sort')">
-      <span>{{ label }}</span><component :is="direction === 'asc' ? IconChevronUp : IconChevronDown" v-if="direction" :size="14" aria-hidden="true" />
+      <span>{{ label }}</span><component :is="direction === 'asc' ? IconChevronUp : IconChevronDown" v-if="direction" class="workbench-sort-direction" :size="16" aria-hidden="true" />
     </button>
     <div v-else class="workbench-header-content"><slot>{{ label }}</slot></div>
     <span v-if="resizable" class="workbench-column-resizer" :class="{ dragging: drag }" role="separator" tabindex="0" aria-orientation="vertical"
