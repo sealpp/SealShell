@@ -1,6 +1,7 @@
 @import './dark-modern.css';
 @import './workbench-table.css';
 @import './workbench-dock.css';
+@import './workbench-activity.css';
 
 :root {
   color-scheme: dark;
@@ -129,32 +130,6 @@
   height: 1px;
   margin: var(--workbench-space-1) 0;
   background: var(--vscode-menu-separatorBackground);
-}
-
-.workbench-menu-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  flex: 0 0 48px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--workbench-text-muted);
-  cursor: pointer;
-  outline: none;
-}
-
-.workbench-menu-trigger:hover,
-.workbench-menu-trigger[data-state='open'] {
-  background: transparent;
-  color: var(--vscode-activityBar-foreground);
-}
-
-.workbench-menu-trigger:focus-visible {
-  outline: 1px solid var(--workbench-text-strong);
-  outline-offset: -2px;
 }
 
 .workbench-dialog-overlay {

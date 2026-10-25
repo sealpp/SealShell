@@ -1,0 +1,39 @@
+.workbench-activity-button {
+  position: relative;
+  isolation: isolate;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--vscode-activityBar-inactiveForeground);
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+}
+
+/* Modern UI paints a 32px control inside the 36px activity target. */
+.workbench-activity-button::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  left: 2px;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--workbench-radius-small);
+  pointer-events: none;
+}
+
+.workbench-activity-button:hover { color: var(--vscode-modernActivityBarItem-hoverForeground); }
+.workbench-activity-button:hover::before { background: var(--vscode-modernActivityBarItem-hoverBackground); }
+.workbench-activity-button:is([aria-pressed='true'], [data-state='open']) { color: var(--vscode-modernActivityBarItem-activeForeground); }
+.workbench-activity-button:is([aria-pressed='true'], [data-state='open'])::before { background: var(--vscode-modernActivityBarItem-activeBackground); }
+.workbench-activity-button:focus-visible { outline: none; }
+.workbench-activity-button:focus-visible::before { outline: 1px solid var(--workbench-focus-border); outline-offset: -1px; }

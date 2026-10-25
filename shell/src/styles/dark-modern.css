@@ -84,7 +84,9 @@
   --vscode-menu-separatorBackground: #454545;
   --vscode-modernActivityBar-border: #252526;
   --vscode-modernActivityBarItem-activeBackground: #FFFFFF22;
+  --vscode-modernActivityBarItem-activeForeground: #CCCCCC;
   --vscode-modernActivityBarItem-hoverBackground: #FFFFFF11;
+  --vscode-modernActivityBarItem-hoverForeground: #CCCCCC;
   --vscode-notificationCenterHeader-background: #1F1F1F;
   --vscode-notificationCenterHeader-foreground: #CCCCCC;
   --vscode-notifications-background: #1F1F1F;

@@ -16,6 +16,8 @@ function readTheme(path) {
 }
 // Dark defaults used by the theme's color registry when its JSON omits a color.
 const defaults = {
+  'modernActivityBarItem.activeForeground': '#CCCCCC',
+  'modernActivityBarItem.hoverForeground': '#CCCCCC',
   'inputValidation.errorBackground': '#5A1D1D',
   'inputValidation.errorBorder': '#BE1100',
   'inputValidation.warningBackground': '#352A05',

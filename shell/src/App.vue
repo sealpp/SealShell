@@ -274,7 +274,7 @@ onBeforeUnmount(() => {
             type="button"
             aria-label="会话"
             :aria-pressed="sidebarVisible"
-            class="icon"
+            class="icon workbench-activity-button"
             :class="{ active: store.sidebarOpen && store.sidebarView === 'connections' }"
             title="会话"
             @click="toggleConnections"
@@ -417,6 +417,7 @@ button, input, select, textarea {
 .activity {
   box-sizing: border-box;
   width: 48px;
+  padding: 4px 0;
   background: var(--workbench-activity-bg);
   display: flex;
   flex-direction: column;
@@ -430,7 +431,7 @@ button, input, select, textarea {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 8px;
   width: 100%;
   align-items: center;
 }
@@ -441,32 +442,6 @@ button, input, select, textarea {
   display: flex;
   justify-content: center;
 }
-
-.activity .icon {
-  position: relative;
-  box-sizing: border-box;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  width: 48px;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--vscode-activityBar-inactiveForeground);
-  cursor: pointer;
-  user-select: none;
-}
-
-.activity .icon:hover {
-  color: var(--vscode-activityBar-foreground);
-}
-
-.activity .icon.active {
-  color: var(--vscode-activityBar-foreground);
-}
-
-.activity .icon.active::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 2px; background: var(--vscode-activityBar-activeBorder); }
 
 .sidebar {
   box-sizing: border-box;

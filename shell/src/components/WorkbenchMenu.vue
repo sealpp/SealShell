@@ -17,7 +17,7 @@ import { MenuId } from '../services/actions/menuIds'
     <template #trigger>
       <button
         type="button"
-        class="workbench-menu-trigger"
+        class="workbench-menu-trigger workbench-activity-button"
         aria-label="设置和关于"
         title="设置和关于"
       >
