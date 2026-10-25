@@ -1,5 +1,6 @@
 @import './dark-modern.css';
 @import './workbench-table.css';
+@import './workbench-dock.css';
 
 :root {
   color-scheme: dark;
@@ -147,8 +148,8 @@
 
 .workbench-menu-trigger:hover,
 .workbench-menu-trigger[data-state='open'] {
-  background: var(--workbench-surface-raised);
-  color: var(--workbench-text-strong);
+  background: transparent;
+  color: var(--vscode-activityBar-foreground);
 }
 
 .workbench-menu-trigger:focus-visible {

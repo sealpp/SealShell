@@ -105,20 +105,20 @@ function onDoubleClick() {
 }
 
 .dot.online {
-  background: #4ec9b0;
+  background: var(--workbench-success);
 }
 
 .dot.connecting {
-  background: #ffcc00;
+  background: var(--workbench-warning);
 }
 
 .dot.offline {
-  background: #f44336;
+  background: var(--workbench-error);
 }
 
 .terminal-tab-label {
   flex: 1;
-  font-size: 12px;
+  font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -130,7 +130,9 @@ function onDoubleClick() {
   border: none;
   color: inherit;
   cursor: pointer;
-  padding: 0.1rem;
+  padding: 0;
+  width: 20px;
+  height: 20px;
   border-radius: 4px;
   display: flex;
   align-items: center;
@@ -139,8 +141,8 @@ function onDoubleClick() {
 }
 
 .terminal-tab-close:hover {
-  background: #c75450;
-  color: #fff;
+  background: var(--workbench-toolbar-hover-bg);
+  color: var(--workbench-text-strong);
   opacity: 1;
 }
 </style>

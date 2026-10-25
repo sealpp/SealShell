@@ -270,14 +270,17 @@ onBeforeUnmount(() => {
     >
       <div ref="activityEl" class="activity">
         <div class="top-icons">
-          <div
+          <button
+            type="button"
+            aria-label="会话"
+            :aria-pressed="sidebarVisible"
             class="icon"
             :class="{ active: store.sidebarOpen && store.sidebarView === 'connections' }"
             title="会话"
             @click="toggleConnections"
           >
             <IconList :size="24" />
-          </div>
+          </button>
 
         </div>
         <div class="activity-bottom">
@@ -346,14 +349,14 @@ html, body, #app {
   padding: 0;
   height: 100%;
   overflow: hidden;
-  background: #1e1e1e;
-  color: #cccccc;
+  background: var(--workbench-bg);
+  color: var(--workbench-text);
   font-family: var(--workbench-font-family);
   font-size: var(--workbench-font-size);
 }
 
-button, input {
-  font-family: inherit;
+button, input, select, textarea {
+  font: inherit;
 }
 
 ::-webkit-scrollbar {
@@ -362,25 +365,25 @@ button, input {
 }
 
 ::-webkit-scrollbar-track {
-  background: #1e1e1e;
+  background: var(--workbench-bg);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #424242;
-  border-radius: 5px;
+  background: var(--vscode-scrollbarSlider-background);
+  border-radius: 0;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #4f4f4f;
+  background: var(--vscode-scrollbarSlider-hoverBackground);
 }
 
 ::-webkit-scrollbar-corner {
-  background: #1e1e1e;
+  background: var(--workbench-bg);
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #424242 #1e1e1e;
+  scrollbar-color: var(--vscode-scrollbarSlider-background) transparent;
 }
 </style>
 
@@ -394,8 +397,8 @@ button, input {
 }
 
 .global-error {
-  background: #ef4444;
-  color: #fff;
+  background: var(--workbench-error);
+  color: var(--workbench-text-strong);
   padding: 8px 12px;
   font-size: 13px;
   text-align: center;
@@ -414,11 +417,11 @@ button, input {
 .activity {
   box-sizing: border-box;
   width: 48px;
-  background: #333333;
+  background: var(--workbench-activity-bg);
   display: flex;
   flex-direction: column;
   align-items: center;
-  border-right: 1px solid #252526;
+  box-shadow: inset -1px 0 var(--vscode-activityBar-border);
   flex-shrink: 0;
   gap: 0;
 }
@@ -440,32 +443,37 @@ button, input {
 }
 
 .activity .icon {
+  position: relative;
+  box-sizing: border-box;
+  padding: 0;
+  border: 0;
+  background: transparent;
   width: 48px;
   height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #858585;
+  color: var(--vscode-activityBar-inactiveForeground);
   cursor: pointer;
   user-select: none;
 }
 
 .activity .icon:hover {
-  color: #fff;
+  color: var(--vscode-activityBar-foreground);
 }
 
 .activity .icon.active {
-  color: #fff;
-  background: #37373d;
-  border-left: 2px solid #fff;
+  color: var(--vscode-activityBar-foreground);
 }
+
+.activity .icon.active::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 2px; background: var(--vscode-activityBar-activeBorder); }
 
 .sidebar {
   box-sizing: border-box;
-  background: #252526;
+  background: var(--workbench-surface);
   display: flex;
   flex-direction: column;
-  border-right: 1px solid #1f1f1f;
+  border-right: 1px solid var(--workbench-border-muted);
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -510,7 +518,7 @@ button, input {
 
 .panel-resizer:hover::before,
 .panel-resizer.dragging::before {
-  background: rgba(74, 170, 255, 0.42);
+  background: var(--workbench-focus-border);
 }
 
 .main.resizing {
@@ -522,7 +530,7 @@ button, input {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  background: #1e1e1e;
+  background: var(--workbench-bg);
   overflow: hidden;
 }
 
@@ -555,7 +563,7 @@ button, input {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #888;
+  color: var(--workbench-text-muted);
   gap: 0.5rem;
 }
 
@@ -578,7 +586,7 @@ button, input {
 
 .welcome h2 {
   margin: 0;
-  color: #4aaaff;
+  color: var(--workbench-link);
   font-weight: 600;
 }
 
@@ -590,12 +598,13 @@ button, input {
 }
 
 .statusbar {
-  height: 24px;
-  background: #1e1e1e;
-  border-top: 1px solid #1f1f1f;
+  box-sizing: border-box;
+  height: 22px;
+  background: var(--vscode-statusBar-background);
+  border-top: 1px solid var(--workbench-border-muted);
   display: flex;
   align-items: center;
-  color: #fff;
+  color: var(--vscode-statusBar-foreground);
   font-size: 12px;
   flex-shrink: 0;
 }

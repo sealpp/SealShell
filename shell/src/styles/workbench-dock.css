@@ -1,0 +1,33 @@
+.dv-dockview {
+  --dv-group-view-background-color: var(--workbench-bg);
+  --dv-tabs-and-actions-container-background-color: var(--vscode-editorGroupHeader-tabsBackground);
+  --dv-tabs-and-actions-container-height: 35px;
+  --dv-tabs-and-actions-container-font-size: 13px;
+  --dv-tab-font-size: 13px;
+  --dv-activegroup-visiblepanel-tab-background-color: var(--vscode-tab-activeBackground);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--vscode-tab-inactiveBackground);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--vscode-tab-activeBackground);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--vscode-tab-inactiveBackground);
+  --dv-activegroup-visiblepanel-tab-color: var(--vscode-tab-activeForeground);
+  --dv-activegroup-hiddenpanel-tab-color: var(--vscode-tab-inactiveForeground);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--vscode-tab-unfocusedActiveForeground);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--vscode-tab-unfocusedInactiveForeground);
+  --dv-tab-divider-color: var(--vscode-tab-border);
+  --dv-separator-border: var(--vscode-panel-border);
+  --dv-drag-over-background-color: #0078d433;
+  font: 400 var(--workbench-font-size)/1.4 var(--workbench-font-family);
+}
+
+.dv-dockview .dv-tab { position: relative; }
+.dv-dockview .dv-tab:hover { background-color: var(--vscode-tab-hoverBackground) !important; }
+.dv-dockview .dv-tab.dv-active-tab::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: var(--vscode-tab-activeBorderTop);
+  pointer-events: none;
+}
+.dv-dockview .dv-inactive-group .dv-tab.dv-active-tab::before { background: var(--vscode-tab-unfocusedActiveBorderTop); }
+.dv-dockview .dv-tab .terminal-tab-close { opacity: 0; }
+.dv-dockview .dv-tab:is(.dv-active-tab, :hover, :focus-within) .terminal-tab-close { opacity: 1; }

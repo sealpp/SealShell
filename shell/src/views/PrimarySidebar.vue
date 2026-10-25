@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref } from 'vue'
-import { DockviewVue, themeAbyss } from 'dockview-vue'
+import { DockviewVue, themeDark } from 'dockview-vue'
 import type { DockviewApi, DockviewReadyEvent } from 'dockview-vue'
 import ConnectionsPanel from './ConnectionsPanel.vue'
 
@@ -38,7 +38,7 @@ onBeforeUnmount(() => {
 <template>
   <DockviewVue
     class="primary-sidebar"
-    :theme="themeAbyss"
+    :theme="themeDark"
     :components="(components as any)"
     @ready="onReady"
   />
@@ -51,6 +51,6 @@ onBeforeUnmount(() => {
 }
 
 .primary-sidebar .dv-dockview {
-  --dv-group-view-background-color: #252526;
+  --dv-group-view-background-color: var(--workbench-surface);
 }
 </style>

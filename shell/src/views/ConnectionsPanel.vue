@@ -61,6 +61,7 @@ function rangeSelection(targetKey: string) {
 }
 
 function onNodeClick(node: TreeNode, event: MouseEvent) {
+  (event.currentTarget as HTMLElement).closest<HTMLElement>('.conn-list')?.focus({ preventScroll: true })
   const key = nodeKey(node.kind, node.id)
   if (event.ctrlKey || event.metaKey) {
     const next = new Set(store.selectedNodeIds)
@@ -242,7 +243,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #252526;
+  background: var(--workbench-surface);
 }
 
 .connections-header {
@@ -250,16 +251,16 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   padding: 0 0.75rem;
-  background: #2d2d2d;
-  border-bottom: 1px solid #1f1f1f;
+  background: var(--workbench-surface-raised);
+  border-bottom: 1px solid var(--workbench-border-muted);
   font-size: 12px;
   font-weight: 600;
-  color: #fff;
+  color: var(--workbench-text-strong);
 }
 
 .conn-list {
   flex: 1;
-  min-height: 24px;
+  min-height: 22px;
   overflow-y: auto;
   padding: 0;
   outline: none;
@@ -268,25 +269,28 @@ onBeforeUnmount(() => {
 .conn-item {
   display: flex;
   align-items: center;
-  min-height: 30px;
+  min-height: var(--workbench-row-height);
   box-sizing: border-box;
   padding-top: 0;
   padding-right: 8px;
   padding-bottom: 0;
-  border-left: 2px solid transparent;
   background: transparent;
   cursor: pointer;
   user-select: none;
 }
 
 .conn-item:hover {
-  background: #2a2d2e;
+  background: var(--workbench-list-hover-bg);
 }
 
 .conn-item.selected {
-  background: #37373d;
-  border-left-color: #fff;
+  background: var(--workbench-list-inactive-bg);
+
 }
+
+.conn-list:focus-within .conn-item.selected { background: var(--workbench-list-active-bg); color: var(--vscode-list-activeSelectionForeground); }
+.conn-list:focus-visible { outline: none; }
+.conn-list:focus-visible .conn-item.selected { outline: 1px solid var(--workbench-focus-border); outline-offset: -1px; }
 
 .conn-item.dragging,
 .conn-item.cut {
@@ -299,12 +303,12 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   width: 18px;
-  height: 24px;
+  height: 22px;
   flex: 0 0 18px;
   padding: 0;
   border: 0;
   background: transparent;
-  color: #858585;
+  color: var(--workbench-text-muted);
 }
 
 .tree-toggle {
@@ -321,15 +325,15 @@ onBeforeUnmount(() => {
   justify-content: center;
   width: 20px;
   flex: 0 0 20px;
-  color: #c5c5c5;
+  color: var(--vscode-icon-foreground);
 }
 
 .conn-label {
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
-  color: #fff;
-  font-size: 12px;
+  color: inherit;
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -339,7 +343,7 @@ onBeforeUnmount(() => {
   flex: 0 100 auto;
   overflow: hidden;
   margin-left: 8px;
-  color: #858585;
+  color: var(--workbench-text-muted);
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -354,7 +358,7 @@ onBeforeUnmount(() => {
   padding: 0;
   border: none;
   background: transparent;
-  color: #858585;
+  color: var(--workbench-text-muted);
   cursor: pointer;
 }
 
@@ -364,11 +368,11 @@ onBeforeUnmount(() => {
 }
 
 .conn-btn:hover {
-  color: #fff;
+  color: var(--workbench-text-strong);
 }
 
 .empty {
-  color: #888;
+  color: var(--workbench-text-muted);
   font-size: 12px;
   text-align: center;
   padding: 1rem 0;
@@ -376,7 +380,7 @@ onBeforeUnmount(() => {
 }
 
 .root-drop-zone {
-  min-height: 24px;
+  min-height: 22px;
   pointer-events: none;
 }
 </style>

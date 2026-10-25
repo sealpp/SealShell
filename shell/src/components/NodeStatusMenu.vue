@@ -55,7 +55,7 @@ const nodeContext = computed<CommandContext>(() => ({
   align-items: center;
   padding: 0 var(--workbench-space-3);
   border: 0;
-  background: #3c3c3c;
+  background: var(--workbench-border);
   color: var(--workbench-text);
   cursor: pointer;
   user-select: none;

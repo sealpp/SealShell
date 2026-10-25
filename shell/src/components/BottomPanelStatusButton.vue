@@ -52,7 +52,7 @@ const count = computed(() => store.tabs.filter(tab => tab.kind === 'monitor').le
   padding: 0 10px;
   border: 0;
   background: transparent;
-  color: #aaa;
+  color: var(--workbench-text-muted);
   cursor: pointer;
   font: inherit;
   font-size: 12px;
@@ -60,9 +60,9 @@ const count = computed(() => store.tabs.filter(tab => tab.kind === 'monitor').le
 
 .workspace-status:hover,
 .workspace-status.active {
-  background: #3c3c3c;
-  color: #fff;
+  background: var(--workbench-border);
+  color: var(--workbench-text-strong);
 }
-.workspace-status.monitoring { color: #ccc; }
+.workspace-status.monitoring { color: var(--workbench-text); }
 .monitor-count { min-width: 13px; text-align: center; font-variant-numeric: tabular-nums; }
 </style>

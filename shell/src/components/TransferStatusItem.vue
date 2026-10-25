@@ -56,8 +56,8 @@ const preview = computed(() => {
 </template>
 
 <style scoped>
-.transfer-status{height:100%;display:inline-flex;flex:none;align-items:center;gap:5px;padding:0 10px;border:0;background:transparent;color:#aaa;cursor:pointer;font:inherit;font-size:12px;white-space:nowrap}
-.transfer-status:hover,.transfer-status.active{background:#3c3c3c;color:#fff}.transfer-status:focus-visible{outline:1px solid #3794ff;outline-offset:-1px}.transfer-status.attention{color:#e5c07b}
+.transfer-status{height:100%;display:inline-flex;flex:none;align-items:center;gap:5px;padding:0 10px;border:0;background:transparent;color:var(--workbench-text-muted);cursor:pointer;font:inherit;font-size:12px;white-space:nowrap}
+.transfer-status:hover,.transfer-status.active{background:var(--vscode-statusBarItem-hoverBackground);color:var(--workbench-text-strong)}.transfer-status:focus-visible{outline:1px solid var(--workbench-accent);outline-offset:-1px}.transfer-status.attention{color:var(--workbench-warning)}
 .transfer-popover{z-index:60;outline:none;max-width:calc(100vw - 16px)}
 .spinning{animation:transfer-spin 1s linear infinite}@keyframes transfer-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.spinning{animation:none}}

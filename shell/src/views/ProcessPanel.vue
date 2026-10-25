@@ -68,7 +68,7 @@ const table = useTable({
 const rows = computed(() => table.getRowModel().rows)
 const virtualizer = useVirtualizer(computed(() => ({
   count: rows.value.length, getScrollElement: () => viewport.value ?? null,
-  estimateSize: () => 32, overscan: 8, scrollMargin: 32,
+  estimateSize: () => 22, overscan: 8, scrollMargin: 22,
   getItemKey: (index: number) => rows.value[index]?.id ?? index,
 })))
 const virtualRows = computed(() => virtualizer.value.getVirtualItems())
@@ -198,7 +198,7 @@ onBeforeUnmount(() => {
                 </WorkbenchColumnHeader>
               </div>
               <div class="process-virtual-body" :style="{ height: virtualizer.getTotalSize() + 'px', width: table.getTotalSize() + 'px' }">
-                <div v-for="item in virtualRows" :key="String(item.key)" class="process-row workbench-table-row" :class="{ selected: selection[rows[item.index].id] }" role="row" :aria-selected="!!selection[rows[item.index].id]" :aria-rowindex="item.index + 2" :data-pid="rows[item.index].original.pid" :style="{ transform: 'translateY(' + (item.start - 32) + 'px)' }"
+                <div v-for="item in virtualRows" :key="String(item.key)" class="process-row workbench-table-row" :class="{ selected: selection[rows[item.index].id] }" role="row" :aria-selected="!!selection[rows[item.index].id]" :aria-rowindex="item.index + 2" :data-pid="rows[item.index].original.pid" :style="{ transform: 'translateY(' + (item.start - 22) + 'px)' }"
                   @click="select(rows[item.index].original, $event)" @contextmenu="contextRow(rows[item.index].original)">
                   <div v-for="cell in rows[item.index].getAllCells()" :key="cell.id" class="process-cell workbench-table-cell" role="gridcell" :style="{ width: cell.column.getSize() + 'px' }">
                     <input v-if="cell.column.id === 'select'" type="checkbox" :aria-label="'选择进程 ' + rows[item.index].original.pid" :checked="!!selection[rows[item.index].id]" @click.stop="select(rows[item.index].original, $event, true)" />

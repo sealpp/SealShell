@@ -150,7 +150,7 @@ async function copy(row: PortRow) {
 .ports-panel { display: flex; flex-direction: column; height: 100%; min-width: 0; overflow: hidden; }
 .ports-host { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
 .ports-summary { color: var(--workbench-text-muted); white-space: nowrap; }
-.ports-icon-button { width: 26px; padding: 0; }
+.ports-icon-button { width: 22px; padding: 0; }
 .ports-notice { padding: 8px 12px; color: var(--workbench-text-muted); }
 .ports-notice.error, .ports-inline-error { color: #f48771; }
 .ports-table-scroll { flex: 1; min-height: 0; }
@@ -159,13 +159,13 @@ async function copy(row: PortRow) {
 .ports-table tbody { display: block; }
 .ports-table tr { display: grid; grid-template-columns: var(--ports-columns, 44px minmax(160px, 1fr) 190px 140px 140px 90px); min-width: max(100%, var(--ports-width, 764px)); }
 .ports-table td { display: block; align-content: center; overflow: hidden; }
-.ports-table tbody tr { height: auto; min-height: 32px; }
+.ports-table tbody tr { height: auto; min-height: var(--workbench-row-height); }
 .ports-check { text-align: center; }
 .ports-table .ports-actions { display: flex; align-items: center; padding: 0 4px; white-space: nowrap; }
 .ports-endpoint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ports-local-value { display: flex; align-items: center; min-width: 0; gap: 2px; }
 .ports-local-value > span { color: var(--workbench-text-muted); }
-.ports-local input { box-sizing: border-box; width: 60px; min-width: 40px; height: 26px; background: transparent; color: inherit; border: 1px solid transparent; padding: 0 3px; font: inherit; font-variant-numeric: tabular-nums; }
+.ports-local input { box-sizing: border-box; width: 60px; min-width: 40px; height: 22px; background: transparent; color: inherit; border: 1px solid transparent; padding: 0 3px; font: inherit; font-variant-numeric: tabular-nums; }
 .ports-local input:hover { border-color: var(--workbench-border); }
 .ports-local input:focus { outline: 1px solid var(--workbench-focus-border); outline-offset: -1px; border-color: transparent; background: var(--workbench-input-bg); }
 .ports-state { display: flex; align-items: center; gap: 6px; white-space: nowrap; }

@@ -397,9 +397,9 @@ watch(
   flex: 0 0 auto;
   min-height: 0;
   min-width: 0;
-  background: #1e1e1e;
-  border-top: 1px solid #111;
-  color: #ccc;
+  background: var(--workbench-bg);
+  border-top: 1px solid var(--workbench-border-muted);
+  color: var(--workbench-text);
 }
 
 .workspace-panel.maximized {
@@ -432,7 +432,7 @@ watch(
 
 .workspace-resizer:hover::before,
 .workspace-resizer.dragging::before {
-  background: rgba(74, 170, 255, 0.42);
+  background: var(--workbench-focus-border);
 }
 
 .workspace-categories {
@@ -441,8 +441,8 @@ watch(
   align-items: stretch;
   flex: 0 0 35px;
   min-height: 35px;
-  background: #252526;
-  border-bottom: 1px solid #333;
+  background: var(--workbench-surface);
+  border-bottom: 1px solid var(--workbench-border-muted);
 }
 
 .workspace-actions {
@@ -457,20 +457,20 @@ watch(
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
   padding: 0;
   border: 0;
   background: transparent;
-  color: #aaa;
+  color: var(--workbench-text-muted);
   cursor: pointer;
 }
 
 .workspace-action:hover:not(:disabled),
 .workspace-action:focus-visible {
-  background: #3c3c3c;
-  color: #fff;
-  outline: none;
+  background: var(--workbench-toolbar-hover-bg);
+  color: var(--workbench-text-strong);
 }
 
 .workspace-action:disabled {
@@ -485,23 +485,24 @@ watch(
   min-width: 96px;
   padding: 0 13px;
   border: 0;
-  border-top: 2px solid transparent;
+  position: relative;
+  border-bottom: 1px solid transparent;
   background: transparent;
-  color: #999;
+  color: var(--workbench-text-muted);
   cursor: pointer;
   font: inherit;
   font-size: 12px;
 }
 
 .workspace-category:hover {
-  color: #fff;
-  background: #2d2d2d;
+  color: var(--workbench-text-strong);
+  background: transparent;
 }
 
 .workspace-category.active {
-  border-top-color: #3794ff;
-  background: #1e1e1e;
-  color: #fff;
+  border-bottom-color: var(--vscode-panelTitle-activeBorder);
+  background: transparent;
+  color: var(--workbench-text-strong);
 }
 
 .workspace-content {
@@ -546,6 +547,6 @@ watch(
 
 .workspace-list-resizer:hover::before,
 .workspace-list-resizer.dragging::before {
-  background: rgba(74, 170, 255, 0.42);
+  background: var(--workbench-focus-border);
 }
 </style>

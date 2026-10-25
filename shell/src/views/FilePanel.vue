@@ -25,7 +25,7 @@ const dropTarget = ref<string | null>(null)
 const listEl = ref<HTMLElement | null>(null)
 const scrollTop = ref(0)
 const viewportHeight = ref(600)
-const ROW_HEIGHT = 32
+const ROW_HEIGHT = 22
 let activateTimer: number | undefined
 
 const columns = [
@@ -293,7 +293,7 @@ onBeforeUnmount(onDragLeave)
   grid-template-columns: var(--file-columns, minmax(160px, 1fr) 90px 165px 100px);
   align-items: center;
   min-width: max(100%, var(--file-list-width, 515px));
-  height: 32px;
+  height: var(--workbench-row-height);
 }
 .file-list-head {
   position: sticky;

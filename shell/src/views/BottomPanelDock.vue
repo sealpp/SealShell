@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
-import { DockviewVue, themeAbyss } from 'dockview-vue'
+import { DockviewVue, themeDark } from 'dockview-vue'
 import type { DockviewApi, DockviewPanelApi, DockviewReadyEvent } from 'dockview-vue'
 import { IconFile, IconFolder, IconChartLine, IconX } from '@tabler/icons-vue'
 import { store, getActiveBottomPanelTabId, setBottomPanelActiveTab, type Tab, type BottomPanelCategory } from '../stores/app'
@@ -530,11 +530,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="workspace-dock-layout">
+  <div class="workspace-dock-layout" :class="{ focused: store.focusedDock === 'bottomPanel' && store.bottomPanelCategory === props.category }">
     <div class="workspace-dock">
       <DockviewVue
         class="workspace-dockview"
-        :theme="themeAbyss"
+        :theme="themeDark"
         :components="(components as any)"
         @ready="onReady"
       />
@@ -580,8 +580,8 @@ onBeforeUnmount(() => {
 </template>
 
 <style>
-.workspace-dock-layout{display:flex;min-width:0;min-height:0;width:100%;height:100%;background:#1e1e1e}.workspace-dock{position:relative;min-width:0;min-height:0;flex:1;overflow:hidden}.workspace-dockview{width:100%;height:100%}.workspace-instance-list{box-sizing:border-box;flex:0 0 var(--workspace-instance-list-width,220px);width:var(--workspace-instance-list-width,220px);min-width:0;max-width:420px;overflow-x:hidden;overflow-y:auto;scrollbar-width:thin;container-type:inline-size;padding:6px 4px;background:#252526;border-left:1px solid #333}.workspace-instance-empty{display:flex;align-items:center;justify-content:center;height:100%;color:#777;font-size:12px}.workspace-instance{box-sizing:border-box;display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 6px;border:0;border-left:2px solid transparent;background:transparent;color:#bbb;text-align:left;cursor:pointer;font:inherit;font-size:12px}.workspace-instance:hover{background:#2d2d2d;color:#fff}.workspace-instance.active{border-left-color:#3794ff;background:#37373d;color:#fff}.workspace-instance.dragging{opacity:.5}.workspace-instance-marker{flex:0 0 12px;width:12px;color:#888;font-family:ui-monospace,monospace;text-align:center}.workspace-instance-label{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.workspace-instance>svg,.workspace-instance-state,.workspace-instance-close{flex-shrink:0}.workspace-instance-state{width:6px;height:6px;border-radius:50%;background:#777}.workspace-instance-state.online{background:#4ec9b0}.workspace-instance-state.connecting{background:#dcdcaa}.workspace-instance-state.error{background:#f14c4c}.workspace-instance-close{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;color:#888}.workspace-instance-close:hover{color:#fff;background:#4b4b4b}
+.workspace-dock-layout{display:flex;min-width:0;min-height:0;width:100%;height:100%;background:var(--workbench-bg)}.workspace-dock{position:relative;min-width:0;min-height:0;flex:1;overflow:hidden}.workspace-dockview{width:100%;height:100%}.workspace-instance-list{box-sizing:border-box;flex:0 0 var(--workspace-instance-list-width,220px);width:var(--workspace-instance-list-width,220px);min-width:0;max-width:420px;overflow-x:hidden;overflow-y:auto;scrollbar-width:thin;container-type:inline-size;padding:0;background:var(--workbench-surface);border-left:1px solid var(--workbench-border-muted)}.workspace-instance-empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--workbench-text-muted);font-size:12px}.workspace-instance{box-sizing:border-box;display:flex;align-items:center;gap:6px;width:100%;min-height:var(--workbench-row-height);padding:0 6px;border:0;background:transparent;color:var(--workbench-text);text-align:left;cursor:pointer;font:inherit;font-size:12px}.workspace-instance:hover{background:var(--workbench-surface-raised);color:var(--workbench-text-strong)}.workspace-instance.active{background:var(--workbench-list-inactive-bg);color:var(--workbench-text-strong)}.workspace-dock-layout.focused .workspace-instance.active{background:var(--workbench-list-active-bg);color:var(--workbench-text-strong)}.workspace-instance.dragging{opacity:.5}.workspace-instance-marker{flex:0 0 12px;width:12px;color:var(--workbench-text-muted);font-family:ui-monospace,monospace;text-align:center}.workspace-instance-label{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.workspace-instance>svg,.workspace-instance-state,.workspace-instance-close{flex-shrink:0}.workspace-instance-state{width:6px;height:6px;border-radius:50%;background:var(--workbench-text-muted)}.workspace-instance-state.online{background:var(--workbench-success)}.workspace-instance-state.connecting{background:var(--workbench-warning)}.workspace-instance-state.error{background:var(--workbench-error)}.workspace-instance-close{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;color:var(--workbench-text-muted)}.workspace-instance-close:hover{color:var(--workbench-text-strong);background:var(--workbench-toolbar-hover-bg)}
 @container (max-width:119px){.workspace-instance{gap:4px}.workspace-instance-label,.workspace-instance-state,.workspace-instance-close,.workspace-instance-empty{display:none}}
-.workspace-dockview .dv-dockview{--dv-group-view-background-color:#1e1e1e;--dv-separator-border:#3c3c3c}.workspace-dockview .dv-tabs-and-actions-container{display:none}.workspace-dockview .dv-groupview{border:0}.workspace-dockview .dv-content-container{background:#1e1e1e}
-.workspace-dock-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:8px;color:#777;pointer-events:none}
+.workspace-dockview .dv-tabs-and-actions-container{display:none}.workspace-dockview .dv-groupview{border:0}.workspace-dockview .dv-content-container{background:var(--workbench-bg)}
+.workspace-dock-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:8px;color:var(--workbench-text-muted);pointer-events:none}
 </style>

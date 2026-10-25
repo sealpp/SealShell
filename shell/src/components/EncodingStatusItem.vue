@@ -64,13 +64,13 @@ function openPicker(): void {
 
 .statusbar-text {
   padding: 0 10px;
-  color: #aaa;
+  color: var(--workbench-text-muted);
   font-size: 12px;
 }
 
 .statusbar-error {
   padding: 0 10px;
-  color: #f87171;
+  color: var(--workbench-error);
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -86,14 +86,14 @@ function openPicker(): void {
   padding: 0 10px;
   border: 0;
   background: transparent;
-  color: #aaa;
+  color: var(--workbench-text-muted);
   cursor: pointer;
   font: inherit;
   font-size: 12px;
 }
 
 .workspace-status:hover {
-  background: #3c3c3c;
-  color: #fff;
+  background: var(--workbench-border);
+  color: var(--workbench-text-strong);
 }
 </style>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { DockviewVue, themeAbyss } from 'dockview-vue'
+import { DockviewVue, themeDark } from 'dockview-vue'
 import type { DockviewApi, DockviewReadyEvent } from 'dockview-vue'
 import type { Tab } from '../stores/app'
 import { store } from '../stores/app'
@@ -162,7 +162,7 @@ onBeforeUnmount(() => {
   <div ref="dockEl" class="main-dock-host">
     <DockviewVue
       class="main-dock"
-      :theme="themeAbyss"
+      :theme="themeDark"
       :components="(components as any)"
       :tab-components="(tabComponents as any)"
       :default-tab-component="(TerminalTab as any)"
@@ -186,17 +186,4 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
 }
 
-.main-dock .dv-dockview {
-  --dv-group-view-background-color: #0d0d0d;
-  --dv-tabs-and-actions-container-background-color: #252526;
-  --dv-tabs-and-actions-container-height: 35px;
-  --dv-activegroup-visiblepanel-tab-background-color: #0d0d0d;
-  --dv-inactivegroup-visiblepanel-tab-background-color: #2d2d2d;
-  --dv-activegroup-hiddenpanel-tab-background-color: #2d2d2d;
-  --dv-inactivegroup-hiddenpanel-tab-background-color: #2d2d2d;
-  --dv-activegroup-visiblepanel-tab-color: #ffffff;
-  --dv-inactivegroup-visiblepanel-tab-color: rgba(255, 255, 255, 0.5);
-  --dv-tab-divider-color: #1f1f1f;
-  --dv-separator-border: #3c3c3c;
-}
 </style>

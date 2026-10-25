@@ -72,8 +72,8 @@ test('cycles every header through ascending, descending and default without chan
   const remoteSelection = page.locator('[data-file-tab="remote"] .file-row.selected')
   await expect(localSelection).toHaveAttribute('aria-selected', 'true')
   await expect(localSelection).toHaveCSS('background-color', 'rgb(55, 55, 61)')
-  await expect(remoteSelection).toHaveCSS('background-color', 'rgb(9, 71, 113)')
-  await expect(remoteSelection).toHaveCSS('height', '32px')
+  await expect(remoteSelection).toHaveCSS('background-color', 'rgb(4, 57, 94)')
+  await expect(remoteSelection).toHaveCSS('height', '22px')
   expect(await page.evaluate(() => (window as unknown as { fileSorting: SortingFixture }).fileSorting.listCalls)).toBe(2)
 })
 

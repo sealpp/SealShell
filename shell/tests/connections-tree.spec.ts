@@ -14,7 +14,7 @@ test('renders sorted folders and compact one-line host metadata', async ({ page 
   await expect(rows.nth(3)).toContainText('Alpha host')
   await expect(rows.nth(4)).toContainText('Zeta')
   await expect(rows.nth(5)).toContainText('Root host')
-  await expect(rows.nth(5)).toHaveCSS('min-height', '30px')
+  await expect(rows.nth(5)).toHaveCSS('min-height', '22px')
 })
 
 test('shrinks username and port before the host label when selected', async ({ page }) => {

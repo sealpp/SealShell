@@ -118,7 +118,7 @@ test('sorts and resizes all data columns without changing rules, edits or enable
   await handle.press('ArrowRight')
   await expect(handle).toHaveAttribute('aria-valuenow', '120')
   await expect(panel.getByRole('columnheader').nth(2)).toHaveAttribute('aria-sort', 'ascending')
-  await expect(panel.locator('[data-port-id="db:80"]')).toHaveCSS('height', '32px')
+  await expect(panel.locator('[data-port-id="db:80"]')).toHaveCSS('height', '22px')
   await expect(input).toHaveCSS('font-size', '13px')
   expect(await page.evaluate(() => (window as any).monitorFixture.store.tabs.find((tab: any) => tab.kind === 'port').ports.rows.map((row: any) => row.id))).toEqual(defaults)
 })
