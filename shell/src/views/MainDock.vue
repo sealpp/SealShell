@@ -94,7 +94,10 @@ function addPanel(tab: Tab) {
     component: 'terminal',
     tabComponent: 'terminalTab',
     params: { tabId: tab.id },
-    renderer: 'always',
+    // Keep content in the group: the always renderer positions its overlay
+    // one animation frame after layout, stranding the scrollbar at its old edge.
+    // Detached inactive content retains its Vue component and xterm instance.
+    renderer: 'onlyWhenVisible',
     position,
   })
 
