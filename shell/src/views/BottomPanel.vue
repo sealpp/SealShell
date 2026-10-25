@@ -39,6 +39,7 @@ let resizeTarget: HTMLElement | null = null
 const visible = computed(() => store.view === 'shell' && store.bottomPanelOpen)
 const heightStyle = computed(() => ({ height: store.bottomPanelMaximized ? '100%' : `${clampNormalHeight(store.bottomPanelHeight)}px` }))
 const terminalContext = computed(() => ({ area: 'terminal' as const, tabId: store.activeTerminalTabId }))
+const canOpenTerminalFiles = computed(() => commandService.isEnabled('terminal.revealFiles', terminalContext.value))
 const canOpenTerminalPorts = computed(() => commandService.isEnabled('ports.open', terminalContext.value))
 const canOpenTerminalMonitor = computed(() => commandService.isEnabled('monitor.open', terminalContext.value))
 const canOpenTerminalProcesses = computed(() => commandService.isEnabled('processes.open', terminalContext.value))
@@ -320,6 +321,9 @@ watch(
         <span class="codicon codicon-list-tree" aria-hidden="true"></span><span>进程管理</span>
       </button>
       <div class="workspace-actions">
+        <button v-if="store.bottomPanelCategory === 'files'" type="button" class="workspace-action" :disabled="!canOpenTerminalFiles"
+          aria-label="打开或定位当前终端的文件列表" :title="canOpenTerminalFiles ? '打开或定位当前终端的文件列表' : '当前没有可用的终端会话'"
+          @click="commandService.execute('terminal.revealFiles', terminalContext)"><IconFocus2 :size="15" aria-hidden="true" /></button>
         <button v-if="store.bottomPanelCategory === 'processes'" type="button" class="workspace-action" :disabled="!canOpenTerminalProcesses"
           aria-label="打开或定位当前终端的进程管理" title="打开或定位当前终端的进程管理"
           @click="commandService.execute('processes.open', terminalContext)"><IconFocus2 :size="15" aria-hidden="true" /></button>

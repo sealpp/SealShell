@@ -1,10 +1,10 @@
 import type { Terminal } from '@xterm/xterm'
-import { store } from '../stores/app'
+import { setBottomPanelActiveTab, store } from '../stores/app'
 import { closeTab, connectHost, createHost } from './ws'
 import { writeToClipboard, readFromClipboard } from '../utils/clipboard'
 import { getBufferText, getScreenText, getSelectedText } from '../utils/terminalText'
 import type { CommandContext } from './context'
-import { registerAction, registerSubmenu } from './commands'
+import { commandService, registerAction, registerSubmenu } from './commands'
 import { MenuId } from './actions/menuIds'
 import { createFileTab } from './sftp/file-tabs'
 import { normalizeRemotePath } from './sftp/path'
@@ -26,6 +26,12 @@ function getTab(ctx: CommandContext) {
 
 function getTerminal(ctx: CommandContext): Terminal | undefined {
   return ctx.terminal
+}
+
+function getTerminalFileTab(ctx: CommandContext) {
+  const terminal = getTab(ctx)
+  if (terminal?.kind !== 'terminal' || !terminal.hostId) return undefined
+  return store.tabs.find(tab => tab.kind === 'file' && tab.endpoint?.kind === 'sftp' && tab.hostId === terminal.hostId)
 }
 
 registerSubmenu({ id: MenuId.TerminalCopy, title: '复制', parentMenuId: MenuId.TerminalContext, order: 20 })
@@ -51,10 +57,13 @@ registerAction({
 registerAction({
   id: 'terminal.openFiles',
   title: '打开文件列表',
-  description: '在当前终端右侧打开 SFTP 文件列表',
+  description: '新建当前终端的独立 SFTP 文件列表',
   category: 'terminal',
   when: 'tabExists',
-  enablement: (ctx) => !!getTab(ctx) && getTab(ctx)?.kind === 'terminal',
+  enablement: (ctx) => {
+    const tab = getTab(ctx)
+    return tab?.kind === 'terminal' && store.hosts.some(host => host.id === tab.hostId)
+  },
   run: (ctx) => {
     const tab = getTab(ctx)
     if (!tab || tab.kind !== 'terminal') return
@@ -62,6 +71,21 @@ registerAction({
     if (host) createFileTab(host, tab.id, normalizeRemotePath(tab.cwd ?? '/'))
   },
   menus: [{ menuId: MenuId.TerminalContext, order: 15 }],
+})
+
+registerAction({
+  id: 'terminal.revealFiles',
+  title: '打开或定位当前终端的文件列表',
+  description: '定位同一保存会话最早打开的文件列表，没有时新建',
+  category: 'terminal',
+  enablement: (ctx) => !!getTerminalFileTab(ctx) || commandService.isEnabled('terminal.openFiles', ctx),
+  run: (ctx) => {
+    const existing = getTerminalFileTab(ctx)
+    if (!existing) return commandService.execute('terminal.openFiles', ctx)
+    setBottomPanelActiveTab(existing.id, 'files')
+    store.bottomPanelOpen = true
+    store.view = 'shell'
+  },
 })
 
 registerAction({
