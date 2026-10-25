@@ -175,7 +175,7 @@ function statusText(metric: MetricCard): string {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--workbench-surface, #252526);
+  background: var(--workbench-surface);
 }
 
 .metrics-header {
@@ -185,8 +185,8 @@ function statusText(metric: MetricCard): string {
   justify-content: space-between;
   gap: 0.5rem;
   padding: 3px 10px;
-  background: var(--workbench-surface-raised, #2d2d2d);
-  border-bottom: 1px solid var(--workbench-border-muted, #1f1f1f);
+  background: var(--workbench-surface);
+  border-bottom: 1px solid var(--workbench-border-muted);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -194,7 +194,7 @@ function statusText(metric: MetricCard): string {
 .metrics-header .title {
   font-size: 12px;
   font-weight: 600;
-  color: var(--workbench-text-strong, #fff);
+  color: var(--workbench-text-strong);
 }
 
 .metrics-heading {
@@ -207,8 +207,8 @@ function statusText(metric: MetricCard): string {
 .host-label {
   min-width: 0;
   overflow: hidden;
-  color: var(--workbench-text-muted, #888);
-  font-size: 10px;
+  color: var(--workbench-text-muted);
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -224,8 +224,8 @@ function statusText(metric: MetricCard): string {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  color: var(--workbench-text-muted, #888);
-  font-size: 10px;
+  color: var(--workbench-text-muted);
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -233,15 +233,15 @@ function statusText(metric: MetricCard): string {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--workbench-text-disabled, #666);
+  background: var(--workbench-text-disabled);
 }
 
-.connection-status[data-state='online'] { color: #4ec9b0; }
-.connection-status[data-state='online'] .status-dot { background: #4ec9b0; }
-.connection-status[data-state='connecting'] { color: #dcdcaa; }
-.connection-status[data-state='connecting'] .status-dot { background: #dcdcaa; }
-.connection-status[data-state='error'] { color: #f14c4c; }
-.connection-status[data-state='error'] .status-dot { background: #f14c4c; }
+.connection-status[data-state='online'] { color: var(--workbench-success); }
+.connection-status[data-state='online'] .status-dot { background: var(--workbench-success); }
+.connection-status[data-state='connecting'] { color: var(--workbench-warning); }
+.connection-status[data-state='connecting'] .status-dot { background: var(--workbench-warning); }
+.connection-status[data-state='error'] { color: var(--workbench-error); }
+.connection-status[data-state='error'] .status-dot { background: var(--workbench-error); }
 
 .panel-action {
   width: 24px;
@@ -253,13 +253,13 @@ function statusText(metric: MetricCard): string {
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: var(--workbench-text-muted, #888);
+  color: var(--workbench-text-muted);
   cursor: pointer;
 }
 
 .panel-action:hover {
-  background: var(--workbench-surface, #252526);
-  color: var(--workbench-text-strong, #fff);
+  background: var(--workbench-surface);
+  color: var(--workbench-text-strong);
 }
 
 .metrics-content {
@@ -274,20 +274,20 @@ function statusText(metric: MetricCard): string {
   flex-direction: column;
   align-items: center;
   gap: 0.35rem;
-  color: var(--workbench-text-muted, #888);
+  color: var(--workbench-text-muted);
   font-size: 12px;
   text-align: center;
   padding: 2.25rem 0.5rem;
 }
 
 .panel-empty strong {
-  color: var(--workbench-text, #ccc);
+  color: var(--workbench-text);
   font-size: 12px;
   font-weight: 500;
 }
 
 .panel-empty span {
-  color: var(--workbench-text-disabled, #666);
+  color: var(--workbench-text-disabled);
   font-size: 11px;
 }
 
@@ -298,11 +298,11 @@ function statusText(metric: MetricCard): string {
 }
 
 .metric {
-  background: var(--workbench-bg, #1e1e1e);
+  background: var(--workbench-bg);
   min-width: 0;
   padding: 0.5rem;
   border-radius: 4px;
-  border: 1px solid var(--workbench-border, #333);
+  border: 1px solid var(--workbench-border);
 }
 
 .metric-header {
@@ -317,7 +317,7 @@ function statusText(metric: MetricCard): string {
   min-width: 0;
   margin: 0;
   overflow: hidden;
-  color: var(--workbench-text-muted, #999);
+  color: var(--workbench-text-muted);
   font-size: 12px;
   font-weight: 500;
   text-overflow: ellipsis;
@@ -329,7 +329,7 @@ function statusText(metric: MetricCard): string {
   align-items: center;
   justify-content: center;
   height: 78px;
-  background: #151515;
+  background: var(--workbench-bg);
   border-radius: 4px;
 }
 
@@ -341,7 +341,7 @@ function statusText(metric: MetricCard): string {
 }
 
 .metric-stat-value {
-  color: var(--workbench-text-strong, #fff);
+  color: var(--workbench-text-strong);
   font-size: 32px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
@@ -352,7 +352,7 @@ function statusText(metric: MetricCard): string {
   display: flex;
   justify-content: space-between;
   gap: 0.5rem;
-  color: var(--workbench-text-muted, #888);
+  color: var(--workbench-text-muted);
   font-size: 11px;
 }
 
@@ -363,20 +363,20 @@ function statusText(metric: MetricCard): string {
 }
 
 .metric[data-status='normal'] .metric-status {
-  color: #4ec9b0;
+  color: var(--workbench-success);
 }
 
 .metric[data-status='warning'] .metric-status {
-  color: #dcdcaa;
+  color: var(--workbench-warning);
 }
 
 .metric[data-status='critical'] .metric-status {
-  color: #f14c4c;
+  color: var(--workbench-error);
 }
 
 .metric[data-status='waiting'] .metric-status,
 .metric[data-status='unavailable'] .metric-status {
-  color: var(--workbench-text-disabled, #666);
+  color: var(--workbench-text-disabled);
 }
-.monitor-login input { width: min(240px, 100%); box-sizing: border-box; padding: 6px 8px; background: #1e1e1e; border: 1px solid #555; color: #ccc; }
+.monitor-login input { width: min(240px, 100%); box-sizing: border-box; padding: 6px 8px; background: var(--workbench-input-bg); border: 1px solid var(--workbench-border); color: var(--workbench-text); }
 </style>

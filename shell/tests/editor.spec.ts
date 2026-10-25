@@ -24,7 +24,7 @@ test('renders dark local syntax, line numbers, folding, Chinese find/replace and
   await pane(page).getByRole('button', { name: '查找/替换', exact: true }).click()
   const find = pane(page).locator('.find-widget')
   await expect(find).toBeVisible()
-  await expect(find).toHaveCSS('background-color', 'rgb(37, 37, 38)')
+  await expect(find).toHaveCSS('background-color', 'rgb(32, 32, 32)')
   await find.getByRole('textbox', { name: '查找', exact: true }).fill('message')
   await expect(pane(page).locator('.matchesCount')).toContainText('2')
   await page.keyboard.press('Escape')

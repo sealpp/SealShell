@@ -50,7 +50,7 @@ try {
   await expect.poll(() => panel.locator('.view-lines span[class^="mtk"]').evaluateAll(spans => new Set(spans.map(span => getComputedStyle(span).color)).size)).toBeGreaterThan(2)
   await panel.getByRole('button', { name: '查找/替换', exact: true }).click()
   await expect(panel.getByRole('textbox', { name: '查找', exact: true })).toBeVisible()
-  await expect(panel.locator('.find-widget')).toHaveCSS('background-color', 'rgb(37, 37, 38)')
+  await expect(panel.locator('.find-widget')).toHaveCSS('background-color', 'rgb(32, 32, 32)')
   assert.deepEqual(errors, [])
   console.log('PASS production PWA opens Monaco for the first time offline with syntax, locale, styles and cached text worker; no language-service workers')
 } finally {

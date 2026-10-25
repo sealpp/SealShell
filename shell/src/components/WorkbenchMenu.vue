@@ -21,7 +21,7 @@ import { MenuId } from '../services/actions/menuIds'
         aria-label="设置和关于"
         title="设置和关于"
       >
-        <IconSettings :size="24"  aria-hidden="true" />
+        <IconSettings :size="24" aria-hidden="true" />
       </button>
     </template>
 

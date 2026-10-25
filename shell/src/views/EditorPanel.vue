@@ -33,10 +33,10 @@ async function mountEditor(): Promise<void> {
     document = getEditorDocument(current)
     view = monaco.editor.create(editorEl.value, {
       model: document.model,
-      theme: 'vs-dark',
+      theme: 'sealshell-dark-modern',
       automaticLayout: true,
       fontFamily: 'Consolas, "Cascadia Mono", "SFMono-Regular", monospace',
-      fontSize: 13,
+      fontSize: 14,
       lineHeight: 20,
       lineNumbers: 'on',
       lineNumbersMinChars: 3,
@@ -112,6 +112,6 @@ onBeforeUnmount(() => {
 /* Keep Monaco's measured hover size after positioning near a pane edge. Shrinking
    it there wraps the label, increases its height and covers the hovered button. */
 .editor-host :deep(.workbench-hover-container) { width: max-content; }
-.editor-error { padding: 8px 12px; color: #f48771; }
+.editor-error { padding: 8px 12px; color: var(--workbench-error); }
 .editor-loading { padding: 8px 12px; color: var(--workbench-text-muted); }
 </style>

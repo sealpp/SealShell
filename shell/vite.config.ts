@@ -38,8 +38,8 @@ export default defineConfig({
         name: 'SealShell',
         short_name: 'SealShell',
         description: 'Local-first SSH terminal console',
-        theme_color: '#0f172a',
-        background_color: '#0f172a',
+        theme_color: '#181818',
+        background_color: '#181818',
         display: 'standalone',
         start_url: '/',
         icons: [

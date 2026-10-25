@@ -57,7 +57,7 @@ async function confirm() {
 <style scoped>
 .warning {
   margin: 0 0 var(--workbench-space-2);
-  color: #f59e0b;
+  color: var(--workbench-warning);
   font-size: 12px;
 }
 
@@ -78,7 +78,7 @@ async function confirm() {
 
 .error {
   margin: var(--workbench-space-2) 0 0;
-  color: #f87171;
+  color: var(--workbench-error);
   font-size: 12px;
 }
 </style>

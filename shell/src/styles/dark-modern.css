@@ -65,6 +65,10 @@
   --vscode-input-placeholderForeground: #989898;
   --vscode-inputOption-activeBackground: #2489DB82;
   --vscode-inputOption-activeBorder: #2488DB;
+  --vscode-inputValidation-errorBackground: #5A1D1D;
+  --vscode-inputValidation-errorBorder: #BE1100;
+  --vscode-inputValidation-warningBackground: #352A05;
+  --vscode-inputValidation-warningBorder: #B89500;
   --vscode-keybindingLabel-foreground: #CCCCCC;
   --vscode-list-activeSelectionBackground: #04395E;
   --vscode-list-activeSelectionForeground: #FFFFFF;

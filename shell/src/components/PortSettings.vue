@@ -24,5 +24,5 @@ defineExpose({ flush: async () => !saving.value })
   </section>
 </template>
 <style scoped>
-.port-settings{flex:1;min-width:0;padding:24px;color:#ccc;overflow:auto;font-size:13px}.port-settings h2{font-size:18px;font-weight:500;margin:0 0 24px}.port-settings label{display:block;margin-bottom:8px}.port-settings select{padding:6px 10px;min-width:240px;background:#3c3c3c;color:#eee;border:1px solid #555;font:inherit}.port-settings p{line-height:1.6;color:#999}.port-settings .error{color:#f48771}
+.port-settings{flex:1;min-width:0;padding:24px;color:var(--workbench-text);overflow:auto;font-size:13px}.port-settings h2{font-size:26px;font-weight:500;margin:0 0 24px}.port-settings label{display:block;margin-bottom:8px}.port-settings select{padding:4px 6px;min-height:26px;border-radius:4px;min-width:240px;background:var(--workbench-border);color:var(--workbench-text);border:1px solid var(--workbench-border);font:inherit}.port-settings p{line-height:1.6;color:var(--workbench-text-muted)}.port-settings .error{color:var(--workbench-error)}
 </style>

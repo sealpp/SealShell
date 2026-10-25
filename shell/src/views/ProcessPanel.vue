@@ -271,11 +271,11 @@ onBeforeUnmount(() => {
 .process-detail dd { margin: 3px 0; overflow-wrap: anywhere; }
 .process-command { white-space: pre-wrap; font-family: ui-monospace, monospace; }
 .process-footer { display: flex; justify-content: space-between; padding: 5px 10px; color: var(--workbench-text-muted); border-top: 1px solid var(--workbench-table-border); font-variant-numeric: tabular-nums; }
-.process-error, .process-gone { padding: 7px; color: #f48771; }
+.process-error, .process-gone { padding: 7px; color: var(--workbench-error); }
 .process-results { padding: 6px 10px; border-bottom: 1px solid var(--workbench-table-border); }
 .process-results summary { cursor: pointer; }
 .process-result-list { max-height: 95px; overflow: auto; margin: 6px 0; }
-.process-result-list .failed, .process-danger { color: #f48771; }
+.process-result-list .failed, .process-danger { color: var(--workbench-error); }
 .process-confirm-list { max-height: 35vh; overflow: auto; border: 1px solid var(--workbench-table-border); padding: 8px; }
 .process-confirm-list > div { padding: 4px; }
 .process-confirm-list strong { display: inline-block; min-width: 70px; }

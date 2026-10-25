@@ -72,8 +72,8 @@ const nodeContext = computed<CommandContext>(() => ({
 }
 
 .node-status.disconnected {
-  background: var(--workbench-danger);
-  color: var(--workbench-text-strong);
+  background: var(--vscode-inputValidation-errorBackground);
+  color: var(--workbench-error);
 }
 
 .node-status .codicon {

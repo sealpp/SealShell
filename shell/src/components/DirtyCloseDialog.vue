@@ -62,5 +62,5 @@ async function saveAndClose(): Promise<void> {
 </template>
 
 <style scoped>
-.message{margin:0;color:var(--workbench-text);line-height:1.6;word-break:break-word}.error{margin:10px 0 0;color:#f87171;word-break:break-word}
+.message{margin:0;color:var(--workbench-text);line-height:1.6;word-break:break-word}.error{margin:10px 0 0;color:var(--workbench-error);word-break:break-word}
 </style>

@@ -41,6 +41,6 @@ defineExpose({ flush: autosave.flush })
 <style scoped>
 .command-suggestion-settings label { display: flex; align-items: center; gap: 8px; margin-top: 24px; }
 .command-suggestion-settings input { margin: 0; }
-.command-suggestion-settings p { max-width: 720px; line-height: 1.7; color: #999; }
-.command-suggestion-settings .error { color: #f48771; }
+.command-suggestion-settings p { max-width: 720px; line-height: 1.7; color: var(--workbench-text-muted); }
+.command-suggestion-settings .error { color: var(--workbench-error); }
 </style>

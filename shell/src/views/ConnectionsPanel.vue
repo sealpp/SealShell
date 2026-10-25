@@ -251,7 +251,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   padding: 0 0.75rem;
-  background: var(--workbench-surface-raised);
+  background: var(--workbench-surface);
   border-bottom: 1px solid var(--workbench-border-muted);
   font-size: 12px;
   font-weight: 600;
@@ -285,7 +285,6 @@ onBeforeUnmount(() => {
 
 .conn-item.selected {
   background: var(--workbench-list-inactive-bg);
-
 }
 
 .conn-list:focus-within .conn-item.selected { background: var(--workbench-list-active-bg); color: var(--vscode-list-activeSelectionForeground); }

@@ -153,9 +153,9 @@ function close() {
 .host-info {
   margin-bottom: var(--workbench-space-3);
   padding: var(--workbench-space-2);
-  background: var(--workbench-input-bg, #1e1e1e);
+  background: var(--workbench-input-bg);
   border-radius: 4px;
-  border: 1px solid var(--workbench-border, #333);
+  border: 1px solid var(--workbench-border);
 }
 
 .info-row {
@@ -166,11 +166,11 @@ function close() {
 }
 
 .info-label {
-  color: var(--workbench-text-muted, #858585);
+  color: var(--workbench-text-muted);
 }
 
 .info-value {
-  color: var(--workbench-text, #cccccc);
+  color: var(--workbench-text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
@@ -193,7 +193,7 @@ function close() {
   display: inline-flex;
   align-items: center;
   gap: var(--workbench-space-2);
-  color: var(--workbench-text, #cccccc);
+  color: var(--workbench-text);
   font-size: 13px;
   line-height: 1.25;
   cursor: pointer;
@@ -206,20 +206,20 @@ function close() {
   margin: 0;
   padding: 0;
   flex-shrink: 0;
-  border: 1px solid var(--workbench-border, #555);
+  border: 1px solid var(--workbench-border);
   border-radius: 3px;
-  background: var(--workbench-input-bg, #1e1e1e);
+  background: var(--workbench-input-bg);
   cursor: pointer;
 }
 
 .checkbox input:checked {
-  background: var(--workbench-accent, #4aaaff) url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2016%2016%27%20fill%3D%27none%27%20stroke%3D%27%23ffffff%27%20stroke-width%3D%272%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpolyline%20points%3D%273%208%206%2011%2013%204%27%2F%3E%3C%2Fsvg%3E") center/9px no-repeat;
-  border-color: var(--workbench-accent, #4aaaff);
+  background: var(--vscode-checkbox-background) url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2016%2016%27%20fill%3D%27none%27%20stroke%3D%27%23ffffff%27%20stroke-width%3D%272%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpolyline%20points%3D%273%208%206%2011%2013%204%27%2F%3E%3C%2Fsvg%3E") center/9px no-repeat;
+  border-color: var(--vscode-checkbox-border);
 }
 
 .checkbox input:focus {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--workbench-accent, #4aaaff);
+  outline: 1px solid var(--workbench-focus-border);
+  outline-offset: 1px;
 }
 
 .checkbox span {
@@ -229,7 +229,8 @@ function close() {
 input {
   width: 100%;
   box-sizing: border-box;
-  padding: var(--workbench-space-2);
+  padding: 4px 6px;
+  min-height: 26px;
   border: 1px solid var(--workbench-border);
   border-radius: 4px;
   background: var(--workbench-input-bg);
@@ -239,7 +240,7 @@ input {
 
 .error {
   margin: 0 0 var(--workbench-space-2) 0;
-  color: #f87171;
+  color: var(--workbench-error);
   font-size: 12px;
 }
 </style>

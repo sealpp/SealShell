@@ -20,6 +20,9 @@ import 'monaco-editor/editor/standalone/browser/quickAccess/standaloneGotoLineQu
 import 'monaco-editor/basic-languages/monaco.contribution'
 import { createTokenizationSupport } from 'monaco-editor/languages/features/json/tokenization.js'
 import EditorWorker from 'monaco-editor/editor/editor.worker?worker'
+import darkModern from '../../theme/dark-modern.json'
+
+monaco.editor.defineTheme('sealshell-dark-modern', { base: 'vs-dark', inherit: true, colors: darkModern, rules: [] })
 
 // Only the generic text worker is used. Language-service entry points are not imported.
 globalThis.MonacoEnvironment = { getWorker: () => new EditorWorker() }

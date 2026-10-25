@@ -87,7 +87,8 @@ function onKeydown(event: KeyboardEvent) {
 .folder-form input {
   width: 100%;
   box-sizing: border-box;
-  padding: var(--workbench-space-2);
+  padding: 4px 6px;
+  min-height: 26px;
   border: 1px solid var(--workbench-border);
   border-radius: 4px;
   background: var(--workbench-input-bg);
@@ -97,7 +98,7 @@ function onKeydown(event: KeyboardEvent) {
 
 .error {
   margin: var(--workbench-space-2) 0 0;
-  color: #f87171;
+  color: var(--workbench-error);
   font-size: 12px;
 }
 </style>

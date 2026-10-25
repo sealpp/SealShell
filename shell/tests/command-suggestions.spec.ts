@@ -66,7 +66,7 @@ test('Down directly selects the first candidate; arrows navigate and Enter only 
   await expect(first(page)).toHaveText('git status')
   await page.keyboard.press('ArrowDown')
   await expect(candidate(page, 'git status')).toBeFocused()
-  await expect(candidate(page, 'git status')).toHaveCSS('background-color', 'rgb(9, 71, 113)')
+  await expect(candidate(page, 'git status')).toHaveCSS('background-color', 'rgb(4, 57, 94)')
   await page.keyboard.press('ArrowDown')
   await expect(candidate(page, 'git diff')).toBeFocused()
   await page.keyboard.press('Enter')

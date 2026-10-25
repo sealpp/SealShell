@@ -65,7 +65,7 @@ function close() {
 }
 
 .workbench-dialog-button:disabled {
-  background: #3c3c3c;
+  background: var(--workbench-border);
   color: var(--workbench-text-muted);
   cursor: default;
 }

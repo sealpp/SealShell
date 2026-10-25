@@ -6,7 +6,8 @@ import {
   IconBrandNpm, IconBrandPnpm, IconBrandYarn, IconBrandVite, IconBrandTypescript, IconBrandNextjs,
   IconBrandQq, IconBrandWechat, IconBrandDingtalk, IconBrandTelegram, IconBrandDiscord, IconBrandSlack, IconBrandZoom,
   IconBrandChrome, IconBrandFirefox, IconBrandEdge, IconBrandOpera, IconBrandVscode, IconBrandSublimeText,
-  IconBrandVlc, IconBrandSteam, IconBrandSpotify, IconCoffee, } from '@tabler/icons-vue'
+  IconBrandVlc, IconBrandSteam, IconBrandSpotify, IconCoffee,
+} from '@tabler/icons-vue'
 import { clickhousePath, libreofficePath, nginxPath, postgresqlPath, redisPath } from '../assets/process-icons/brand-paths'
 import { pyreflyPaths, pyreflyViewBox } from '../assets/process-icons/pyrefly'
 import { aiBrandPaths } from '../assets/process-icons/ai-brand-paths'

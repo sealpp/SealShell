@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { IconCheck, IconChevronRight } from '../ui/icons'
 import {
   DropdownMenuItem,
   DropdownMenuPortal,
@@ -28,11 +29,11 @@ function execute(item: ResolvedMenuItem) {
     <DropdownMenuSeparator v-if="item.separator" class="command-menu-separator" />
     <DropdownMenuSub v-else-if="item.children?.length">
       <DropdownMenuSubTrigger :class="['command-menu-item', props.itemClass]" :disabled="item.disabled">
-        <span class="command-menu-check">{{ item.checked ? '✓' : '' }}</span>
+        <span class="command-menu-check"><IconCheck v-if="item.checked" /></span>
         <component :is="item.icon" v-if="item.icon" :size="16" aria-hidden="true" />
         <span class="command-menu-label">{{ item.label }}</span>
         <span class="command-menu-shortcut">{{ item.shortcut ?? '' }}</span>
-        <span class="command-menu-chevron">›</span>
+        <span class="command-menu-chevron"><IconChevronRight /></span>
       </DropdownMenuSubTrigger>
       <DropdownMenuPortal :to="props.portalTarget">
         <DropdownMenuSubContent
@@ -56,7 +57,7 @@ function execute(item: ResolvedMenuItem) {
       :disabled="item.disabled"
       @select="execute(item)"
     >
-      <span class="command-menu-check">{{ item.checked ? '✓' : '' }}</span>
+      <span class="command-menu-check"><IconCheck v-if="item.checked" /></span>
       <component :is="item.icon" v-if="item.icon" :size="16" aria-hidden="true" />
       <span class="command-menu-label">{{ item.label }}</span>
       <span v-if="item.shortcut" class="command-menu-shortcut">{{ item.shortcut }}</span>

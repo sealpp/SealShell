@@ -285,7 +285,7 @@ onBeforeUnmount(onDragLeave)
 .file-toolbar button { width: 26px; padding: 0; }
 .file-toolbar input { min-width: 100px; flex: 1; }
 .file-toolbar select { max-width: 120px; padding: 0 6px; }
-.file-error { padding: 8px 12px; color: #f48771; background: #3a1d1d; border-bottom: 1px solid #633; }
+.file-error { padding: 8px 12px; color: var(--workbench-error); background: var(--vscode-inputValidation-errorBackground); border-bottom: 1px solid var(--vscode-inputValidation-errorBorder); }
 .file-list { min-height: 0; flex: 1; overflow: auto; }
 .file-list-head, .file-row {
   box-sizing: border-box;

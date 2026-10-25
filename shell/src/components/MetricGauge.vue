@@ -17,13 +17,13 @@ const props = withDefaults(
 )
 
 const STATUS_COLORS: Record<GaugeStatus, string> = {
-  normal: '#4ec9b0',
-  warning: '#dcdcaa',
-  critical: '#f14c4c',
-  unavailable: '#666666',
+  normal: 'var(--workbench-success)',
+  warning: 'var(--workbench-warning)',
+  critical: 'var(--workbench-error)',
+  unavailable: 'var(--workbench-text-disabled)',
 }
 
-const TRACK_COLOR = '#3a3a3a'
+const TRACK_COLOR = 'var(--workbench-border)'
 
 function clamp(value: number): number {
   return Math.min(100, Math.max(0, value))
@@ -69,7 +69,7 @@ const style = computed(() => ({
   border-radius: 50%;
   background: conic-gradient(
     var(--gauge-color) var(--gauge-value),
-    #3a3a3a var(--gauge-value)
+    var(--workbench-border) var(--gauge-value)
   );
   position: relative;
 }
@@ -79,13 +79,13 @@ const style = computed(() => ({
   position: absolute;
   inset: var(--metric-gauge-inset, 14px);
   border-radius: 50%;
-  background: var(--workbench-bg, #1e1e1e);
+  background: var(--workbench-bg);
 }
 
 .metric-gauge-value {
   position: relative;
   z-index: 1;
-  color: var(--workbench-text-strong, #fff);
+  color: var(--workbench-text-strong);
   font-size: var(--metric-gauge-font-size, 18px);
   font-weight: 600;
   font-variant-numeric: tabular-nums;

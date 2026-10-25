@@ -16,6 +16,10 @@ function readTheme(path) {
 }
 // Dark defaults used by the theme's color registry when its JSON omits a color.
 const defaults = {
+  'inputValidation.errorBackground': '#5A1D1D',
+  'inputValidation.errorBorder': '#BE1100',
+  'inputValidation.warningBackground': '#352A05',
+  'inputValidation.warningBorder': '#B89500',
   'disabledForeground': '#CCCCCC80',
   'list.activeSelectionBackground': '#04395E',
   'list.activeSelectionForeground': '#FFFFFF',

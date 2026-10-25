@@ -152,7 +152,7 @@ async function copy(row: PortRow) {
 .ports-summary { color: var(--workbench-text-muted); white-space: nowrap; }
 .ports-icon-button { width: 22px; padding: 0; }
 .ports-notice { padding: 8px 12px; color: var(--workbench-text-muted); }
-.ports-notice.error, .ports-inline-error { color: #f48771; }
+.ports-notice.error, .ports-inline-error { color: var(--workbench-error); }
 .ports-table-scroll { flex: 1; min-height: 0; }
 .ports-table { display: block; border-spacing: 0; font: inherit; }
 .ports-table thead { display: block; position: sticky; top: 0; z-index: 1; }
@@ -169,16 +169,16 @@ async function copy(row: PortRow) {
 .ports-local input:hover { border-color: var(--workbench-border); }
 .ports-local input:focus { outline: 1px solid var(--workbench-focus-border); outline-offset: -1px; border-color: transparent; background: var(--workbench-input-bg); }
 .ports-state { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
-.ports-state i { width: 7px; height: 7px; border-radius: 50%; background: #777; flex-shrink: 0; }
-.ports-state i.active { background: #4ec9b0; }.ports-state i.connecting { background: #dcdcaa; }.ports-state i.failed { background: #f14c4c; }
-.ports-row-error { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 2px 0 4px; color: #f48771; }
+.ports-state i { width: 7px; height: 7px; border-radius: 50%; background: var(--workbench-text-muted); flex-shrink: 0; }
+.ports-state i.active { background: var(--workbench-success); }.ports-state i.connecting { background: var(--workbench-warning); }.ports-state i.failed { background: var(--workbench-error); }
+.ports-row-error { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 2px 0 4px; color: var(--workbench-error); }
 .ports-discovery { color: var(--workbench-text-muted); white-space: nowrap; }
 .ports-empty { padding: 28px; color: var(--workbench-text-muted); text-align: center; }
 .ports-add { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
 .ports-add input, .ports-login input { padding: 5px 7px; background: var(--workbench-input-bg); border: 1px solid var(--workbench-border); color: inherit; }
 .ports-add input { flex: 1; min-width: 190px; }
 .ports-add button, .ports-login button { background: var(--workbench-accent); color: var(--workbench-text-strong); border: 0; padding: 5px 10px; cursor: pointer; }
-.ports-add-button { display: flex; align-items: center; gap: 6px; margin: 10px 12px; padding: 3px 0; background: none; border: 0; color: #75beff; cursor: pointer; }
+.ports-add-button { display: flex; align-items: center; gap: 6px; margin: 10px 12px; padding: 3px 0; background: none; border: 0; color: var(--workbench-link); cursor: pointer; }
 .ports-inline-error { display: block; margin: 2px 0 4px; }
 .ports-login { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }

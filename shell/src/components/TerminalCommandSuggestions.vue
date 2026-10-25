@@ -66,13 +66,13 @@ function onFocusOutside(event: FocusOutsideEvent): void {
 
 <style>
 .terminal-command-anchor { position: absolute; width: 1px; pointer-events: none; }
-.terminal-command-suggestions { width: max-content; min-width: min(180px, var(--reka-popover-content-available-width)); max-width: min(420px, calc(100vw - 16px), var(--reka-popover-content-available-width)); max-height: var(--reka-popover-content-available-height); display: flex; flex-direction: column; overflow: hidden; z-index: 80; border: 1px solid #454545; border-radius: 4px; background: #202020; color: #ccc; box-shadow: 0 4px 12px #0005; }
+.terminal-command-suggestions { width: max-content; min-width: min(180px, var(--reka-popover-content-available-width)); max-width: min(420px, calc(100vw - 16px), var(--reka-popover-content-available-width)); max-height: var(--reka-popover-content-available-height); display: flex; flex-direction: column; overflow: hidden; z-index: 80; border: 1px solid var(--vscode-editorWidget-border); border-radius: var(--workbench-radius); background: var(--vscode-editorWidget-background); color: var(--workbench-text); box-shadow: 0 4px 12px var(--vscode-widget-shadow); }
 .terminal-command-suggestions-panel { display: flex; flex-direction: column; min-height: 0; padding: 4px 0; }
 .terminal-command-suggestions-body { display: flex; flex-direction: column; min-height: 0; }
 .terminal-command-suggestions-list { overflow-y: auto; min-height: 0; outline: none; }
-.terminal-command-suggestion { display: flex; align-items: center; padding: 4px 8px; cursor: pointer; outline: none; }
-.terminal-command-suggestion:hover { background: #2a2d2e; }
-.terminal-command-suggestions:focus-within .terminal-command-suggestion[data-highlighted] { background: #094771; color: #fff; }
+.terminal-command-suggestion { display: flex; align-items: center; min-height: 22px; padding: 0 8px; cursor: pointer; outline: none; }
+.terminal-command-suggestion:hover { background: var(--workbench-list-hover-bg); }
+.terminal-command-suggestions:focus-within .terminal-command-suggestion[data-highlighted] { background: var(--workbench-list-active-bg); color: var(--workbench-text-strong); }
 .terminal-command-suggestion code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; font: 12px/1.5 Consolas, ui-monospace, monospace; }
-.terminal-command-prefix { color: #75beff; }
+.terminal-command-prefix { color: var(--workbench-link); }
 </style>

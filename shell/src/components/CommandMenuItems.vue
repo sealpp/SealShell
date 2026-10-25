@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { IconCheck, IconChevronRight } from '../ui/icons'
 import {
   ContextMenuItem,
   ContextMenuPortal,
@@ -28,10 +29,10 @@ function execute(item: ResolvedMenuItem) {
         class="command-menu-item command-menu-subtrigger"
         :disabled="item.disabled"
       >
-        <span class="command-menu-check">{{ item.checked ? '✓' : '' }}</span>
+        <span class="command-menu-check"><IconCheck v-if="item.checked" /></span>
         <span class="command-menu-label">{{ item.label }}</span>
         <span class="command-menu-shortcut">{{ item.shortcut ?? '' }}</span>
-        <span class="command-menu-chevron">›</span>
+        <span class="command-menu-chevron"><IconChevronRight /></span>
       </ContextMenuSubTrigger>
       <ContextMenuPortal :to="props.portalTarget">
         <ContextMenuSubContent
@@ -51,7 +52,7 @@ function execute(item: ResolvedMenuItem) {
       :disabled="item.disabled"
       @select="execute(item)"
     >
-      <span class="command-menu-check">{{ item.checked ? '✓' : '' }}</span>
+      <span class="command-menu-check"><IconCheck v-if="item.checked" /></span>
       <span class="command-menu-label">{{ item.label }}</span>
       <span v-if="item.shortcut" class="command-menu-shortcut">{{ item.shortcut }}</span>
     </ContextMenuItem>

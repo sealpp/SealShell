@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { IconCheck } from '../ui/icons'
 import { computed, nextTick, ref, watch } from 'vue'
 import UiDialog from './UiDialog.vue'
 import { store, type EditorTab } from '../stores/app'
@@ -158,7 +159,7 @@ async function confirm(item: PickItem): Promise<void> {
         @click="confirm(item)"
         @mousemove="activeIndex = index"
       >
-        <span class="picker-check">{{ item.key === currentKey ? '✓' : '' }}</span>
+        <span class="picker-check"><IconCheck v-if="item.key === currentKey" /></span>
         <span class="picker-label">{{ item.label }}</span>
         <span v-if="item.detail" class="picker-detail">{{ item.detail }}</span>
       </li>
@@ -181,7 +182,7 @@ async function confirm(item: PickItem): Promise<void> {
 }
 
 .picker-input:focus {
-  border-color: var(--workbench-accent-hover, #3794ff);
+  border-color: var(--workbench-accent-hover);
 }
 
 .picker-list {
@@ -196,8 +197,10 @@ async function confirm(item: PickItem): Promise<void> {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 8px;
-  border-radius: 4px;
+  min-height: 22px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  border-radius: 0;
   color: var(--workbench-text);
   font-size: 13px;
   cursor: pointer;
@@ -205,18 +208,18 @@ async function confirm(item: PickItem): Promise<void> {
 }
 
 .picker-item.active {
-  background: #094771;
-  color: #fff;
+  background: var(--workbench-list-active-bg);
+  color: var(--workbench-text-strong);
 }
 
 .picker-check {
-  width: 14px;
-  flex: 0 0 14px;
-  color: #75beff;
+  width: 16px;
+  flex: 0 0 16px;
+  color: var(--workbench-link);
 }
 
 .picker-item.active .picker-check {
-  color: #fff;
+  color: var(--workbench-text-strong);
 }
 
 .picker-label {
@@ -233,7 +236,7 @@ async function confirm(item: PickItem): Promise<void> {
 }
 
 .picker-item.active .picker-detail {
-  color: #cde4ff;
+  color: var(--vscode-list-activeSelectionForeground);
 }
 
 .picker-empty {
