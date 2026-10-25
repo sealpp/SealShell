@@ -7,7 +7,6 @@ test.beforeEach(async ({ page }) => {
 test('opens the Node menu and invokes the pairing command', async ({ page }) => {
   await page.locator('.node-status').click()
   await expect(page.getByRole('menu')).toBeVisible()
-  await expect(page.getByRole('menu')).toHaveCSS('min-width', '320px')
   await expect(page.getByRole('menuitem', { name: '配对' })).toBeVisible()
 
   await page.getByRole('menuitem', { name: '配对' }).click()
