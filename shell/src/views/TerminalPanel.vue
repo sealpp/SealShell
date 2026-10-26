@@ -10,11 +10,12 @@ const props = defineProps<{
 }>()
 
 const tabId = computed(() => props.params?.params?.tabId ?? '')
+const viewportTabIds = () => props.params.api.group.panels.map((panel: { id: string }) => panel.id)
 </script>
 
 <template>
   <div class="terminal-panel">
-    <ShellTerminal v-if="tabId" :tab-id="tabId" />
+    <ShellTerminal v-if="tabId" :tab-id="tabId" :viewport-tab-ids="viewportTabIds" />
   </div>
 </template>
 

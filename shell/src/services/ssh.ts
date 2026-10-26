@@ -2,6 +2,7 @@ import { readKnownHost } from './storage'
 import { SshWorkerClient } from './ssh/ssh-worker-client'
 import { copyConnection, type RemoteConnection } from './proxy/types'
 import { initialDirectoryCommand } from './terminalDirectory'
+import type { TerminalSize } from '../stores/app'
 
 export interface SshConnectionInfo extends RemoteConnection {
   sessionId: string
@@ -13,11 +14,12 @@ type StateHandler = (state: 'connecting' | 'online' | 'error' | 'idle', error?: 
 interface ActiveSession {
   info: SshConnectionInfo
   worker: SshWorkerClient
+  size: TerminalSize
 }
 
 const sessions = new Map<string, ActiveSession>()
 
-async function connectWorker(info: SshConnectionInfo, onState: StateHandler, onOutput: OutputHandler, integrateShell = false): Promise<ActiveSession> {
+async function connectWorker(info: SshConnectionInfo, onState: StateHandler, onOutput: OutputHandler, size: TerminalSize): Promise<ActiveSession> {
   const known = await readKnownHost(info.host, info.port)
   const knownHostKey = known ? base64ToBytes(known.publicKey) : undefined
   const worker = new SshWorkerClient()
@@ -25,8 +27,8 @@ async function connectWorker(info: SshConnectionInfo, onState: StateHandler, onO
   worker.onState = (state, error) => { if (state !== 'online') onState(state, error) }
   worker.onOutput = onOutput
   try {
-    await worker.connect({ ...info, knownHostKey, integrateShell })
-    const active = { info: { ...copyConnection(info), sessionId: info.sessionId }, worker }
+    await worker.connect({ ...info, ...size, knownHostKey, integrateShell: true })
+    const active = { info: { ...copyConnection(info), sessionId: info.sessionId }, worker, size: { ...size } }
     sessions.set(info.sessionId, active)
     return active
   } catch (error) {
@@ -35,9 +37,9 @@ async function connectWorker(info: SshConnectionInfo, onState: StateHandler, onO
   }
 }
 
-export async function connectSsh(info: SshConnectionInfo, onState: StateHandler, onOutput: OutputHandler, initialCwd?: string): Promise<SshConnectionInfo> {
+export async function connectSsh(info: SshConnectionInfo, onState: StateHandler, onOutput: OutputHandler, initialSize: TerminalSize, initialCwd?: string): Promise<SshConnectionInfo> {
   onState('connecting')
-  const active = await connectWorker(info, onState, onOutput, true)
+  const active = await connectWorker(info, onState, onOutput, initialSize)
   const command = initialDirectoryCommand(initialCwd)
   if (command) active.worker.send(new TextEncoder().encode(command))
   onState('online')
@@ -56,7 +58,10 @@ export function sendInput(sessionId: string, payload: Uint8Array): Promise<void>
 }
 
 export async function resize(sessionId: string, columns: number, rows: number): Promise<void> {
-  sessions.get(sessionId)?.worker.resize(columns, rows)
+  const active = sessions.get(sessionId)
+  if (!active || (active.size.columns === columns && active.size.rows === rows)) return
+  active.worker.resize(columns, rows)
+  active.size = { columns, rows }
 }
 
 async function releaseSession(sessionId: string): Promise<void> {

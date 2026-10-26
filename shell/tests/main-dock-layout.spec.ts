@@ -57,10 +57,13 @@ for (const { name, width, reconnect } of [
   test(`${name} terminals publish the fitted size when SSH becomes ready without a viewport resize`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 })
     await openTerminals(page, ['layout-a'], reconnect ? 'online' : 'connecting')
-    await expect.poll(() => page.evaluate(() => (window as any).terminalLayoutFixture.resizes.at(-1)?.columns ?? 80)).not.toBe(80)
-    const fitted = await page.evaluate(() => {
-      const { columns, rows } = (window as any).terminalLayoutFixture.resizes.at(-1)
-      return { columns, rows }
+    await expect.poll(() => page.evaluate(async () => {
+      const { store } = await import('/src/stores/app.ts')
+      return store.tabs[0].viewportSize?.columns ?? 80
+    })).not.toBe(80)
+    const fitted = await page.evaluate(async () => {
+      const { store } = await import('/src/stores/app.ts')
+      return { ...store.tabs[0].viewportSize }
     })
     if (reconnect) {
       await page.evaluate(async () => {

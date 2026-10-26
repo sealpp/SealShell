@@ -25,6 +25,7 @@ import { disposePorts } from './ports/runtime'
 import { nodeClient, type NodeCallbacks } from './nodeClient'
 import { closeFileTabSession } from './sftp/file-tabs'
 import { hostProxySource, loadProxyProfiles, resolveHostConnection } from './proxy/profiles'
+import { waitForTerminalSize } from './terminalSize'
 
 const outputHandlers = new Map<string, (data: Uint8Array) => void>()
 const pendingOutput = new Map<string, Uint8Array[]>()
@@ -283,6 +284,8 @@ export async function connectHost(host: HostProfile, insertAfterTabId?: string, 
 
 async function startTab(tab: Tab, host: HostProfile, password: string, options?: AddTabOptions): Promise<void> {
   const { allowLoginDialog = true } = options ?? {}
+  const sessionId = tab.sessionId
+  const isCurrent = () => store.tabs.some(item => item.id === tab.id && item.sessionId === sessionId)
   try {
     let credential = password
     if (!credential) {
@@ -292,30 +295,38 @@ async function startTab(tab: Tab, host: HostProfile, password: string, options?:
       }
     }
     const reactiveTab = store.tabs.find((item) => item.id === tab.id)
-    if (!reactiveTab) throw new Error('tab not found in reactive store')
+    if (!reactiveTab || !isCurrent()) return
     reactiveTab.proxySource = hostProxySource(host)
     const connection = await resolveHostConnection(host, credential)
+    const initialSize = await waitForTerminalSize(tab.id, sessionId)
+    if (!initialSize || !isCurrent()) return
 
     await connectSsh(
       {
-        sessionId: reactiveTab.sessionId,
+        sessionId,
         ...connection,
       },
-      (state, error) => updateTabState(reactiveTab.sessionId, state, error),
+      (state, error) => updateTabState(sessionId, state, error),
       (data) => {
-        emitTerminalOutput(reactiveTab.sessionId, data)
+        if (isCurrent()) emitTerminalOutput(sessionId, data)
       },
+      initialSize,
       reactiveTab.initialCwd,
     )
+    if (!isCurrent()) {
+      await closeSsh(sessionId)
+      return
+    }
     delete reactiveTab.initialCwd
-    updateTabState(reactiveTab.sessionId, 'online')
+    updateTabState(sessionId, 'online')
     if (store.loginDialogOpen && store.loginDialogHostId === host.id) {
       store.loginDialogOpen = false
       store.loginDialogError = ''
     }
   } catch (error) {
+    if (!isCurrent()) return
     const message = error instanceof Error ? error.message : String(error)
-    updateTabState(tab.sessionId, 'error', message)
+    updateTabState(sessionId, 'error', message)
     if (allowLoginDialog && isSavedHost(host) && !message.includes('PROXY_ERROR') && isAuthError(message)) {
       openLoginDialog(host, message, tab.id)
     } else if (store.loginDialogOpen && store.loginDialogHostId === host.id) {

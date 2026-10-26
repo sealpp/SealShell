@@ -15,6 +15,7 @@ import type { CommandContext } from '../services/context'
 import { getTerminalFontFamily, getTerminalTheme } from '../services/terminalPreferences'
 import { encodingDecoder } from '../services/encodings'
 import { registerTerminalDirectoryHandlers } from '../services/terminalDirectory'
+import { publishTerminalSize } from '../services/terminalSize'
 import TerminalCommandSuggestions from '../components/TerminalCommandSuggestions.vue'
 import { attachCommandSuggestions, type TerminalSuggestionView } from '../services/terminalSuggestions/controller'
 import { commonCommandProvider } from '../services/terminalSuggestions/catalog'
@@ -22,7 +23,7 @@ import { historyProvider } from '../services/terminalSuggestions/model'
 import { commandSuggestions, loadSuggestionHistory, rememberSuggestionCommand } from '../services/terminalSuggestions/runtime'
 import '@xterm/xterm/css/xterm.css'
 
-const props = defineProps<{ tabId: string }>()
+const props = defineProps<{ tabId: string; viewportTabIds?: () => string[] }>()
 
 const FIT_DEBOUNCE_MS = 100
 const BACKEND_RESIZE_DEBOUNCE_MS = 80
@@ -34,6 +35,8 @@ const suggestion = shallowRef<TerminalSuggestionView>()
 const suggestionAppearance = shallowRef<CSSProperties>({})
 const suggestionList = ref<InstanceType<typeof TerminalCommandSuggestions> | null>(null)
 let fitAddon: FitAddon | null = null
+let layoutObserved = false
+let fitted = false
 let resizeObserver: ResizeObserver | null = null
 let fitTimer: number | null = null
 let backendResizeTimer: number | null = null
@@ -81,8 +84,14 @@ const activeState = computed(() => {
 watch(() => [commandSuggestions.enabled, commandSuggestions.rememberHistory, commandSuggestions.history[tab.value?.hostId ?? ''], activeState.value], () => suggestions?.refresh())
 
 function fitAndResize() {
-  if (!terminal || !fitAddon) return
+  if (!terminal || !fitAddon || !layoutObserved || !termEl.value?.isConnected) return
+  const rect = termEl.value.getBoundingClientRect()
+  if (rect.width <= 0 || rect.height <= 0 || !fitAddon.proposeDimensions()) return
   fitAddon.fit()
+  fitted = true
+  // Inactive Dockview content is detached. Tabs in the same group share this
+  // viewport, so batch connections can start without activating every tab.
+  publishTerminalSize(props.viewportTabIds?.() ?? [props.tabId], { columns: terminal.cols, rows: terminal.rows })
 }
 
 function scheduleFit() {
@@ -107,7 +116,7 @@ function flushBackendResize() {
 
 function scheduleBackendResize(columns: number, rows: number) {
   const currentTab = tab.value
-  if (!currentTab?.sessionId) return
+  if (!currentTab?.sessionId || currentTab.state !== 'online') return
 
   pendingBackendResize = {
     terminalId: currentTab.terminalId,
@@ -172,13 +181,9 @@ function bindOutput() {
   if (!sessionId || !terminal) return
   setTerminalOutputHandler(sessionId, writeOutput)
 
-  // Bind with the current viewport size. A connecting session may not accept
-  // it yet; the online watcher publishes it again once SSH is ready.
-  fitAddon?.fit()
-  const currentTab = tab.value
-  if (currentTab && currentTab.sessionId) {
-    resizeTerminal(currentTab.terminalId, terminal.cols, terminal.rows)
-  }
+  fitAndResize()
+  const size = tab.value?.viewportSize
+  if (size) scheduleBackendResize(size.columns, size.rows)
 }
 
 function initTerminal() {
@@ -236,7 +241,9 @@ function initTerminal() {
   resizeObserver = new ResizeObserver((entries) => {
     const rect = entries[0]?.contentRect
     if (rect && rect.width > 0 && rect.height > 0) {
-      scheduleFit()
+      layoutObserved = true
+      if (fitted) scheduleFit()
+      else fitAndResize()
     }
   })
   resizeObserver.observe(termEl.value)
@@ -245,10 +252,11 @@ function initTerminal() {
     () => tab.value?.state,
     (state) => {
       if (state === 'online' && terminal) {
-        // Fitting may have finished before the SSH session could accept a
-        // resize. Publish again on readiness even when xterm's size is unchanged.
+        // Reconcile genuine layout changes during the handshake. The SSH
+        // service suppresses sizes already used to open the shell.
         fitAndResize()
-        scheduleBackendResize(terminal.cols, terminal.rows)
+        const size = tab.value?.viewportSize
+        if (size) scheduleBackendResize(size.columns, size.rows)
       } else if (state === 'error') {
         suggestions?.reset()
         terminal?.writeln(`\r\n[session error: ${tab.value?.error}]`)

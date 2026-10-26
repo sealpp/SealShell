@@ -11,6 +11,11 @@ export type TabKind = 'terminal' | 'file' | 'editor' | 'monitor' | 'port' | 'pro
 export type BottomPanelCategory = 'files' | 'editors' | 'monitors' | 'ports' | 'processes'
 export type FocusedDock = 'terminal' | 'bottomPanel'
 
+export interface TerminalSize {
+  columns: number
+  rows: number
+}
+
 export type TerminalFontWeight = 400 | 500 | 600 | 700
 
 export interface TerminalTheme {
@@ -134,6 +139,7 @@ export interface Tab {
   error: string
   sessionId: string
   terminalId: string
+  viewportSize?: TerminalSize
   encoding: string
   cwd?: string
   initialCwd?: string
