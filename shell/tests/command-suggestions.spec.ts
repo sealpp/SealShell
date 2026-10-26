@@ -30,6 +30,58 @@ test('shows multiple offline candidates and sources without changing the termina
   expect(await page.evaluate(() => (window as any).harness.text())).not.toContain('git status')
 })
 
+test('suggests and records commands at decorated multiline and Powerline prompts', async ({ page }) => {
+  const prompts = [
+    '\x1b[36m╭─ dev@host\r\n├─ ~/项目 git:(main) 12:34\r\n╰─\x1b[0m❯ ',
+    '╭─ dev@host ~/project\r\n└──$ ',
+    '╭─ dev@host ~/project\r\n╰─ ',
+    '➜  项目 git:(main) ',
+    ' dev  ~/project  ',
+  ]
+  for (const [index, prompt] of prompts.entries()) {
+    await reset(page, prompt)
+    await page.keyboard.type('g')
+    await expect(first(page)).toHaveText('git status')
+    await candidate(page, 'git status').click()
+    expect(await page.evaluate(() => (window as any).harness.sent.at(-1))).toBe('it status')
+    await page.keyboard.press('Enter')
+    await expect.poll(() => readHistory(page)).toEqual([
+      expect.objectContaining({ command: 'git status', uses: index + 1 }),
+    ])
+  }
+  await reset(page, prompts[0])
+  await page.keyboard.type('g')
+  await expect(candidate(page, 'git status')).toHaveAttribute('data-source', 'history')
+  const screenshotDirectory = join(tmpdir(), 'seal-e2e', 'command-suggestions')
+  await mkdir(screenshotDirectory, { recursive: true })
+  await page.screenshot({ path: join(screenshotDirectory, 'decorated-prompt.png') })
+})
+
+test('updates an untouched prompt when its border and sign arrive in separate writes', async ({ page }) => {
+  await reset(page, '╭─ dev@host ~/project\r\n╰─')
+  await write(page, '\x1b[32m❯ \x1b[0m')
+  await page.keyboard.type('g')
+  await expect(first(page)).toHaveText('git status')
+  await page.keyboard.press('Enter')
+  await expect.poll(() => readHistory(page)).toEqual([expect.objectContaining({ command: 'g' })])
+})
+
+test('discards a tentative border when subsequent output is not a shell prompt', async ({ page }) => {
+  for (const [index, text] of ['file.txt ', 'Password: ', '> '].entries()) {
+    await reset(page, '╰─ ')
+    await write(page, text)
+    await page.keyboard.type('git ')
+    await expect(list(page)).toHaveCount(0)
+    await page.keyboard.press('Enter')
+    await reset(page)
+    await page.keyboard.type('pwd')
+    await page.keyboard.press('Enter')
+    await expect.poll(() => readHistory(page)).toEqual([
+      expect.objectContaining({ command: 'pwd', uses: index + 1 }),
+    ])
+  }
+})
+
 test('Right, Tab and unselected Enter keep their remote behavior; Escape restores remote history arrows', async ({ page }) => {
   for (const [key, data] of [['ArrowRight', '\x1b[C'], ['Tab', '\t']]) {
     await reset(page)

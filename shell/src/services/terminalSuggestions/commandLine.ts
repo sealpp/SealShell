@@ -12,10 +12,15 @@ export interface CommandLineSnapshot {
   column: number
 }
 
-// Recognize a small set of visible shell prompts. A continuation prompt ('> ')
-// and arbitrary application input are deliberately not treated as a shell.
+// Recognize visible shell prompts, including the input row of multiline themes.
+// A continuation prompt ('> ') is deliberately not treated as a shell.
 export function isShellPrompt(text: string): boolean {
-  return /^(?:[#$%❯➜] |(?:\([^()\r\n]*\) )?(?:\[[^\r\n]+\]|[\w.-]+@[\w.-]+[^\r\n]*|[\w.-]+|[~/][^\r\n]*)[#$%❯] )$/.test(text)
+  // Keep the original decoration in the anchor; remove it only for recognition.
+  const prompt = text.replace(/^[ \t]*[└┗╰][\u2500-\u257f]+[ \t]*/, '')
+  if (!prompt) return prompt !== text
+  return /^(?!\d+%[ \t]+$)(?:[#$%❯➜]|(?:\([^()\r\n]*\)[ \t]+)?(?:\[[^\r\n]+\]|[\w.-]+@[\w.-]+[^\r\n]*|[\w.-]+|[~/][^\r\n]*)[#$%❯])[ \t]+$/.test(prompt)
+    || /^➜[ \t]+[^\r\n]*\S[ \t]+$/.test(prompt)
+    || /^[^\r\n]*\ue0b0[ \t]+$/.test(prompt)
 }
 
 function wrappedRowText(buffer: IBuffer, row: number, columns: number): string {
@@ -113,13 +118,14 @@ export class TerminalCommandLine {
       const cursorRow = buffer.baseY + buffer.cursorY
       if (!line || cursorRow < this.anchor.marker.line || cursorRow > line.endRow) this.clearAnchor()
     }
-    if (!this.anchor && !this.submitted) {
+    if (!this.edited && !this.submitted) {
       const row = buffer.baseY + buffer.cursorY
       const line = buffer.getLine(row)
       if (!line || line.isWrapped || line.translateToString(true, buffer.cursorX).trimEnd()) return
       const prefix = line.translateToString(false, 0, buffer.cursorX)
-      if (!isShellPrompt(prefix)) return
-      const marker = terminal.registerMarker(0)
+      if (!isShellPrompt(prefix)) { this.clearAnchor(); return }
+      // An untouched prompt can arrive in parts, such as a border then a sign.
+      const marker = this.anchor?.marker ?? terminal.registerMarker(0)
       if (marker) { this.anchor = { marker, prefix }; this.expectedCommand = '' }
     }
   }
