@@ -1,6 +1,6 @@
 import { pathSuggestions, probeDirectory, type DirectoryFacts } from './context'
 import { generateRecommendations, type RecommendationQuery } from './cloud'
-import type { CommandSuggestion } from './model'
+import type { CommandSuggestion, RecommendationActivity } from './model'
 import type { RecommendationSettings } from './settings'
 
 export interface RecommendationRequest extends RecommendationQuery { sessionId: string }
@@ -14,7 +14,7 @@ interface RecommendationPorts {
 export function createRecommender(key: () => Promise<string>, ports: RecommendationPorts = { context: probeDirectory, generate: generateRecommendations, key }) {
   let cache: { key: string; time: number; facts: DirectoryFacts } | undefined
   return async (request: RecommendationRequest, settings: RecommendationSettings, signal: AbortSignal,
-    publish: (items: CommandSuggestion[]) => void): Promise<string> => {
+    publish: (items: CommandSuggestion[]) => void, progress?: (activity: RecommendationActivity) => void): Promise<string> => {
     const abort = new AbortController()
     const cancel = () => abort.abort(signal.reason)
     signal.addEventListener('abort', cancel, { once: true })
@@ -28,6 +28,7 @@ export function createRecommender(key: () => Promise<string>, ports: Recommendat
         if (cache?.key === contextKey && Date.now() - cache.time < 30_000) facts = cache.facts
         else {
           try {
+            progress?.('context')
             facts = await ports.context(request.sessionId, request.cwd, abort.signal)
             abort.signal.throwIfAborted()
             cache = { key: contextKey, time: Date.now(), facts }
@@ -38,6 +39,7 @@ export function createRecommender(key: () => Promise<string>, ports: Recommendat
       if (settings.cloud) {
         const apiKey = await ports.key()
         abort.signal.throwIfAborted()
+        progress?.('ai')
         const candidates = await ports.generate(request, facts, settings, apiKey, abort.signal)
         abort.signal.throwIfAborted()
         publish(candidates)

@@ -1,6 +1,6 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
 import { TerminalCommandLine } from './commandLine'
-import { canRememberCommand, COMMAND_SUGGESTION_LIMIT, findCommandSuggestions, type CommandSuggestion, type CommandSuggestionProvider, type CommandUse } from './model'
+import { canRememberCommand, COMMAND_SUGGESTION_LIMIT, findCommandSuggestions, type CommandSuggestion, type CommandSuggestionProvider, type CommandUse, type RecommendationActivity } from './model'
 
 export interface TerminalSuggestionView {
   prefix: string
@@ -8,6 +8,7 @@ export interface TerminalSuggestionView {
   row: number
   column: number
   loading?: boolean
+  activity?: RecommendationActivity
   status?: string
   pending?: number
   enhanced?: boolean
@@ -20,7 +21,7 @@ interface SuggestionOptions {
   context?(): { key: string; cwd?: string }
   automatic?(): boolean
   enhancementEnabled?(query: string): boolean
-  enhance?(query: string, signal: AbortSignal, publish: (items: CommandSuggestion[]) => void): Promise<string>
+  enhance?(query: string, signal: AbortSignal, publish: (items: CommandSuggestion[]) => void, progress: (activity: RecommendationActivity) => void): Promise<string>
   onCommand(command: string, use?: CommandUse): void
   onAccept?(command: string, use: CommandUse): void
   onChange(view: TerminalSuggestionView | undefined): void
@@ -80,13 +81,15 @@ export function attachCommandSuggestions(terminal: Terminal, options: Suggestion
     const requestPrefix = linePrefix
     timer = setTimeout(async () => {
       if (!usable() || request.signal.aborted) return
-      if (view) show({ ...view, loading: true, status: '' })
+      if (view) show({ ...view, loading: true, activity: undefined, status: '' })
       const valid = () => !request.signal.aborted && usable() && context().key === requestKey && tracker.snapshot()?.command === requestPrefix
       try {
-        const status = await options.enhance!(query, request.signal, items => { if (valid()) publish(items) })
-        if (valid() && view) show({ ...view, loading: false, status })
+        const status = await options.enhance!(query, request.signal, items => { if (valid()) publish(items) }, activity => {
+          if (valid() && view) show({ ...view, activity })
+        })
+        if (valid() && view) show({ ...view, loading: false, activity: undefined, status })
       } catch {
-        if (valid() && view) show({ ...view, loading: false, status: '推荐暂不可用' })
+        if (valid() && view) show({ ...view, loading: false, activity: undefined, status: '推荐暂不可用' })
       }
     }, 650)
   }

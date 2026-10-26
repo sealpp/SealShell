@@ -19,6 +19,8 @@ export interface CommandSuggestion {
   lastUsed: number
 }
 
+export type RecommendationActivity = 'context' | 'ai'
+
 export interface CommandSuggestionProvider {
   suggestions(prefix: string): readonly CommandSuggestion[]
 }

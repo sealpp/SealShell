@@ -217,9 +217,9 @@ function initTerminal() {
     context: () => ({ key: `${tab.value?.sessionId}:${tab.value?.cwd}:${commandSuggestions.revision}:${commandSuggestions.rememberHistory}`, cwd: tab.value?.cwd }),
     automatic: () => commandSuggestions.recommendations.automatic,
     enhancementEnabled: query => commandSuggestions.recommendations.cloud || (commandSuggestions.recommendations.remoteContext && !!tab.value?.cwd && /^(cd|ls|cat|less|tail -f)\s/.test(query)),
-    enhance: (query, signal, publish) => recommend({ query, sessionId: tab.value?.sessionId ?? '', cwd: tab.value?.cwd,
+    enhance: (query, signal, publish, progress) => recommend({ query, sessionId: tab.value?.sessionId ?? '', cwd: tab.value?.cwd,
       history: commandSuggestions.rememberHistory ? commandSuggestions.history[tab.value?.hostId ?? ''] ?? [] : [],
-    }, { ...commandSuggestions.recommendations }, signal, publish),
+    }, { ...commandSuggestions.recommendations }, signal, publish, progress),
     onAccept: (command, use) => {
       const hostId = tab.value?.hostId
       if (hostId) void rememberSuggestionCommand(hostId, command, use).catch(historyError)

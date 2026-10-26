@@ -3,12 +3,25 @@ import { computed, ref, type CSSProperties } from 'vue'
 import { ListboxContent, ListboxItem, ListboxRoot, PopoverAnchor, PopoverContent, PopoverPortal, PopoverRoot, type FocusOutsideEvent } from 'reka-ui'
 import type { TerminalSuggestionView } from '../services/terminalSuggestions/controller'
 import { usePortalTarget } from '../ui/portal'
+import UiStatus from './UiStatus.vue'
 
 const props = defineProps<{ suggestion: TerminalSuggestionView; appearance: CSSProperties; boundary: HTMLElement | null }>()
 const emit = defineEmits<{ accept: [command: string]; dismiss: []; terminalKey: [event: KeyboardEvent]; lock: []; refresh: [] }>()
 const panel = ref<HTMLDivElement | null>(null)
 const listbox = ref<{ highlightFirstItem(): void; highlightItem(command: string): void } | null>(null)
 const portalTarget = usePortalTarget(computed(() => props.boundary))
+const sourceIcons: Record<string, string> = { history: 'history', ai: 'sparkle', directory: 'folder' }
+const feedback = computed(() => {
+  const view = props.suggestion
+  if (view.status) return { kind: 'warning' as const, label: view.status }
+  if (view.loading) return {
+    kind: 'busy' as const,
+    icon: view.activity === 'ai' ? 'sparkle' : undefined,
+    label: view.activity === 'ai' ? 'AI 正在生成建议' : view.activity === 'context' ? '正在读取目录' : '正在查找建议',
+  }
+  if (view.loading === false) return { kind: view.candidates.length || view.pending ? 'success' as const : 'idle' as const, label: view.candidates.length || view.pending ? '建议已更新' : '暂无匹配建议' }
+  return { kind: 'idle' as const, icon: 'clock', label: '输入停顿后补充建议' }
+})
 
 defineExpose({
   focus: (edge: 'first' | 'last') => {
@@ -37,13 +50,13 @@ function onFocusOutside(event: FocusOutsideEvent): void {
     <PopoverAnchor as-child><span class="terminal-command-anchor" :style="appearance" aria-hidden="true" /></PopoverAnchor>
     <PopoverPortal :to="portalTarget">
       <PopoverContent
-        class="terminal-command-suggestions" :class="{ 'has-enhancement': suggestion.enhanced }" aria-label="本地命令提示"
+        class="terminal-command-suggestions" :class="{ 'has-enhancement': suggestion.enhanced }" aria-label="命令提示"
         side="bottom" align="start" :side-offset="4" :collision-padding="8"
         :collision-boundary="boundary" :prioritize-position="true"
         @open-auto-focus.prevent @close-auto-focus.prevent
         @focus-outside="onFocusOutside"
       >
-        <div ref="panel" class="terminal-command-suggestions-panel" @keydown.capture="onKeydown" @pointerenter="emit('lock')" @focusin="emit('lock')">
+        <div ref="panel" class="terminal-command-suggestions-panel" :class="{ 'has-candidates': suggestion.candidates.length }" @keydown.capture="onKeydown" @pointerenter="emit('lock')" @focusin="emit('lock')">
           <ListboxRoot ref="listbox" class="terminal-command-suggestions-body workbench-selection-container" selection-behavior="replace" :highlight-on-hover="true">
             <ListboxContent aria-label="命令候选" class="terminal-command-suggestions-list">
               <ListboxItem
@@ -55,15 +68,15 @@ function onFocusOutside(event: FocusOutsideEvent): void {
                 @mousedown.left.prevent="listbox?.highlightItem(candidate.command)"
                 @select.prevent="emit('accept', candidate.command)"
               >
+                <span class="terminal-command-source codicon" :class="`codicon-${sourceIcons[candidate.source] ?? 'terminal'}`" aria-hidden="true" />
                 <code v-if="suggestion.prefix && candidate.command.startsWith(suggestion.prefix)"><span class="terminal-command-prefix">{{ suggestion.prefix }}</span>{{ candidate.command.slice(suggestion.prefix.length) }}</code>
                 <code v-else>{{ candidate.command }}</code>
               </ListboxItem>
             </ListboxContent>
           </ListboxRoot>
-          <div v-if="suggestion.enhanced || suggestion.pending || suggestion.loading || suggestion.status" class="terminal-command-status" :title="suggestion.status">
-            <button v-if="suggestion.pending" type="button" @click="emit('refresh')">显示 {{ suggestion.pending }} 条新建议</button>
-            <span v-else-if="suggestion.loading" role="status">正在推荐…</span>
-            <span v-else role="status">{{ suggestion.status }}</span>
+          <div v-if="suggestion.enhanced || suggestion.pending || suggestion.loading || suggestion.status" class="terminal-command-status">
+            <UiStatus v-bind="feedback" compact />
+            <button v-if="suggestion.pending" type="button" @click="emit('refresh')"><span class="codicon codicon-refresh" aria-hidden="true" />显示 {{ suggestion.pending }} 条新建议</button>
           </div>
         </div>
       </PopoverContent>
@@ -77,10 +90,15 @@ function onFocusOutside(event: FocusOutsideEvent): void {
 .terminal-command-suggestions-panel { display: flex; flex-direction: column; min-height: 0; padding: 4px 0; }
 .terminal-command-suggestions-body { display: flex; flex-direction: column; min-height: 0; }
 .terminal-command-suggestions-list { overflow-y: auto; min-height: 0; outline: none; }
-.terminal-command-suggestion { display: flex; align-items: center; min-height: 22px; padding: 0 8px; cursor: pointer; }
+.terminal-command-suggestion { display: flex; align-items: center; gap: 6px; min-height: 22px; padding: 0 8px; cursor: pointer; }
+.terminal-command-source { flex: 0 0 16px; font-size: 16px; color: var(--workbench-text-muted); }
+.terminal-command-suggestion[data-source='ai'] .terminal-command-source { color: var(--workbench-link); }
 .terminal-command-suggestion code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; font: 12px/1.5 Consolas, ui-monospace, monospace; }
 .terminal-command-prefix { color: var(--workbench-link); }
 .terminal-command-suggestions.has-enhancement { width: 420px; }
-.terminal-command-status { box-sizing: border-box; font-size: 11px; height: 26px; flex-shrink: 0; padding: 4px 8px; color: var(--workbench-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.terminal-command-status button { color: var(--workbench-link); background: none; border: 0; cursor: pointer; }
+.terminal-command-status { display: flex; align-items: center; gap: 8px; box-sizing: border-box; height: 28px; flex-shrink: 0; padding: 3px 8px; }
+.has-candidates .terminal-command-status { margin-top: 4px; border-top: 1px solid var(--workbench-border-muted); }
+.terminal-command-status .ui-status { flex: 1; }
+.terminal-command-status button { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; padding: 2px 4px; border-radius: var(--workbench-radius-small); color: var(--workbench-link); background: transparent; border: 0; font: 400 12px/18px var(--workbench-font-family); cursor: pointer; }
+.terminal-command-status button:hover { background: var(--workbench-toolbar-hover-bg); }
 </style>
