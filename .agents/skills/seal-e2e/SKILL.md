@@ -148,7 +148,7 @@ loopback 后用 SSH 隧道访问。容器 sshd 设置 `LANG=C.UTF-8`，并为测
 
 ## 选择器
 
-`shell/tests/settings-consistency.spec.ts` 比较所有设置页的实际标题、表单尺寸和聚焦样式，覆盖窄窗以及端口设置慢保存时切页、关闭、失败重试；截图存系统临时目录 `seal-e2e/settings`。推荐状态通过 `command-recommendations.spec.ts` 的受控请求检查目录读取、AI 生成、完成和异常，保留候选焦点并验证减少动态效果；实际云端适配器的等待与完成截图存 `seal-e2e/command-suggestions`。表格密度调整须检查表头单元的真实边界与首行点击，避免内部固定高度溢出行容器；不得用强制点击绕过。
+`shell/tests/settings-consistency.spec.ts` 比较所有设置页的实际标题、表单尺寸和聚焦样式，覆盖窄窗、开关位置与键盘操作、按需帮助，以及端口设置慢保存时切页、关闭、失败重试；截图存系统临时目录 `seal-e2e/settings`。推荐状态通过 `command-recommendations.spec.ts` 的受控请求检查目录读取、AI 生成、完成和异常，保留候选焦点并验证减少动态效果；同时验证图形反馈仍有完整的悬停/读屏文案、无候选时不留宽空框，以及密钥未编辑时保留、显式清除后移除。实际云端适配器的等待与完成截图存 `seal-e2e/command-suggestions`。表格密度调整须检查表头单元的真实边界与首行点击，避免内部固定高度溢出行容器；不得用强制点击绕过。
 
 `shell/tests/workbench-theme.spec.ts` 使用实际工作台验证活动栏的内缩圆角伪元素、选中/悬停/键盘焦点及图标位置稳定、列表聚焦/失焦选择、菜单 Portal 与 Dockview 标签的主题，以及终端配色改变后外围保持独立。Codicons 检查包含本地字体与断网后首次打开弹窗；不配对真实 Node，不操作用户主机。配色或密度变更时同步相关 UI 套件的视觉断言，并运行生产构建及 `node shell/tests/editor-offline.mjs`，验证编辑器首次离线加载的主题和字体。
 

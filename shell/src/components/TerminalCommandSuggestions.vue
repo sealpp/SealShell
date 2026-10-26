@@ -11,6 +11,7 @@ const panel = ref<HTMLDivElement | null>(null)
 const listbox = ref<{ highlightFirstItem(): void; highlightItem(command: string): void } | null>(null)
 const portalTarget = usePortalTarget(computed(() => props.boundary))
 const sourceIcons: Record<string, string> = { history: 'history', ai: 'sparkle', directory: 'folder' }
+const hasContent = computed(() => props.suggestion.candidates.length > 0 || props.suggestion.loading || props.suggestion.status || props.suggestion.pending || props.suggestion.loading === false)
 const feedback = computed(() => {
   const view = props.suggestion
   if (view.status) return { kind: 'warning' as const, label: view.status }
@@ -46,11 +47,11 @@ function onFocusOutside(event: FocusOutsideEvent): void {
 </script>
 
 <template>
-  <PopoverRoot :open="true" @update:open="open => { if (!open) emit('dismiss') }">
+  <PopoverRoot :open="!!hasContent" @update:open="open => { if (!open) emit('dismiss') }">
     <PopoverAnchor as-child><span class="terminal-command-anchor" :style="appearance" aria-hidden="true" /></PopoverAnchor>
     <PopoverPortal :to="portalTarget">
       <PopoverContent
-        class="terminal-command-suggestions" :class="{ 'has-enhancement': suggestion.enhanced }" aria-label="命令提示"
+        class="terminal-command-suggestions" :class="{ 'has-enhancement': suggestion.enhanced, 'status-only': !suggestion.candidates.length }" aria-label="命令提示"
         side="bottom" align="start" :side-offset="4" :collision-padding="8"
         :collision-boundary="boundary" :prioritize-position="true"
         @open-auto-focus.prevent @close-auto-focus.prevent
@@ -75,8 +76,8 @@ function onFocusOutside(event: FocusOutsideEvent): void {
             </ListboxContent>
           </ListboxRoot>
           <div v-if="suggestion.enhanced || suggestion.pending || suggestion.loading || suggestion.status" class="terminal-command-status">
-            <UiStatus v-bind="feedback" compact />
-            <button v-if="suggestion.pending" type="button" @click="emit('refresh')"><span class="codicon codicon-refresh" aria-hidden="true" />显示 {{ suggestion.pending }} 条新建议</button>
+            <UiStatus v-bind="feedback" compact :icon-only="!suggestion.status && (suggestion.loading !== false || !!suggestion.candidates.length)" />
+            <button v-if="suggestion.pending" type="button" :aria-label="`显示 ${suggestion.pending} 条新建议`" :title="`显示 ${suggestion.pending} 条新建议`" @click="emit('refresh')"><span class="codicon codicon-refresh" aria-hidden="true" /><span>{{ suggestion.pending }}</span></button>
           </div>
         </div>
       </PopoverContent>
@@ -96,6 +97,7 @@ function onFocusOutside(event: FocusOutsideEvent): void {
 .terminal-command-suggestion code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; font: 12px/1.5 Consolas, ui-monospace, monospace; }
 .terminal-command-prefix { color: var(--workbench-link); }
 .terminal-command-suggestions.has-enhancement { width: 420px; }
+.terminal-command-suggestions.status-only { width: max-content; min-width: 32px; }
 .terminal-command-status { display: flex; align-items: center; gap: 8px; box-sizing: border-box; height: 28px; flex-shrink: 0; padding: 3px 8px; }
 .has-candidates .terminal-command-status { margin-top: 4px; border-top: 1px solid var(--workbench-border-muted); }
 .terminal-command-status .ui-status { flex: 1; }
