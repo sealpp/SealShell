@@ -192,6 +192,20 @@ async function main() {
     }
     console.log(`shell starts at the fitted ${initialTerminalSize.columns}x${initialTerminalSize.rows} before its first output`);
 
+    // The actual PWA/WASM exec path uses a separate connection and releases it.
+    const beforeRecommendation = readMockSshState();
+    const recommendationFacts = await page.evaluate(async () => {
+      const { probeDirectory } = await import('/src/services/terminalSuggestions/context.ts');
+      const tab = window.sealE2eStore.tabs[0];
+      return probeDirectory(tab.sessionId, '/workspace', new AbortController().signal);
+    });
+    if (!recommendationFacts.directories.includes('/workspace/project one')) throw new Error('recommendation context missing');
+    await waitForMockSshState(state => state.active_connections === beforeRecommendation.active_connections
+      && state.connections === beforeRecommendation.connections + 1 && state.shell === beforeRecommendation.shell,
+    'recommendation probe connection to close without creating an interactive shell');
+    if (readMockSshState().recommendation_probe !== 1) throw new Error('recommendation probe did not use fixed exec');
+    console.log('recommendation context uses an isolated WASM SSH connection and releases it');
+
     const sourceDirectory = NATIVE_SHELL
       ? path.join(trustDirectory, 'remote', "中文 path", "a'b;$(touch sentinel) #%=back").replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, drive) => `/${drive.toLowerCase()}`)
       : "/workspace/中文 path/a'b;$(touch sentinel) #%=back";

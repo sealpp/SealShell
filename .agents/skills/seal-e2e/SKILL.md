@@ -182,12 +182,17 @@ loopback 后用 SSH 隧道访问。容器 sshd 设置 `LANG=C.UTF-8`，并为测
 
 ## PWA WASM 资源
 
+命令推荐回归在 `shell/tests/command-recommendations.spec.ts`：真实 xterm 完整命令替换、自然语言不进入远端输入、迟到结果冻结/刷新、目录变更取消、采纳与提交分别记忆、云端配置加密，以及生产 ShellTerminal 经真实云端适配器请求（响应由路由 fixture 提供）。既有 `command-suggestions.spec.ts` 保留前缀、远端灰字和延迟回显回归。`recommendations.test.ts` 另用实际 Bash 执行固定只读目录探测，验证特殊路径引用和元数据提取；Windows 仅覆盖 Git Bash shell 语义，不代表真实 Linux PTY 行编辑。
+
+SSH runner 验证目录探测使用独立 PWA/WASM SSH exec 连接、零新增交互 shell，以及完成后释放连接；mock 的固定 NUL 字段只验证协议链路，不替代真实目录语义测试。使用真实服务商的 smoke 只发送合成目录/命令，不把 Key 放测试源码、截图、trace 或构建环境；Key 从本地忽略文件读取。云端延迟与整个推荐流程延迟应分别报告。
+
 Vite 配置会从已锁定的 npm 依赖复制以下运行时资源到开发/构建 public 目录：
 
 - `libssh2.wasm`
 
 这些生成文件不提交。修改 `ws.ts`、`nodeClient.ts`、`ssh.ts`、Worker 或 Vite 配置后，
 刷新页面或重启 dev server 再跑 E2E，避免 HMR 使用旧的 WASM/模块状态。
+涉及模块路由替换或测试侧动态 import 的浏览器用例应在代码修改后冷启动 Vite：热更新的静态依赖可能带 `?t=`，而测试 import 仍为无时间戳 URL，导致 vault 等状态模块出现两份实例、精确路由漏匹配。不要以重新初始化生产状态掩盖测试加载差异。
 
 ## 文件卫生
 
