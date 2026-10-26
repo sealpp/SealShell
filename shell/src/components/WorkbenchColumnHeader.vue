@@ -64,7 +64,7 @@ onBeforeUnmount(() => observer?.disconnect())
 </template>
 
 <style scoped>
-.workbench-column-header { position: relative; box-sizing: border-box; min-width: 0; height: 32px; padding: 0; flex-shrink: 0; text-align: left; font-weight: 600; }
+.workbench-column-header { position: relative; box-sizing: border-box; min-width: 0; height: var(--workbench-row-height); padding: 0; flex-shrink: 0; text-align: left; font-weight: 600; }
 .workbench-column-header[aria-sort='ascending'], .workbench-column-header[aria-sort='descending'] { color: var(--workbench-text-strong); }
 .workbench-sort-button { position: absolute; inset: 0; display: flex; align-items: center; gap: 4px; width: 100%; height: 100%; box-sizing: border-box; min-width: 0; padding: 0 8px; border: 0; border-radius: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .workbench-sort-button > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

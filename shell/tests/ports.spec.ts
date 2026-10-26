@@ -59,6 +59,23 @@ test('validates targets inline and keeps failed checked rules distinct from disa
   await expect(row).toHaveCount(0)
 })
 
+test('keeps header cells within the shared row height and the first forwarding checkbox clickable', async ({ page }) => {
+  await page.locator('.test-host').click({ button: 'right' })
+  await page.getByRole('menuitem', { name: '打开端口转发', exact: true }).click()
+  await expect(page.locator('.ports-notice.error')).toBeVisible()
+  await page.evaluate(() => {
+    const state = (window as any).monitorFixture.store.tabs.find((tab: any) => tab.kind === 'port').ports
+    state.rows = [{ id: 'localhost:3000', host: 'localhost', port: 3000, localPort: 3000, enabled: false, status: 'disabled', listening: true, configured: false, error: '' }]
+  })
+  const panel = page.locator('.ports-panel:visible')
+  const row = panel.locator('[data-port-id="localhost:3000"]')
+  const bounds = await panel.getByRole('columnheader').first().boundingBox()
+  const firstRow = await row.boundingBox()
+  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(firstRow!.y)
+  await row.getByRole('checkbox').check()
+  await expect(row.getByRole('checkbox')).toBeChecked()
+})
+
 test('sorts and resizes all data columns without changing rules, edits or enabled state', async ({ page }) => {
   await page.locator('.test-host').click({ button: 'right' })
   await page.getByRole('menuitem', { name: '打开端口转发', exact: true }).click()
