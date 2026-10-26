@@ -1,13 +1,13 @@
 import { expect, test, type Page } from '@playwright/test'
 
-async function openTerminals(page: Page, ids = ['layout-a']) {
+async function openTerminals(page: Page, ids = ['layout-a'], state: 'connecting' | 'online' = 'online') {
   await page.route('**/src/services/ws.ts', route => route.fulfill({
     contentType: 'application/javascript',
     body: `
       export * from '/src/services/ws.ts?actual';
       const handlers = new Map();
       const encoder = new TextEncoder();
-      window.terminalLayoutFixture = { handlers, bindings: [], resizes: [], inputs: [] };
+      window.terminalLayoutFixture = { handlers, bindings: [], resizes: [], inputs: [], ready: new Set(), remoteSizes: new Map() };
       export function setTerminalOutputHandler(id, handler) {
         window.terminalLayoutFixture.bindings.push({ id, bound: !!handler });
         if (handler) handlers.set(id, text => handler(encoder.encode(text)));
@@ -15,6 +15,7 @@ async function openTerminals(page: Page, ids = ['layout-a']) {
       }
       export function resizeTerminal(id, columns, rows) {
         window.terminalLayoutFixture.resizes.push({ id, columns, rows });
+        if (window.terminalLayoutFixture.ready.has(id)) window.terminalLayoutFixture.remoteSizes.set(id, { columns, rows });
       }
       export function sendTerminalInput(id, data) {
         const text = new TextDecoder().decode(data);
@@ -27,20 +28,61 @@ async function openTerminals(page: Page, ids = ['layout-a']) {
   const pairing = page.getByRole('dialog', { name: '配对 Node', exact: true })
   await expect(pairing).toBeVisible()
   await pairing.getByRole('button', { name: '关闭', exact: true }).click()
-  await page.evaluate(async ids => {
+  await page.evaluate(async ({ ids, state }) => {
     const { store } = await import('/src/stores/app.ts')
     const { commandSuggestions } = await import('/src/services/terminalSuggestions/runtime.ts')
     commandSuggestions.enabled = false
+    for (const id of ids) {
+      const fixture = (window as any).terminalLayoutFixture
+      fixture.remoteSizes.set(id, { columns: 80, rows: 24 })
+      if (state === 'online') fixture.ready.add(id)
+    }
     store.hosts = [{ id: 'layout-host', name: 'Layout fixture', address: 'test.invalid', port: 22, username: 'test', folderId: null }]
     store.tabs = ids.map(id => ({
-      id, kind: 'terminal', hostId: 'layout-host', label: id, state: 'online', error: '',
+      id, kind: 'terminal', hostId: 'layout-host', label: id, state, error: '',
       sessionId: id, terminalId: id, encoding: 'utf-8',
     }))
     store.view = 'shell'
     store.activeTerminalTabId = ids[0]
-  }, ids)
+  }, { ids, state })
   await expect(page.locator('.terminal-tab')).toHaveCount(ids.length)
   await page.waitForFunction(ids => ids.every(id => (window as any).terminalLayoutFixture.handlers.has(id)), ids)
+}
+
+for (const { name, width, reconnect } of [
+  { name: 'new wide', width: 1280, reconnect: false },
+  { name: 'new narrow', width: 800, reconnect: false },
+  { name: 'reconnected', width: 1280, reconnect: true },
+]) {
+  test(`${name} terminals publish the fitted size when SSH becomes ready without a viewport resize`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 })
+    await openTerminals(page, ['layout-a'], reconnect ? 'online' : 'connecting')
+    await expect.poll(() => page.evaluate(() => (window as any).terminalLayoutFixture.resizes.at(-1)?.columns ?? 80)).not.toBe(80)
+    const fitted = await page.evaluate(() => {
+      const { columns, rows } = (window as any).terminalLayoutFixture.resizes.at(-1)
+      return { columns, rows }
+    })
+    if (reconnect) {
+      await page.evaluate(async () => {
+        const { store } = await import('/src/stores/app.ts')
+        const fixture = (window as any).terminalLayoutFixture
+        fixture.ready.delete('layout-a')
+        fixture.remoteSizes.set('layout-a', { columns: 80, rows: 24 })
+        store.tabs[0].state = 'connecting'
+        store.tabs[0].sessionId = 'reconnected-session'
+      })
+      await page.waitForFunction(() => (window as any).terminalLayoutFixture.handlers.has('reconnected-session'))
+    }
+    expect(await page.evaluate(() => (window as any).terminalLayoutFixture.remoteSizes.get('layout-a'))).toEqual({ columns: 80, rows: 24 })
+    await page.evaluate(async () => {
+      const { store } = await import('/src/stores/app.ts')
+      const fixture = (window as any).terminalLayoutFixture
+      fixture.ready.add('layout-a')
+      store.tabs[0].state = 'online'
+    })
+    await expect.poll(() => page.evaluate(() => (window as any).terminalLayoutFixture.remoteSizes.get('layout-a'))).toEqual(fitted)
+    expect(page.viewportSize()).toEqual({ width, height: 800 })
+  })
 }
 
 async function recordLayoutChanges(page: Page) {

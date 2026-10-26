@@ -141,10 +141,15 @@ def command_output(command: str) -> tuple[str, int]:
     return f"unknown command: {command}\n", 1
 
 
+def record_shell_size(process: asyncssh.SSHServerProcess, shell_id: str) -> None:
+    call_count.setdefault("shell_sizes", {})[shell_id] = list(process.term_size[:2])
+    write_state()
+
+
 async def handle_native_shell(process: asyncssh.SSHServerProcess, startup_command: str | None = None) -> None:
     call_count["shell"] += 1
     shell_id = str(call_count["shell"])
-    write_state()
+    record_shell_size(process, shell_id)
     args = ["-f"] if zsh_path else ["--noprofile", "--norc"]
     args += ["-c", startup_command] if startup_command else ["-i"]
     shell_env = {**os.environ, "HISTFILE": str(mock_sftp_root / "shell-history"), "CHERE_INVOKING": "1"}
@@ -168,6 +173,7 @@ async def handle_native_shell(process: asyncssh.SSHServerProcess, startup_comman
             try:
                 data = await process.stdin.read(4096)
             except asyncssh.TerminalSizeChanged:
+                record_shell_size(process, shell_id)
                 continue
             if not data:
                 shell.stdin.close()
@@ -208,6 +214,7 @@ async def handle_shell(process: asyncssh.SSHServerProcess) -> None:
     call_count["shell"] += 1
     shell_id = str(call_count["shell"])
     cwd = "/"
+    record_shell_size(process, shell_id)
 
     def report_cwd() -> None:
         if not os.environ.get("MOCK_SSH_REPORT_CWD"):
@@ -223,6 +230,7 @@ async def handle_shell(process: asyncssh.SSHServerProcess) -> None:
             line = await process.stdin.readline()
         except asyncssh.TerminalSizeChanged:
             # PTY window changes are stream events, not shell termination.
+            record_shell_size(process, shell_id)
             continue
         if not line:
             return

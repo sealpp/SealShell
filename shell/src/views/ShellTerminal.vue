@@ -172,8 +172,8 @@ function bindOutput() {
   if (!sessionId || !terminal) return
   setTerminalOutputHandler(sessionId, writeOutput)
 
-  // Ensure the remote PTY receives the initial window size as soon as the
-  // output handler is bound; xterm's onResize may not fire by itself.
+  // Bind with the current viewport size. A connecting session may not accept
+  // it yet; the online watcher publishes it again once SSH is ready.
   fitAddon?.fit()
   const currentTab = tab.value
   if (currentTab && currentTab.sessionId) {
@@ -244,7 +244,12 @@ function initTerminal() {
   unwatchState.value = watch(
     () => tab.value?.state,
     (state) => {
-      if (state === 'error') {
+      if (state === 'online' && terminal) {
+        // Fitting may have finished before the SSH session could accept a
+        // resize. Publish again on readiness even when xterm's size is unchanged.
+        fitAndResize()
+        scheduleBackendResize(terminal.cols, terminal.rows)
+      } else if (state === 'error') {
         suggestions?.reset()
         terminal?.writeln(`\r\n[session error: ${tab.value?.error}]`)
       }

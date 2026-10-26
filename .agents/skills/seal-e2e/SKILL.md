@@ -128,6 +128,8 @@ SIGHUP 时的清理；Windows 跳过该信号测试，需用真实 Linux 环境�
 AsyncSSH 的 PTY resize 会在 stdin 读取时抛出 `TerminalSizeChanged`，mock 必须消费后继续读取，
 否则终端刚上线即断开，telemetry 也无法开始 exec；不要将其误判为 Node 转发故障。
 
+mock 状态的 `shell_sizes` 记录每个 shell 最近收到的 SSH PTY `[columns, rows]`。SSH 套件在首次主机指纹确认前等待本地 fit 完成，确认上线后比较远端记录与 xterm 行列，期间不缩放浏览器；这样可捕捉连接前 resize 被忽略、上线时未补发的问题。该记录验证 SSH 端收到的尺寸，pipe shell 本身不能替代真实 PTY 行编辑验收。
+
 ## 真实 OpenSSH 目录继承
 
 `python scripts/test.py ssh-real` 连接独立的真实 SSH 测试端点，自行启动和清理本机 Vite、SealNode

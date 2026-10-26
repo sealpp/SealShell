@@ -114,6 +114,19 @@ async function main() {
     });
     page.on('pageerror', (error) => { browserErrors.push(error.message); console.error('page error:', error.message); });
 
+    await page.route('**/src/services/ws.ts', route => route.fulfill({
+      contentType: 'application/javascript',
+      body: `
+        export * from '/src/services/ws.ts?actual';
+        import { resizeTerminal as resize } from '/src/services/ws.ts?actual';
+        window.terminalResizeEvents = [];
+        export function resizeTerminal(id, columns, rows) {
+          window.terminalResizeEvents.push({ id, columns, rows });
+          resize(id, columns, rows);
+        }
+      `,
+    }));
+
     await page.goto(PWA_URL);
 
     await page.getByPlaceholder('000000').fill(pin);
@@ -137,6 +150,9 @@ async function main() {
         const hostKeyAccept = page.locator('#host-key-accept');
         await hostKeyAccept.waitFor({ state: 'visible', timeout: 5000 });
         hostKeyPromptSeen = true;
+        // Let local fitting finish before SSH can open its PTY. This models
+        // a slow handshake or a user taking time to confirm the host key.
+        await page.waitForFunction(() => window.terminalResizeEvents.at(-1)?.columns > 80);
         await hostKeyAccept.click();
         await page.waitForTimeout(1200);
       } catch {
@@ -174,6 +190,12 @@ async function main() {
 
     await addHost('A');
     if (!hostKeyPromptSeen) throw new Error('first SSH connection did not request host-key confirmation');
+    const initialTerminalSize = await page.evaluate(() => window.terminalResizeEvents.at(-1));
+    await waitForMockSshState(state => {
+      const size = state.shell_sizes?.['1'];
+      return size?.[0] === initialTerminalSize.columns && size?.[1] === initialTerminalSize.rows;
+    }, `the initial PTY to match xterm (${initialTerminalSize.columns}x${initialTerminalSize.rows}) without a browser resize`);
+    console.log('initial remote PTY matches the fitted terminal without resizing the browser');
 
     const sourceDirectory = NATIVE_SHELL
       ? path.join(trustDirectory, 'remote', "中文 path", "a'b;$(touch sentinel) #%=back").replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, drive) => `/${drive.toLowerCase()}`)
