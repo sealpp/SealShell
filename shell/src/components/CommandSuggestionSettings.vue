@@ -45,12 +45,13 @@ defineExpose({ flush: autosave.flush })
     </fieldset>
     <details class="suggestion-help">
       <summary>操作说明</summary>
-      <p>常用命令按前缀匹配，历史支持关键词和意图检索，并优先当前目录。用 ↑↓ 或点击选中后只填入完整命令，再由你按 Enter 执行。Escape 关闭列表后可用 ↑↓ 查看远端历史。Tab 和左右方向键保持远端行为。</p>
-      <p>Ctrl+Shift+Space 在光标附近打开目标输入，例如“运行当前项目”或“查看 8080 端口”。目标文字不会发往终端。完整替换使用 Bash/zsh 默认 Emacs 行编辑的 Ctrl+U；自定义键位或 vi 模式请核对填入结果。晚到结果不会重排已有候选，选择期间通过“新建议”手动刷新。</p>
+      <p>直接在终端输入，例如 python main 或 cd myproject。本地候选立即匹配，输入停顿后补充已启用的目录和云端建议。历史支持关键词检索，并优先当前目录。</p>
+      <p>用 ↑↓ 或点击选中后只填入完整命令，再由你按 Enter 执行。未选中候选时，Enter 仍提交当前终端输入。Escape 关闭列表后可用 ↑↓ 查看远端历史，Tab 和左右方向键保持远端行为。</p>
+      <p>完整替换使用 Bash/zsh 默认 Emacs 行编辑的 Ctrl+U；自定义键位或 vi 模式请核对填入结果。晚到结果不会重排已有候选，选择期间通过“新建议”手动刷新。</p>
       <p>云端接口须兼容 Chat Completions JSON 输出并允许浏览器跨域访问。清空已编辑的 Key 输入框可移除它。</p>
     </details>
     <label><input v-model="draft.rememberHistory" type="checkbox">记住当前浏览器的命令历史</label>
-    <p>每个连接保存最近 200 条命令及其目录、意图、采纳与提交次数。提交不代表执行成功，采纳不代表已经执行。默认仅存本机；命令参数也会保留，可在命令前加空格跳过记录与推荐。</p>
+    <p>每个连接保存最近 200 条命令及其目录、采纳与提交次数。提交不代表执行成功，采纳不代表已经执行。默认仅存本机；命令参数也会保留，可在命令前加空格跳过记录与推荐。</p>
     <p>关闭历史后停止记录与检索，目录和云端来源由各自开关控制；已有历史保留到手动清除。密码输入、多行粘贴、全屏程序和无法识别的提示符暂停提示。</p>
     <button type="button" class="settings-reset-all" :disabled="clearing" @click="clear">清除命令历史</button>
     <label><input v-model="draft.recommendations.remoteContext" type="checkbox">按需探测 Linux 目录</label>

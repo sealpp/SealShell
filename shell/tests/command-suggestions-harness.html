@@ -68,7 +68,7 @@
             active: () => true,
             context: () => ({ key: `${enhanced}:${cwd}`, cwd }),
             enhancementEnabled: () => enhanced,
-            enhance: (query, mode, signal, publish) => new Promise(resolve => { requests.push({ query, mode, signal, publish, resolve }) }),
+            enhance: (query, signal, publish) => new Promise(resolve => { requests.push({ query, signal, publish, resolve }) }),
             focusList: edge => list.value?.focus(edge),
             listContains: target => list.value?.contains(target) ?? false,
             providers: () => [commonCommandProvider, historyProvider(commandSuggestions.rememberHistory ? commandSuggestions.history['suggestions-a'] ?? [] : [])],
@@ -96,7 +96,7 @@
         })
         onBeforeUnmount(() => { adapter?.dispose(); terminal?.dispose() })
         return () => h('main', [
-          h('div', { class: 'terminal', ref: container }, suggestion.value ? h(TerminalCommandSuggestions, { ref: list, suggestion: suggestion.value, appearance: appearance.value, boundary: container.value, onAccept: command => adapter.accept(command), onDismiss: () => adapter.dismiss(), onTerminalKey: event => adapter.forwardKey(event), onLock: () => adapter.lock(), onIntent: query => adapter.setIntent(query), onRefresh: () => adapter.applyPending(), onRetry: () => adapter.retry() }) : []),
+          h('div', { class: 'terminal', ref: container }, suggestion.value ? h(TerminalCommandSuggestions, { ref: list, suggestion: suggestion.value, appearance: appearance.value, boundary: container.value, onAccept: command => adapter.accept(command), onDismiss: () => adapter.dismiss(), onTerminalKey: event => adapter.forwardKey(event), onLock: () => adapter.lock(), onRefresh: () => adapter.applyPending() }) : []),
           h('div', { class: 'controls' }, [h('button', { onClick: () => { store.settingsSection = 'suggestions'; store.settingsModalOpen = true } }, '命令提示设置'), h('input', { 'aria-label': 'Other input' }), h('span', { id: 'ready' }, String(ready.value))]),
           store.settingsModalOpen ? h(SettingsDialog) : null,
           h(InteractionDialog),

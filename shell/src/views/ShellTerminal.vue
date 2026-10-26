@@ -216,8 +216,8 @@ function initTerminal() {
     ],
     context: () => ({ key: `${tab.value?.sessionId}:${tab.value?.cwd}:${commandSuggestions.revision}:${commandSuggestions.rememberHistory}`, cwd: tab.value?.cwd }),
     automatic: () => commandSuggestions.recommendations.automatic,
-    enhancementEnabled: (query, mode) => commandSuggestions.recommendations.cloud || (commandSuggestions.recommendations.remoteContext && !!tab.value?.cwd && (mode === 'intent' || /^(cd|ls|cat|less|tail -f)\s/.test(query))),
-    enhance: (query, mode, signal, publish) => recommend({ query, mode, sessionId: tab.value?.sessionId ?? '', cwd: tab.value?.cwd,
+    enhancementEnabled: query => commandSuggestions.recommendations.cloud || (commandSuggestions.recommendations.remoteContext && !!tab.value?.cwd && /^(cd|ls|cat|less|tail -f)\s/.test(query)),
+    enhance: (query, signal, publish) => recommend({ query, mode: 'command', sessionId: tab.value?.sessionId ?? '', cwd: tab.value?.cwd,
       history: commandSuggestions.rememberHistory ? commandSuggestions.history[tab.value?.hostId ?? ''] ?? [] : [],
     }, { ...commandSuggestions.recommendations }, signal, publish),
     onAccept: (command, use) => {
@@ -363,7 +363,7 @@ onBeforeUnmount(() => {
         <TerminalCommandSuggestions
           v-if="suggestion" ref="suggestionList" :suggestion="suggestion" :appearance="suggestionAppearance" :boundary="termEl"
           @accept="suggestions?.accept($event)" @dismiss="suggestions?.dismiss()" @terminal-key="suggestions?.forwardKey($event)"
-          @lock="suggestions?.lock()" @intent="suggestions?.setIntent($event)" @refresh="suggestions?.applyPending()" @retry="suggestions?.retry()"
+          @lock="suggestions?.lock()" @refresh="suggestions?.applyPending()"
         />
       </div>
     </div>

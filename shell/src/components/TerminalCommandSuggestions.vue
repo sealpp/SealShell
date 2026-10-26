@@ -1,14 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch, type CSSProperties } from 'vue'
+import { computed, ref, type CSSProperties } from 'vue'
 import { ListboxContent, ListboxItem, ListboxRoot, PopoverAnchor, PopoverContent, PopoverPortal, PopoverRoot, type FocusOutsideEvent } from 'reka-ui'
 import type { TerminalSuggestionView } from '../services/terminalSuggestions/controller'
 import { usePortalTarget } from '../ui/portal'
 
 const props = defineProps<{ suggestion: TerminalSuggestionView; appearance: CSSProperties; boundary: HTMLElement | null }>()
-const emit = defineEmits<{ accept: [command: string]; dismiss: []; terminalKey: [event: KeyboardEvent]; lock: []; intent: [query: string]; refresh: []; retry: [] }>()
+const emit = defineEmits<{ accept: [command: string]; dismiss: []; terminalKey: [event: KeyboardEvent]; lock: []; refresh: [] }>()
 const panel = ref<HTMLDivElement | null>(null)
-const intentInput = ref<HTMLInputElement | null>(null)
-watch(() => props.suggestion.mode, async mode => { if (mode === 'intent') { await nextTick(); intentInput.value?.focus() } }, { immediate: true })
 const listbox = ref<{ highlightFirstItem(): void; highlightItem(command: string): void } | null>(null)
 const portalTarget = usePortalTarget(computed(() => props.boundary))
 
@@ -24,20 +22,6 @@ function onKeydown(event: KeyboardEvent): void {
   if (event.target instanceof Element && event.target.closest('input, button')) return
   if (!event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey
     && ['ArrowUp', 'ArrowDown', 'Home', 'End', 'Enter', 'Escape'].includes(event.key)) return
-  if (props.suggestion.mode === 'intent') {
-    event.stopPropagation()
-    const editor = intentInput.value
-    editor?.focus()
-    if (editor && event.key === 'Backspace' && !event.ctrlKey && !event.altKey && !event.metaKey) {
-      event.preventDefault()
-      const start = editor.selectionStart ?? editor.value.length
-      const end = editor.selectionEnd ?? start
-      const previous = Array.from(editor.value.slice(0, start)).pop()?.length ?? 0
-      editor.setRangeText('', start === end ? start - previous : start, end, 'end')
-      emit('intent', editor.value)
-    }
-    return
-  }
   emit('terminalKey', event)
 }
 
@@ -53,17 +37,13 @@ function onFocusOutside(event: FocusOutsideEvent): void {
     <PopoverAnchor as-child><span class="terminal-command-anchor" :style="appearance" aria-hidden="true" /></PopoverAnchor>
     <PopoverPortal :to="portalTarget">
       <PopoverContent
-        class="terminal-command-suggestions" :class="{ 'has-enhancement': suggestion.enhanced || suggestion.mode === 'intent' }" aria-label="本地命令提示"
+        class="terminal-command-suggestions" :class="{ 'has-enhancement': suggestion.enhanced }" aria-label="本地命令提示"
         side="bottom" align="start" :side-offset="4" :collision-padding="8"
         :collision-boundary="boundary" :prioritize-position="true"
         @open-auto-focus.prevent @close-auto-focus.prevent
         @focus-outside="onFocusOutside"
       >
         <div ref="panel" class="terminal-command-suggestions-panel" @keydown.capture="onKeydown" @pointerenter="emit('lock')" @focusin="emit('lock')">
-          <form v-if="suggestion.mode === 'intent'" class="terminal-command-intent" @submit.prevent="emit('retry')">
-            <input ref="intentInput" :value="suggestion.query" maxlength="256" aria-label="想完成什么" placeholder="想完成什么？例如：查看 8080 端口" @input="emit('intent', ($event.target as HTMLInputElement).value)" @keydown.esc.prevent="emit('dismiss')" @keydown.down.prevent="listbox?.highlightFirstItem()">
-            <button type="submit" :disabled="!suggestion.query || suggestion.loading">推荐</button>
-          </form>
           <ListboxRoot ref="listbox" class="terminal-command-suggestions-body workbench-selection-container" selection-behavior="replace" :highlight-on-hover="true">
             <ListboxContent aria-label="命令候选" class="terminal-command-suggestions-list">
               <ListboxItem
@@ -80,10 +60,10 @@ function onFocusOutside(event: FocusOutsideEvent): void {
               </ListboxItem>
             </ListboxContent>
           </ListboxRoot>
-          <div v-if="suggestion.enhanced || suggestion.pending || suggestion.loading || suggestion.status || suggestion.mode === 'intent'" class="terminal-command-status" :title="suggestion.status">
+          <div v-if="suggestion.enhanced || suggestion.pending || suggestion.loading || suggestion.status" class="terminal-command-status" :title="suggestion.status">
             <button v-if="suggestion.pending" type="button" @click="emit('refresh')">显示 {{ suggestion.pending }} 条新建议</button>
             <span v-else-if="suggestion.loading" role="status">正在推荐…</span>
-            <span v-else role="status">{{ suggestion.status || (suggestion.mode === 'intent' ? (suggestion.candidates.length ? '选择后只填入，返回终端确认执行' : '输入目标，或在设置中启用云端推荐') : '') }}</span>
+            <span v-else role="status">{{ suggestion.status }}</span>
           </div>
         </div>
       </PopoverContent>
@@ -101,8 +81,6 @@ function onFocusOutside(event: FocusOutsideEvent): void {
 .terminal-command-suggestion code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; font: 12px/1.5 Consolas, ui-monospace, monospace; }
 .terminal-command-prefix { color: var(--workbench-link); }
 .terminal-command-suggestions.has-enhancement { width: 420px; }
-.terminal-command-intent { display: flex; gap: 6px; padding: 4px 8px; min-width: 0; width: 100%; box-sizing: border-box; }
-.terminal-command-intent input { min-width: 0; flex: 1; background: var(--vscode-input-background); color: var(--workbench-text); border: 1px solid var(--vscode-editorWidget-border); padding: 4px; }
 .terminal-command-status { box-sizing: border-box; font-size: 11px; height: 26px; flex-shrink: 0; padding: 4px 8px; color: var(--workbench-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.terminal-command-status button, .terminal-command-intent button { color: var(--workbench-link); background: none; border: 0; cursor: pointer; }
+.terminal-command-status button { color: var(--workbench-link); background: none; border: 0; cursor: pointer; }
 </style>

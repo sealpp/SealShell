@@ -7,8 +7,6 @@ export interface TerminalSuggestionView {
   candidates: readonly CommandSuggestion[]
   row: number
   column: number
-  mode?: 'command' | 'intent'
-  query?: string
   loading?: boolean
   status?: string
   pending?: number
@@ -21,8 +19,8 @@ interface SuggestionOptions {
   providers(): readonly CommandSuggestionProvider[]
   context?(): { key: string; cwd?: string }
   automatic?(): boolean
-  enhancementEnabled?(query: string, mode: 'command' | 'intent'): boolean
-  enhance?(query: string, mode: 'command' | 'intent', signal: AbortSignal, publish: (items: CommandSuggestion[]) => void): Promise<string>
+  enhancementEnabled?(query: string): boolean
+  enhance?(query: string, signal: AbortSignal, publish: (items: CommandSuggestion[]) => void): Promise<string>
   onCommand(command: string, use?: CommandUse): void
   onAccept?(command: string, use: CommandUse): void
   onChange(view: TerminalSuggestionView | undefined): void
@@ -32,17 +30,14 @@ interface SuggestionOptions {
 
 export function attachCommandSuggestions(terminal: Terminal, options: SuggestionOptions) {
   let submittedUse: CommandUse = {}
-  let accepted: { command: string; intent?: string } | undefined
   const tracker = new TerminalCommandLine(terminal, command => {
-    if (options.enabled()) options.onCommand(command, { ...submittedUse, intent: accepted?.command === command ? accepted.intent : undefined })
-    accepted = undefined
+    if (options.enabled()) options.onCommand(command, submittedUse)
   })
   const element = terminal.element!
   let view: TerminalSuggestionView | undefined
   let pendingOutput = false, composing = false, locked = false
   let dismissedPrefix: string | undefined
   let contextKey = '', linePrefix: string | undefined
-  let mode: 'command' | 'intent' = 'command', intent = ''
   let pool: CommandSuggestion[] = []
   let abort: AbortController | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -74,71 +69,60 @@ export function attachCommandSuggestions(terminal: Terminal, options: Suggestion
     const visible = new Set(candidates.map(item => item.command))
     show({ ...view, candidates, pending: pool.filter(item => !visible.has(item.command)).length })
   }
-  function schedule(immediate = false): void {
+  function schedule(): void {
     cancel()
-    if (!options.enhance || (!immediate && !(options.automatic?.() ?? true))) return
-    const query = mode === 'intent' ? intent : linePrefix ?? ''
-    if (!canRememberCommand(query) || options.enhancementEnabled?.(query, mode) === false) return
+    if (!options.enhance || !(options.automatic?.() ?? true)) return
+    const query = linePrefix ?? ''
+    if (!canRememberCommand(query) || options.enhancementEnabled?.(query) === false) return
     const request = new AbortController()
     abort = request
     const requestKey = contextKey
     const requestPrefix = linePrefix
-    const requestMode = mode
     timer = setTimeout(async () => {
       if (!usable() || request.signal.aborted) return
       if (view) show({ ...view, loading: true, status: '' })
       const valid = () => !request.signal.aborted && usable() && context().key === requestKey && tracker.snapshot()?.command === requestPrefix
       try {
-        const status = await options.enhance!(query, requestMode, request.signal, items => { if (valid()) publish(items) })
+        const status = await options.enhance!(query, request.signal, items => { if (valid()) publish(items) })
         if (valid() && view) show({ ...view, loading: false, status })
       } catch {
         if (valid() && view) show({ ...view, loading: false, status: '推荐暂不可用' })
       }
-    }, immediate ? 0 : 650)
+    }, 650)
   }
   function refresh(): void {
-    if (!usable()) { resetQuery(); mode = 'command'; show(); return }
+    if (!usable()) { resetQuery(); show(); return }
     const line = tracker.snapshot()
     if (!line || line.command === dismissedPrefix || (line.command && !canRememberCommand(line.command))) {
-      resetQuery(); mode = 'command'; show(); return
+      resetQuery(); show(); return
     }
     const nextKey = context().key
     if (linePrefix === line.command && contextKey === nextKey && view) return
     resetQuery()
     linePrefix = line.command; contextKey = nextKey
-    const query = mode === 'intent' ? intent : line.command
+    const query = line.command
     pool = findCommandSuggestions(query, options.providers())
-    const enhanced = !!options.enhance && options.enhancementEnabled?.(query, mode) !== false && (options.automatic?.() ?? true)
-    const shouldShow = mode === 'intent' || pool.length || (query && enhanced)
-    show(shouldShow ? { prefix: line.command, candidates: pool, row: line.row, column: Math.min(line.column, terminal.cols - 1), mode, query, enhanced } : undefined)
+    const enhanced = !!options.enhance && options.enhancementEnabled?.(query) !== false && (options.automatic?.() ?? true)
+    const shouldShow = pool.length || (query && enhanced)
+    show(shouldShow ? { prefix: line.command, candidates: pool, row: line.row, column: Math.min(line.column, terminal.cols - 1), enhanced } : undefined)
     schedule()
   }
   function dismiss(): void {
     dismissedPrefix = linePrefix
-    resetQuery(); mode = 'command'; intent = ''; show()
+    resetQuery(); show()
   }
   function accept(command: string): void {
     const line = tracker.snapshot()
     if (!usable() || !line || line.command !== view?.prefix || context().key !== contextKey
       || !view?.candidates.some(candidate => candidate.command === command)) { dismiss(); return }
-    const use: CommandUse = { kind: 'accepted', cwd: context().cwd, intent: mode === 'intent' ? intent : undefined }
+    const use: CommandUse = { kind: 'accepted', cwd: context().cwd }
     const input = command.startsWith(line.command) ? command.slice(line.command.length) : '\x15' + command
     dismiss()
     terminal.focus()
     terminal.input(input, true)
     tracker.expectReplacement(command)
     dismissedPrefix = command
-    accepted = { command, intent: use.intent }
     options.onAccept?.(command, use)
-  }
-  function openIntent(): void {
-    if (!usable() || !tracker.snapshot()) return
-    resetQuery(); mode = 'intent'; intent = ''; dismissedPrefix = undefined; refresh()
-  }
-  function setIntent(query: string): void {
-    if (mode !== 'intent') return
-    intent = query.slice(0, 256)
-    resetQuery(); refresh()
   }
   function applyPending(): void {
     if (!view) return
@@ -146,7 +130,6 @@ export function attachCommandSuggestions(terminal: Terminal, options: Suggestion
     show({ ...view, candidates: pool.slice(0, COMMAND_SUGGESTION_LIMIT), pending: 0 })
     options.focusList('first')
   }
-  function retry(): void { schedule(true) }
   function beforeOutput(): void { pendingOutput = true; show() }
   function forwardKey(event: KeyboardEvent): void {
     event.stopPropagation()
@@ -159,7 +142,7 @@ export function attachCommandSuggestions(terminal: Terminal, options: Suggestion
     terminal.onData(data => {
       if (data === '\r') submittedUse = { cwd: context().cwd }
       dismissedPrefix = undefined
-      resetQuery(); mode = 'command'; intent = ''
+      resetQuery()
       tracker.input(data); pendingOutput = true; show()
     }),
     terminal.onWriteParsed(() => { pendingOutput = false; tracker.update(); refresh() }),
@@ -169,9 +152,6 @@ export function attachCommandSuggestions(terminal: Terminal, options: Suggestion
   ]
   terminal.attachCustomKeyEventHandler(event => {
     if (event.type !== 'keydown' || event.isComposing || composing) return true
-    if (event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey && event.code === 'Space') {
-      openIntent(); event.preventDefault(); return false
-    }
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || !['ArrowDown', 'ArrowUp', 'Escape'].includes(event.key)) return true
     if (!view) return true
     refresh()
@@ -190,9 +170,9 @@ export function attachCommandSuggestions(terminal: Terminal, options: Suggestion
   element.addEventListener('compositionstart', compositionStart)
   element.addEventListener('compositionend', compositionEnd)
   return {
-    refresh, accept, forwardKey, dismiss, beforeOutput, openIntent, setIntent, applyPending, retry,
+    refresh, accept, forwardKey, dismiss, beforeOutput, applyPending,
     lock() { if (view?.candidates.length) locked = true },
-    reset() { tracker.reset(); resetQuery(); mode = 'command'; dismissedPrefix = undefined; show() },
+    reset() { tracker.reset(); resetQuery(); dismissedPrefix = undefined; show() },
     dispose() {
       disposed = true; tracker.reset(); resetQuery()
       subscriptions.forEach(subscription => subscription.dispose())
