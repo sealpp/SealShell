@@ -530,7 +530,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="workspace-dock-layout" :class="{ focused: store.focusedDock === 'bottomPanel' && store.bottomPanelCategory === props.category }">
+  <div class="workspace-dock-layout">
     <div class="workspace-dock">
       <DockviewVue
         class="workspace-dockview"

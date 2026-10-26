@@ -66,7 +66,7 @@ const proxyState = () => JSON.parse(fs.readFileSync(statePath, 'utf8'));
     await page.locator('.workbench-menu-trigger').click();
     await page.getByRole('menuitem', { name: '设置', exact: true }).click();
     const settings = page.getByRole('dialog', { name: '设置', exact: true });
-    await settings.getByRole('button', { name: '代理服务器', exact: true }).click();
+    await settings.getByRole('tab', { name: '代理服务器', exact: true }).click();
     await settings.getByRole('button', { name: '添加代理', exact: true }).click();
     await settings.getByLabel('代理名称', { exact: true }).fill('Proxy fixture');
     await settings.getByLabel('代理地址', { exact: true }).fill('127.0.0.1');

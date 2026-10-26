@@ -264,6 +264,7 @@
 }
 
 .settings-layout{display:flex;min-width:0;min-height:0;height:100%;background:var(--workbench-bg);color:var(--workbench-text)}
+.settings-page{display:flex;flex:1;min-width:0;min-height:0;outline:none}
 .settings-nav{width:180px;flex:0 0 180px;padding:12px 4px;background:var(--workbench-surface);border-right:1px solid var(--workbench-border)}
 .settings-nav-item{height:26px;padding:0 12px;border:0;color:var(--workbench-text-muted);text-align:left;font:inherit;cursor:pointer}
 .settings-main{min-width:0;flex:1;overflow:auto;padding:22px 28px 30px}

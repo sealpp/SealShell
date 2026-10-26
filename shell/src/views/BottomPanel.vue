@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { TabsContent, TabsList, TabsRoot, TabsTrigger } from 'reka-ui'
 import { IconDeviceDesktopPlus, IconFile, IconFolder, IconChartLine, IconFocus2, IconMaximize, IconMaximizeOff, IconX } from '../ui/icons'
 import { getActiveBottomPanelTabId, setBottomPanelActiveTab, store, type BottomPanelCategory } from '../stores/app'
 import {
@@ -124,7 +125,8 @@ function closePanel(): void {
   store.bottomPanelOpen = false
 }
 
-function selectCategory(category: BottomPanelCategory): void {
+function selectCategory(value: string | number): void {
+  const category = value as BottomPanelCategory
   setBottomPanelActiveTab(getActiveBottomPanelTabId(category), category)
 }
 
@@ -275,120 +277,116 @@ watch(
 
 <template>
   <section v-show="visible" ref="panelEl" class="workspace-panel" :class="{ maximized: store.bottomPanelMaximized }" :style="heightStyle" aria-label="面板">
-    <div
-      class="workspace-resizer"
-      :class="{ dragging: resizing }"
-      role="separator"
-      aria-label="调整面板高度"
-      @pointerdown="startResize"
-    ></div>
-    <nav class="workspace-categories" role="tablist" aria-label="面板视图">
-      <button
-        type="button"
-        role="tab"
-        class="workspace-category"
-        :class="{ active: store.bottomPanelCategory === 'files' }"
-        :aria-selected="store.bottomPanelCategory === 'files'"
-        @click="selectCategory('files')"
-      >
-        <IconFolder :size="16" aria-hidden="true" />
-        <span>文件列表</span>
-      </button>
-      <button
-        type="button"
-        role="tab"
-        class="workspace-category"
-        :class="{ active: store.bottomPanelCategory === 'editors' }"
-        :aria-selected="store.bottomPanelCategory === 'editors'"
-        @click="selectCategory('editors')"
-      >
-        <IconFile :size="16" aria-hidden="true" />
-        <span>文件编辑</span>
-      </button>
-      <button type="button" role="tab" class="workspace-category"
-        :class="{ active: store.bottomPanelCategory === 'monitors' }"
-        :aria-selected="store.bottomPanelCategory === 'monitors'" @click="selectCategory('monitors')">
-        <IconChartLine :size="16" aria-hidden="true" /><span>性能监测</span>
-      </button>
-      <button type="button" role="tab" class="workspace-category"
-        :class="{ active: store.bottomPanelCategory === 'ports' }"
-        :aria-selected="store.bottomPanelCategory === 'ports'" @click="selectCategory('ports')">
-        <span class="codicon codicon-plug" aria-hidden="true"></span><span>端口转发</span>
-      </button>
-      <button type="button" role="tab" class="workspace-category"
-        :class="{ active: store.bottomPanelCategory === 'processes' }"
-        :aria-selected="store.bottomPanelCategory === 'processes'" @click="selectCategory('processes')">
-        <span class="codicon codicon-list-tree" aria-hidden="true"></span><span>进程管理</span>
-      </button>
-      <div class="workspace-actions">
-        <button v-if="store.bottomPanelCategory === 'files'" type="button" class="workspace-action" :disabled="!canOpenTerminalFiles"
-          aria-label="打开或定位当前终端的文件列表" :title="canOpenTerminalFiles ? '打开或定位当前终端的文件列表' : '当前没有可用的终端会话'"
-          @click="commandService.execute('terminal.revealFiles', terminalContext)"><IconFocus2 :size="16" aria-hidden="true" /></button>
-        <button v-if="store.bottomPanelCategory === 'processes'" type="button" class="workspace-action" :disabled="!canOpenTerminalProcesses"
-          aria-label="打开或定位当前终端的进程管理" title="打开或定位当前终端的进程管理"
-          @click="commandService.execute('processes.open', terminalContext)"><IconFocus2 :size="16" aria-hidden="true" /></button>
-        <button v-if="store.bottomPanelCategory === 'ports'" type="button" class="workspace-action" :disabled="!canOpenTerminalPorts"
-          aria-label="打开或定位当前终端的端口转发" :title="canOpenTerminalPorts ? '打开或定位当前终端的端口转发' : '当前没有可用的终端会话'"
-          @click="commandService.execute('ports.open', terminalContext)"><IconFocus2 :size="16" aria-hidden="true" /></button>
-        <button v-if="store.bottomPanelCategory === 'monitors'" type="button" class="workspace-action" :disabled="!canOpenTerminalMonitor"
-          aria-label="打开或定位当前终端的性能监测" :title="canOpenTerminalMonitor ? '打开或定位当前终端的性能监测' : '当前没有可用的终端会话'"
-          @click="commandService.execute('monitor.open', terminalContext)"><IconFocus2 :size="16" aria-hidden="true" /></button>
-        <button v-if="store.bottomPanelCategory === 'files'" type="button" class="workspace-action" :disabled="!store.paired"
-          aria-label="新建本地窗口并分栏" title="新建本地窗口并分栏 (Alt+L)"
-          @click="commandService.execute('file.newLocalSplit', { area: 'global' })"><IconDeviceDesktopPlus :size="16" /></button>
-        <button
-          type="button"
-          class="workspace-action"
-          :aria-label="store.bottomPanelMaximized ? '恢复面板大小' : '最大化面板'"
-          :title="store.bottomPanelMaximized ? '恢复面板大小' : '最大化面板'"
-          @click="toggleMaximized"
+    <TabsRoot class="workspace-tabs" :model-value="store.bottomPanelCategory" @update:model-value="selectCategory">
+      <div
+        class="workspace-resizer"
+        :class="{ dragging: resizing }"
+        role="separator"
+        aria-label="调整面板高度"
+        @pointerdown="startResize"
+      ></div>
+      <TabsList as="nav" class="workspace-categories" aria-label="面板视图" loop>
+        <TabsTrigger
+          value="files"
+          class="workspace-category"
         >
-          <IconMaximizeOff v-if="store.bottomPanelMaximized" :size="16" aria-hidden="true" />
-          <IconMaximize v-else :size="16" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          class="workspace-action"
-          aria-label="关闭面板"
-          title="关闭面板"
-          @click="closePanel"
+          <IconFolder :size="16" aria-hidden="true" />
+          <span>文件列表</span>
+        </TabsTrigger>
+        <TabsTrigger
+          value="editors"
+          class="workspace-category"
         >
-          <IconX :size="16" aria-hidden="true" />
-        </button>
+          <IconFile :size="16" aria-hidden="true" />
+          <span>文件编辑</span>
+        </TabsTrigger>
+        <TabsTrigger value="monitors" class="workspace-category">
+          <IconChartLine :size="16" aria-hidden="true" /><span>性能监测</span>
+        </TabsTrigger>
+        <TabsTrigger value="ports" class="workspace-category">
+          <span class="codicon codicon-plug" aria-hidden="true"></span><span>端口转发</span>
+        </TabsTrigger>
+        <TabsTrigger value="processes" class="workspace-category">
+          <span class="codicon codicon-list-tree" aria-hidden="true"></span><span>进程管理</span>
+        </TabsTrigger>
+        <div class="workspace-actions">
+          <button v-if="store.bottomPanelCategory === 'files'" type="button" class="workspace-action" :disabled="!canOpenTerminalFiles"
+            aria-label="打开或定位当前终端的文件列表" :title="canOpenTerminalFiles ? '打开或定位当前终端的文件列表' : '当前没有可用的终端会话'"
+            @click="commandService.execute('terminal.revealFiles', terminalContext)"><IconFocus2 :size="16" aria-hidden="true" /></button>
+          <button v-if="store.bottomPanelCategory === 'processes'" type="button" class="workspace-action" :disabled="!canOpenTerminalProcesses"
+            aria-label="打开或定位当前终端的进程管理" title="打开或定位当前终端的进程管理"
+            @click="commandService.execute('processes.open', terminalContext)"><IconFocus2 :size="16" aria-hidden="true" /></button>
+          <button v-if="store.bottomPanelCategory === 'ports'" type="button" class="workspace-action" :disabled="!canOpenTerminalPorts"
+            aria-label="打开或定位当前终端的端口转发" :title="canOpenTerminalPorts ? '打开或定位当前终端的端口转发' : '当前没有可用的终端会话'"
+            @click="commandService.execute('ports.open', terminalContext)"><IconFocus2 :size="16" aria-hidden="true" /></button>
+          <button v-if="store.bottomPanelCategory === 'monitors'" type="button" class="workspace-action" :disabled="!canOpenTerminalMonitor"
+            aria-label="打开或定位当前终端的性能监测" :title="canOpenTerminalMonitor ? '打开或定位当前终端的性能监测' : '当前没有可用的终端会话'"
+            @click="commandService.execute('monitor.open', terminalContext)"><IconFocus2 :size="16" aria-hidden="true" /></button>
+          <button v-if="store.bottomPanelCategory === 'files'" type="button" class="workspace-action" :disabled="!store.paired"
+            aria-label="新建本地窗口并分栏" title="新建本地窗口并分栏 (Alt+L)"
+            @click="commandService.execute('file.newLocalSplit', { area: 'global' })"><IconDeviceDesktopPlus :size="16" /></button>
+          <button
+            type="button"
+            class="workspace-action"
+            :aria-label="store.bottomPanelMaximized ? '恢复面板大小' : '最大化面板'"
+            :title="store.bottomPanelMaximized ? '恢复面板大小' : '最大化面板'"
+            @click="toggleMaximized"
+          >
+            <IconMaximizeOff v-if="store.bottomPanelMaximized" :size="16" aria-hidden="true" />
+            <IconMaximize v-else :size="16" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            class="workspace-action"
+            aria-label="关闭面板"
+            title="关闭面板"
+            @click="closePanel"
+          >
+            <IconX :size="16" aria-hidden="true" />
+          </button>
+        </div>
+      </TabsList>
+      <div class="workspace-content">
+        <TabsContent force-mount value="files" class="workspace-category-view" :class="{ active: store.bottomPanelCategory === 'files' }">
+          <BottomPanelDock category="files" />
+        </TabsContent>
+        <TabsContent force-mount value="editors" class="workspace-category-view" :class="{ active: store.bottomPanelCategory === 'editors' }">
+          <BottomPanelDock category="editors" />
+        </TabsContent>
+        <TabsContent force-mount value="monitors" class="workspace-category-view" :class="{ active: store.bottomPanelCategory === 'monitors' }">
+          <BottomPanelDock category="monitors" />
+        </TabsContent>
+        <TabsContent force-mount value="processes" class="workspace-category-view" :class="{ active: store.bottomPanelCategory === 'processes' }">
+          <BottomPanelDock category="processes" />
+        </TabsContent>
+        <TabsContent force-mount value="ports" class="workspace-category-view" :class="{ active: store.bottomPanelCategory === 'ports' }">
+          <BottomPanelDock category="ports" />
+        </TabsContent>
       </div>
-    </nav>
-    <div class="workspace-content">
-      <div class="workspace-category-view" :class="{ active: store.bottomPanelCategory === 'files' }">
-        <BottomPanelDock category="files" />
-      </div>
-      <div class="workspace-category-view" :class="{ active: store.bottomPanelCategory === 'editors' }">
-        <BottomPanelDock category="editors" />
-      </div>
-      <div class="workspace-category-view" :class="{ active: store.bottomPanelCategory === 'monitors' }">
-        <BottomPanelDock category="monitors" />
-      </div>
-      <div class="workspace-category-view" :class="{ active: store.bottomPanelCategory === 'processes' }">
-        <BottomPanelDock category="processes" />
-      </div>
-      <div class="workspace-category-view" :class="{ active: store.bottomPanelCategory === 'ports' }">
-        <BottomPanelDock category="ports" />
-      </div>
-    </div>
-    <div
-      class="workspace-list-resizer"
-      :class="{ dragging: listResizing }"
-      role="separator"
-      aria-label="调整实例列表宽度"
-      @pointerdown="startListResize"
-      @pointermove="moveListResize"
-      @pointerup="endListResize"
-      @pointercancel="endListResize"
-      @lostpointercapture="endListResize"
-    ></div>
+      <div
+        class="workspace-list-resizer"
+        :class="{ dragging: listResizing }"
+        role="separator"
+        aria-label="调整实例列表宽度"
+        @pointerdown="startListResize"
+        @pointermove="moveListResize"
+        @pointerup="endListResize"
+        @pointercancel="endListResize"
+        @lostpointercapture="endListResize"
+      ></div>
+    </TabsRoot>
   </section>
 </template>
 
 <style scoped>
+.workspace-tabs {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
 .workspace-panel {
   position: relative;
   box-sizing: border-box;
@@ -499,7 +497,7 @@ watch(
   background: transparent;
 }
 
-.workspace-category.active {
+.workspace-category[data-state='active'] {
   border-bottom-color: var(--vscode-panelTitle-activeBorder);
   background: transparent;
   color: var(--workbench-text-strong);
