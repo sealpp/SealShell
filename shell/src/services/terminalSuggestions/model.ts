@@ -34,13 +34,21 @@ export function canRememberCommand(command: string): boolean {
     && !/^\s/.test(command) && !/[\x00-\x1f\x7f]/.test(command)
 }
 
-export function rememberCommand(entries: readonly CommandHistoryEntry[], command: string, now: number): CommandHistoryEntry[] {
+export function rememberCommand(entries: readonly CommandHistoryEntry[], command: string, now: number, use: CommandUse = {}): CommandHistoryEntry[] {
   if (!canRememberCommand(command)) return [...entries]
   command = command.trimEnd()
   if (!canRememberCommand(command)) return [...entries]
   const previous = entries.find(entry => entry.command === command)
+  const entry: CommandHistoryEntry = { ...previous, command, uses: (previous?.uses ?? 0) + (use.kind === 'accepted' ? 0 : 1), lastUsed: now }
+  if (use.kind === 'accepted') entry.accepted = (previous?.accepted ?? 0) + 1
+  if (use.cwd && use.kind !== 'accepted') {
+    const contexts = previous?.contexts ?? []
+    entry.contexts = [{ cwd: use.cwd, uses: (contexts.find(item => item.cwd === use.cwd)?.uses ?? 0) + 1, lastUsed: now },
+      ...contexts.filter(item => item.cwd !== use.cwd)].slice(0, 12)
+  }
+  if (use.intent) entry.intents = [...new Set([use.intent.slice(0, 256), ...previous?.intents ?? []])].slice(0, 5)
   return [
-    { command, uses: (previous?.uses ?? 0) + 1, lastUsed: now },
+    entry,
     ...entries.filter(entry => entry.command !== command),
   ].sort((a, b) => b.lastUsed - a.lastUsed).slice(0, COMMAND_HISTORY_LIMIT)
 }

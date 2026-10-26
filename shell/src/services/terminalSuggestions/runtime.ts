@@ -1,11 +1,14 @@
 import { reactive } from 'vue'
 import { clearCommandHistory, readCommandHistory, readMeta, recordCommandHistory, saveMeta } from '../storage'
-import { canRememberCommand, type CommandHistoryEntry } from './model'
+import { canRememberCommand, type CommandHistoryEntry, type CommandUse } from './model'
+import { loadCredentialRecord, saveCredentialRecord } from '../vault'
+import { defaultRecommendationSettings, validateRecommendationSettings, type RecommendationSettings } from './settings'
 
 interface SuggestionPreferences {
   key: 'commandSuggestions'
   enabled: boolean
   rememberHistory: boolean
+  recommendations?: RecommendationSettings
 }
 
 export const commandSuggestions = reactive({
@@ -13,6 +16,8 @@ export const commandSuggestions = reactive({
   rememberHistory: true,
   history: {} as Record<string, CommandHistoryEntry[]>,
   error: '',
+  recommendations: { ...defaultRecommendationSettings },
+  revision: 0,
 })
 
 const loading = new Map<string, Promise<void>>()
@@ -30,13 +35,22 @@ export async function loadSuggestionPreferences(): Promise<void> {
   if (preferences) {
     commandSuggestions.enabled = preferences.enabled
     commandSuggestions.rememberHistory = preferences.rememberHistory
+    commandSuggestions.recommendations = { ...defaultRecommendationSettings, ...preferences.recommendations }
   }
 }
 
-export async function saveSuggestionPreferences(enabled: boolean, rememberHistory: boolean): Promise<void> {
-  await saveMeta<SuggestionPreferences>({ key: 'commandSuggestions', enabled, rememberHistory })
+export async function saveSuggestionPreferences(enabled: boolean, rememberHistory: boolean, recommendations = commandSuggestions.recommendations, apiKey?: string): Promise<void> {
+  validateRecommendationSettings(recommendations)
+  if (apiKey !== undefined) await saveCredentialRecord('command-recommendations', { apiKey: apiKey.trim() })
+  await saveMeta<SuggestionPreferences>({ key: 'commandSuggestions', enabled, rememberHistory, recommendations: { ...recommendations } })
   commandSuggestions.enabled = enabled
   commandSuggestions.rememberHistory = rememberHistory
+  commandSuggestions.recommendations = { ...recommendations }
+  commandSuggestions.revision++
+}
+
+export async function loadRecommendationKey(): Promise<string> {
+  return (await loadCredentialRecord('command-recommendations'))?.apiKey ?? ''
 }
 
 export function loadSuggestionHistory(hostId: string): Promise<void> {
@@ -48,11 +62,11 @@ export function loadSuggestionHistory(hostId: string): Promise<void> {
   return pending
 }
 
-export function rememberSuggestionCommand(hostId: string, command: string): Promise<void> {
+export function rememberSuggestionCommand(hostId: string, command: string, use: CommandUse = {}): Promise<void> {
   return queueHistoryWrite(async () => {
     if (!commandSuggestions.enabled || !commandSuggestions.rememberHistory || !canRememberCommand(command)) return
     await loadSuggestionHistory(hostId)
-    commandSuggestions.history[hostId] = await recordCommandHistory(hostId, command)
+    commandSuggestions.history[hostId] = await recordCommandHistory(hostId, command, use)
   })
 }
 

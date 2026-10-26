@@ -1,7 +1,7 @@
 import type { FolderProfile, HostProfile, TerminalPreferences } from '../stores/app'
 import type { ProxyProfile } from './proxy/types'
 import type { PortRule, PortBindHost } from './ports/types'
-import { rememberCommand, type CommandHistoryEntry } from './terminalSuggestions/model'
+import { rememberCommand, type CommandHistoryEntry, type CommandUse } from './terminalSuggestions/model'
 
 const DB_NAME = 'seal-shell'
 const DB_VERSION = 3
@@ -292,7 +292,7 @@ export async function readCommandHistory(hostId: string): Promise<CommandHistory
   return (await readMeta<{ key: string; items: CommandHistoryEntry[] }>(`commandHistory:${hostId}`))?.items ?? []
 }
 
-export async function recordCommandHistory(hostId: string, command: string): Promise<CommandHistoryEntry[]> {
+export async function recordCommandHistory(hostId: string, command: string, use: CommandUse = {}): Promise<CommandHistoryEntry[]> {
   const db = await openDatabase()
   const transaction = db.transaction(['hosts', 'meta'], 'readwrite')
   const meta = transaction.objectStore('meta')
@@ -303,7 +303,7 @@ export async function recordCommandHistory(hostId: string, command: string): Pro
     if (!host.result) return
     const history = meta.get(key)
     history.onsuccess = () => {
-      items = rememberCommand(history.result?.items ?? [], command, Date.now())
+      items = rememberCommand(history.result?.items ?? [], command, Date.now(), use)
       meta.put({ key, items })
     }
   }
