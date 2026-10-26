@@ -22,6 +22,7 @@ interface VaultMeta {
 }
 
 export interface CredentialPayload {
+  apiKey?: string
   password?: string
   inlineProxyPassword?: string
 }

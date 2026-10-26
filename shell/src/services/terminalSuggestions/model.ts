@@ -2,6 +2,15 @@ export interface CommandHistoryEntry {
   command: string
   uses: number
   lastUsed: number
+  accepted?: number
+  contexts?: { cwd: string; uses: number; lastUsed: number }[]
+  intents?: string[]
+}
+
+export interface CommandUse {
+  cwd?: string
+  intent?: string
+  kind?: 'accepted' | 'submitted'
 }
 
 export interface CommandSuggestion {
@@ -34,6 +43,10 @@ export function rememberCommand(entries: readonly CommandHistoryEntry[], command
     { command, uses: (previous?.uses ?? 0) + 1, lastUsed: now },
     ...entries.filter(entry => entry.command !== command),
   ].sort((a, b) => b.lastUsed - a.lastUsed).slice(0, COMMAND_HISTORY_LIMIT)
+}
+
+export function matchesQuery(text: string, query: string): boolean {
+  return query.toLocaleLowerCase().trim().split(/\s+/).every(token => text.toLocaleLowerCase().includes(token))
 }
 
 export function historyProvider(entries: readonly CommandHistoryEntry[]): CommandSuggestionProvider {
