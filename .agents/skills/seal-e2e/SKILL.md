@@ -128,7 +128,7 @@ SIGHUP 时的清理；Windows 跳过该信号测试，需用真实 Linux 环境�
 AsyncSSH 的 PTY resize 会在 stdin 读取时抛出 `TerminalSizeChanged`，mock 必须消费后继续读取，
 否则终端刚上线即断开，telemetry 也无法开始 exec；不要将其误判为 Node 转发故障。
 
-mock 状态的 `shell_sizes` 记录每个 shell 最近收到的 SSH PTY `[columns, rows]`。SSH 套件在首次主机指纹确认前等待本地 fit 完成，确认上线后比较远端记录与 xterm 行列，期间不缩放浏览器；这样可捕捉连接前 resize 被忽略、上线时未补发的问题。该记录验证 SSH 端收到的尺寸，pipe shell 本身不能替代真实 PTY 行编辑验收。
+mock 状态的 `shell_initial_sizes` 保留每个 Shell 启动时的 SSH PTY `[columns, rows]`，`shell_sizes` 记录最新尺寸。SSH 套件在首次主机指纹确认前检查本地有效测量，分别比较启动与上线后的远端尺寸，期间不缩放浏览器；只比较最新尺寸会漏掉先按默认 80 × 24 启动、再补发 resize 的变化。新建副本及三个同组并发连接也检查各自的启动尺寸。该记录验证 SSH 端收到的尺寸，pipe shell 本身不能替代真实 PTY 行编辑验收。`shell/tests/terminal-initial-size.spec.ts` 另覆盖窄窗、重连、同组后台批量连接、测量前关闭、过期连接完成，以及握手期间真实窗口变化；`main-dock-layout.spec.ts` 保留上线校准和侧栏绘制前边界检查。
 
 ## 真实 OpenSSH 目录继承
 

@@ -114,20 +114,11 @@ async function main() {
     });
     page.on('pageerror', (error) => { browserErrors.push(error.message); console.error('page error:', error.message); });
 
-    await page.route('**/src/services/ws.ts', route => route.fulfill({
-      contentType: 'application/javascript',
-      body: `
-        export * from '/src/services/ws.ts?actual';
-        import { resizeTerminal as resize } from '/src/services/ws.ts?actual';
-        window.terminalResizeEvents = [];
-        export function resizeTerminal(id, columns, rows) {
-          window.terminalResizeEvents.push({ id, columns, rows });
-          resize(id, columns, rows);
-        }
-      `,
-    }));
-
     await page.goto(PWA_URL);
+    await page.evaluate(async () => {
+      const { store } = await import('/src/stores/app.ts');
+      window.sealE2eStore = store;
+    });
 
     await page.getByPlaceholder('000000').fill(pin);
     await page.locator('.workbench-dialog-content .workbench-dialog-button--primary').click();
@@ -152,7 +143,7 @@ async function main() {
         hostKeyPromptSeen = true;
         // Let local fitting finish before SSH can open its PTY. This models
         // a slow handshake or a user taking time to confirm the host key.
-        await page.waitForFunction(() => window.terminalResizeEvents.at(-1)?.columns > 80);
+        await page.waitForFunction(() => window.sealE2eStore.tabs[0]?.viewportSize?.columns > 80);
         await hostKeyAccept.click();
         await page.waitForTimeout(1200);
       } catch {
@@ -190,21 +181,21 @@ async function main() {
 
     await addHost('A');
     if (!hostKeyPromptSeen) throw new Error('first SSH connection did not request host-key confirmation');
-    const initialTerminalSize = await page.evaluate(() => window.terminalResizeEvents.at(-1));
+    const initialTerminalSize = await page.evaluate(() => window.sealE2eStore.tabs[0].viewportSize);
     await waitForMockSshState(state => {
       const size = state.shell_sizes?.['1'];
       return size?.[0] === initialTerminalSize.columns && size?.[1] === initialTerminalSize.rows;
     }, `the initial PTY to match xterm (${initialTerminalSize.columns}x${initialTerminalSize.rows}) without a browser resize`);
-    console.log('initial remote PTY matches the fitted terminal without resizing the browser');
+    const firstSize = readMockSshState().shell_initial_sizes?.['1'];
+    if (firstSize?.[0] !== initialTerminalSize.columns || firstSize?.[1] !== initialTerminalSize.rows) {
+      throw new Error(`shell started at ${JSON.stringify(firstSize)}, expected ${initialTerminalSize.columns}x${initialTerminalSize.rows}`);
+    }
+    console.log(`shell starts at the fitted ${initialTerminalSize.columns}x${initialTerminalSize.rows} before its first output`);
 
     const sourceDirectory = NATIVE_SHELL
       ? path.join(trustDirectory, 'remote', "中文 path", "a'b;$(touch sentinel) #%=back").replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, drive) => `/${drive.toLowerCase()}`)
       : "/workspace/中文 path/a'b;$(touch sentinel) #%=back";
     if (NATIVE_SHELL) fs.mkdirSync(path.join(trustDirectory, 'remote', "中文 path", "a'b;$(touch sentinel) #%=back"), { recursive: true });
-    await page.evaluate(async () => {
-      const { store } = await import('/src/stores/app.ts');
-      window.sealE2eStore = store;
-    });
 
     const sourceTabId = await page.evaluate(() => window.sealE2eStore.activeTerminalTabId);
     const initialState = await waitForMockSshState(state => !!state.shell_cwds?.['1'], 'the initial shell directory');
@@ -229,6 +220,14 @@ async function main() {
         const tab = store.tabs.find(tab => tab.id === store.activeTerminalTabId);
         return tab?.state === 'online' && tab.cwd === expected;
       }, expectedDirectory);
+      const size = await page.evaluate(() => {
+        const store = window.sealE2eStore;
+        return store.tabs.find(tab => tab.id === store.activeTerminalTabId).viewportSize;
+      });
+      const firstSize = readMockSshState().shell_initial_sizes?.[shellNumber];
+      if (firstSize?.[0] !== size.columns || firstSize?.[1] !== size.rows) {
+        throw new Error(`duplicated shell started at ${JSON.stringify(firstSize)}, expected ${size.columns}x${size.rows}`);
+      }
       await page.locator('.terminal-tab-close').nth(1).click();
       await page.locator('.terminal-tab').nth(1).waitFor({ state: 'detached' });
     }
@@ -275,6 +274,23 @@ async function main() {
     });
     await duplicate(() => page.locator('.terminal-tab-label').first().dblclick(), loginDirectory);
     console.log('unknown source directory keeps the normal login directory');
+
+    const beforeBatch = readMockSshState().shell;
+    const batchIds = await page.evaluate(async () => {
+      const { addTab } = await import('/src/services/ws.ts');
+      return Array.from({ length: 3 }, () => addTab(window.sealE2eStore.hosts[0], 'test').id);
+    });
+    await page.waitForFunction(ids => ids.every(id => window.sealE2eStore.tabs.find(tab => tab.id === id)?.state === 'online'), batchIds);
+    const batchSize = await page.evaluate(ids => window.sealE2eStore.tabs.find(tab => tab.id === ids[0]).viewportSize, batchIds);
+    const batchState = await waitForMockSshState(state => state.shell === beforeBatch + 3, 'all batch shells to start');
+    for (let number = beforeBatch + 1; number <= beforeBatch + 3; number++) {
+      const size = batchState.shell_initial_sizes[number];
+      if (size?.[0] !== batchSize.columns || size?.[1] !== batchSize.rows) {
+        throw new Error(`batch shell ${number} started at ${JSON.stringify(size)}, expected ${batchSize.columns}x${batchSize.rows}`);
+      }
+    }
+    await page.evaluate(async ids => (await import('/src/services/ws.ts')).closeTabs(ids), batchIds);
+    console.log('PASS batch shells start with their shared viewport while background tabs remain detached');
 
     const credentialStore = await page.evaluate(() => new Promise((resolve, reject) => {
       const request = indexedDB.open('seal-shell');

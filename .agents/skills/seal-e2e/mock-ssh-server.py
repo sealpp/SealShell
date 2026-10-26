@@ -142,7 +142,9 @@ def command_output(command: str) -> tuple[str, int]:
 
 
 def record_shell_size(process: asyncssh.SSHServerProcess, shell_id: str) -> None:
-    call_count.setdefault("shell_sizes", {})[shell_id] = list(process.term_size[:2])
+    size = list(process.term_size[:2])
+    call_count.setdefault("shell_initial_sizes", {}).setdefault(shell_id, size)
+    call_count.setdefault("shell_sizes", {})[shell_id] = size
     write_state()
 
 
