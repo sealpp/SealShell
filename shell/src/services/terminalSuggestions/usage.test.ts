@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { rememberCommand } from './model'
 
 describe('contextual usage memory', () => {
-  it('keeps acceptance and intent separate from submitted directory evidence', () => {
-    let entries = rememberCommand([], 'python3 main.py', 1, { kind: 'accepted', cwd: '/work', intent: '运行项目' })
-    expect(entries[0]).toMatchObject({ uses: 0, accepted: 1, intents: ['运行项目'] })
+  it('keeps acceptance separate from submitted directory evidence', () => {
+    let entries = rememberCommand([], 'python3 main.py', 1, { kind: 'accepted', cwd: '/work' })
+    expect(entries[0]).toMatchObject({ uses: 0, accepted: 1 })
     expect(entries[0].contexts).toBeUndefined()
     entries = rememberCommand(entries, 'python3 main.py', 2, { cwd: '/work' })
     entries = rememberCommand(entries, 'python3 other.py', 3, { cwd: '/other' })

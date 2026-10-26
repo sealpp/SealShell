@@ -8,7 +8,7 @@ import { createRecommender } from './recommender'
 import { directoryProbe, parseDirectoryFacts, pathSuggestions } from './context'
 import { defaultRecommendationSettings as defaults } from './settings'
 
-const request = { sessionId: 'session-a', query: 'python main.py', mode: 'command' as const, cwd: '/work', history: [] }
+const request = { sessionId: 'session-a', query: 'python main.py', cwd: '/work', history: [] }
 const facts = { cwd: '/work', directories: ['/work/项目 a'], files: ['/work/main.py'], scripts: ['dev'], tools: ['python3'] }
 const candidate = { command: 'python3 main.py', source: 'ai', priority: 2, uses: 0, lastUsed: 0 }
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })

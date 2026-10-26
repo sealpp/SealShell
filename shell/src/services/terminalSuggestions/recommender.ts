@@ -33,7 +33,7 @@ export function createRecommender(key: () => Promise<string>, ports: Recommendat
             cache = { key: contextKey, time: Date.now(), facts }
           } catch { contextError = true; abort.signal.throwIfAborted() }
         }
-        if (facts && request.mode === 'command') publish(pathSuggestions(request.query, facts))
+        if (facts) publish(pathSuggestions(request.query, facts))
       }
       if (settings.cloud) {
         const apiKey = await ports.key()
@@ -42,7 +42,7 @@ export function createRecommender(key: () => Promise<string>, ports: Recommendat
         abort.signal.throwIfAborted()
         publish(candidates)
       }
-      return contextError ? '目录探测暂不可用，已使用其他来源' : settings.cloud || request.mode === 'command' ? '' : '云端未启用；可在命令提示设置中配置'
+      return contextError ? '目录探测暂不可用，已使用其他来源' : ''
     } catch (error) {
       if (signal.aborted) throw error
       if (abort.signal.aborted) return '推荐超时，请重试'

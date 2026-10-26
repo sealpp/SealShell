@@ -151,7 +151,7 @@ test('the production terminal composes a real cloud adapter request and inserts 
   await input(page).focus()
   await page.keyboard.type('python main')
   await expect(options(page).filter({ hasText: command })).toBeVisible()
-  expect(JSON.parse(payload.messages[1].content)).toMatchObject({ input: 'python main', mode: 'command', history: [] })
+  expect(JSON.parse(payload.messages[1].content)).toMatchObject({ input: 'python main', history: [] })
   const directory = join(tmpdir(), 'seal-e2e', 'command-suggestions')
   await mkdir(directory, { recursive: true })
   await page.screenshot({ path: join(directory, 'cloud-recommendation.png') })

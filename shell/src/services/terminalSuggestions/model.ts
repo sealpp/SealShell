@@ -4,12 +4,10 @@ export interface CommandHistoryEntry {
   lastUsed: number
   accepted?: number
   contexts?: { cwd: string; uses: number; lastUsed: number }[]
-  intents?: string[]
 }
 
 export interface CommandUse {
   cwd?: string
-  intent?: string
   kind?: 'accepted' | 'submitted'
 }
 
@@ -46,7 +44,6 @@ export function rememberCommand(entries: readonly CommandHistoryEntry[], command
     entry.contexts = [{ cwd: use.cwd, uses: (contexts.find(item => item.cwd === use.cwd)?.uses ?? 0) + 1, lastUsed: now },
       ...contexts.filter(item => item.cwd !== use.cwd)].slice(0, 12)
   }
-  if (use.intent) entry.intents = [...new Set([use.intent.slice(0, 256), ...previous?.intents ?? []])].slice(0, 5)
   return [
     entry,
     ...entries.filter(entry => entry.command !== command),
@@ -59,7 +56,7 @@ export function matchesQuery(text: string, query: string): boolean {
 
 export function historyProvider(entries: readonly CommandHistoryEntry[], cwd?: string): CommandSuggestionProvider {
   return {
-    suggestions: query => entries.filter(entry => matchesQuery([entry.command, ...entry.intents ?? []].join(' '), query))
+    suggestions: query => entries.filter(entry => matchesQuery(entry.command, query))
       .map(entry => ({ ...entry, source: 'history', priority: entry.contexts?.some(item => item.cwd === cwd) ? 3 : 1 })),
   }
 }
