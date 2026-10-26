@@ -110,6 +110,10 @@ test('continuing to type after intent list navigation edits the local query', as
 
 test('saves cloud configuration with encrypted credentials and preserves it across reload', async ({ page }) => {
   await page.getByRole('button', { name: '命令提示设置', exact: true }).click()
+  // Locators can auto-scroll before editing; assert discoverability first.
+  await expect(page.getByRole('textbox', { name: 'API 地址', exact: true })).toBeInViewport({ ratio: 1 })
+  await expect(page.getByRole('textbox', { name: '模型', exact: true })).toBeInViewport({ ratio: 1 })
+  await expect(page.getByLabel('API Key', { exact: true })).toBeInViewport({ ratio: 1 })
   await page.getByRole('checkbox', { name: '启用云端智能推荐' }).check()
   await page.getByRole('textbox', { name: 'API 地址', exact: true }).fill('https://example.invalid/v1')
   await page.getByRole('textbox', { name: '模型', exact: true }).fill('example-model')
