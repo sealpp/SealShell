@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { IconCheck, IconChevronRight } from '../ui/icons'
 import {
   DropdownMenuItem,
@@ -18,6 +19,8 @@ const props = withDefaults(defineProps<{
   itemClass: 'command-menu-item',
 })
 
+const hasIcons = computed(() => props.items.some(item => item.icon || item.checked))
+
 function execute(item: ResolvedMenuItem) {
   if (item.disabled || !item.action) return
   void item.action()
@@ -29,8 +32,10 @@ function execute(item: ResolvedMenuItem) {
     <DropdownMenuSeparator v-if="item.separator" class="command-menu-separator" />
     <DropdownMenuSub v-else-if="item.children?.length">
       <DropdownMenuSubTrigger :class="['command-menu-item', props.itemClass]" :disabled="item.disabled">
-        <span class="command-menu-check"><IconCheck v-if="item.checked" /></span>
-        <component :is="item.icon" v-if="item.icon" :size="16" aria-hidden="true" />
+        <span v-if="hasIcons" class="command-menu-check" aria-hidden="true">
+          <IconCheck v-if="item.checked" />
+          <component :is="item.icon" v-else-if="item.icon" :size="16" />
+        </span>
         <span class="command-menu-label">{{ item.label }}</span>
         <span class="command-menu-shortcut">{{ item.shortcut ?? '' }}</span>
         <span class="command-menu-chevron"><IconChevronRight /></span>
@@ -57,8 +62,10 @@ function execute(item: ResolvedMenuItem) {
       :disabled="item.disabled"
       @select="execute(item)"
     >
-      <span class="command-menu-check"><IconCheck v-if="item.checked" /></span>
-      <component :is="item.icon" v-if="item.icon" :size="16" aria-hidden="true" />
+      <span v-if="hasIcons" class="command-menu-check" aria-hidden="true">
+        <IconCheck v-if="item.checked" />
+        <component :is="item.icon" v-else-if="item.icon" :size="16" />
+      </span>
       <span class="command-menu-label">{{ item.label }}</span>
       <span v-if="item.shortcut" class="command-menu-shortcut">{{ item.shortcut }}</span>
     </DropdownMenuItem>
