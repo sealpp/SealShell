@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref } from 'vue'
 import UiDialog from './UiDialog.vue'
+import UiStatus from './UiStatus.vue'
 import { RoutedTransport } from '../services/transport/routed-transport'
 import { normalizeTarget, type ProxyConnection, type TcpTarget } from '../services/transport/types'
 
@@ -44,8 +45,7 @@ onBeforeUnmount(() => { void transport?.close('proxy_test_closed') })
       <div class="proxy-field"><label for="proxy-test-host">测试目标地址</label><input id="proxy-test-host" v-model="host" :readonly="!!target" placeholder="目标主机或域名" :disabled="running"></div>
       <div class="proxy-field"><label for="proxy-test-port">测试目标端口</label><input id="proxy-test-port" v-model.number="port" type="number" min="1" max="65535" :readonly="!!target" :disabled="running"></div>
     </div>
-    <p v-if="error" class="error" role="alert">{{ error }}</p>
-    <p v-else-if="message" role="status">{{ message }}</p>
+    <UiStatus v-if="error || message" :kind="error ? 'error' : running ? 'busy' : 'success'" :label="error || message" />
     <template #actions><button type="button" class="workbench-dialog-button workbench-dialog-button--primary" :disabled="running" @click="test">{{ running ? '测试中…' : '开始测试' }}</button></template>
   </UiDialog>
 </template>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import ProxyFields from './ProxyFields.vue'
+import AutosaveStatus from './AutosaveStatus.vue'
 import { store } from '../stores/app'
 import { useAutosave } from '../services/autosave'
 import { proxyPassword, saveProxyProfile } from '../services/proxy/profiles'
@@ -39,7 +40,9 @@ defineExpose({ flush: autosave.flush })
   <section class="proxy-editor" aria-label="代理配置">
     <div class="proxy-field"><label for="proxy-name">代理名称</label><input id="proxy-name" v-model="draft.name" placeholder="例如：办公室代理" autocomplete="off"></div>
     <ProxyFields v-model="fields" v-model:password-change="passwordChange" :saved-password="savedPassword" />
-    <div class="proxy-editor-footer"><span class="settings-save-status" role="status">{{ autosave.status.value }}</span><button type="button" class="settings-reset-all" @click="test">测试代理</button></div>
-    <p v-if="autosave.error.value || testError" class="error" role="alert">{{ autosave.error.value || testError }}</p>
+    <div class="proxy-editor-footer">
+      <AutosaveStatus :state="autosave.state.value" :status="autosave.status.value" :error="autosave.error.value || testError" />
+      <button type="button" class="settings-reset-all" @click="test">测试代理</button>
+    </div>
   </section>
 </template>

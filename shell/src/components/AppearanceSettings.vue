@@ -7,6 +7,8 @@ import '@xterm/xterm/css/xterm.css'
 import { store, type TerminalPreferences } from '../stores/app'
 import { confirmDialog } from '../services/dialogs'
 import { useAutosave } from '../services/autosave'
+import SettingsPage from './SettingsPage.vue'
+import AutosaveStatus from './AutosaveStatus.vue'
 import { DEFAULT_TERMINAL_PREFERENCES, defaultTerminalPreferences, getTerminalFontFamily, getTerminalTheme, saveTerminalPreferences, terminalFontOptions, terminalThemeNames, terminalWeightOptions } from '../services/terminalPreferences'
 
 const previewEl = ref<HTMLDivElement | null>(null)
@@ -62,10 +64,9 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); preview?.dispose(); previe
 </script>
 
 <template>
-      <main class="settings-main">
-        <div class="settings-heading"><div><h2>外观</h2><p>调整终端字体和配色方案，修改后自动保存。</p></div><button type="button" class="settings-reset-all" @click="resetAll">恢复默认</button></div>
-        <p v-if="autosave.error.value" class="error" role="alert">{{ autosave.error.value }}</p>
-        <p v-else class="settings-save-status" role="status">{{ autosave.status.value }}</p>
+      <SettingsPage title="外观" description="调整终端字体和配色方案，修改后自动保存。">
+        <template #actions><button type="button" class="settings-reset-all" @click="resetAll">恢复默认</button></template>
+        <template #status><AutosaveStatus :state="autosave.state.value" :status="autosave.status.value" :error="autosave.error.value" /></template>
         <div ref="previewEl" class="terminal-preview" aria-label="终端外观预览" />
         <h3 class="settings-section-title">文本</h3>
         <div class="settings-form">
@@ -76,5 +77,5 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); preview?.dispose(); previe
           <div class="settings-row"><span><strong>字体粗细</strong><small>普通文字的字重。</small></span><span class="settings-control"><button type="button" :class="['settings-reset', { 'settings-reset--hidden': draft.fontWeight === DEFAULT_TERMINAL_PREFERENCES.fontWeight }]" :disabled="draft.fontWeight === DEFAULT_TERMINAL_PREFERENCES.fontWeight" title="恢复默认字体粗细" aria-label="恢复默认字体粗细" @click="resetField('fontWeight')"><IconRotate :size="16" /></button><select v-model.number="draft.fontWeight" aria-label="字体粗细"><option v-for="weight in terminalWeightOptions" :key="weight.value" :value="weight.value">{{ weight.label }}</option></select></span></div>
           <div class="settings-row"><span><strong>粗体字体粗细</strong><small>粗体文字的字重。</small></span><span class="settings-control"><button type="button" :class="['settings-reset', { 'settings-reset--hidden': draft.fontWeightBold === DEFAULT_TERMINAL_PREFERENCES.fontWeightBold }]" :disabled="draft.fontWeightBold === DEFAULT_TERMINAL_PREFERENCES.fontWeightBold" title="恢复默认粗体字体粗细" aria-label="恢复默认粗体字体粗细" @click="resetField('fontWeightBold')"><IconRotate :size="16" /></button><select v-model.number="draft.fontWeightBold" aria-label="粗体字体粗细"><option v-for="weight in terminalWeightOptions" :key="weight.value" :value="weight.value">{{ weight.label }}</option></select></span></div>
         </div>
-      </main>
+      </SettingsPage>
 </template>
