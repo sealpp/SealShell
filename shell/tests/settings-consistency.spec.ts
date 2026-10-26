@@ -38,7 +38,7 @@ for (const width of [1280, 375]) {
     const styles = []
     const screenshots = join(tmpdir(), 'seal-e2e', 'settings')
     await mkdir(screenshots, { recursive: true })
-    for (const [name, label] of [['外观', '字体'], ['命令提示', 'API 地址'], ['代理服务器', '代理地址'], ['端口转发', '本机监听地址']]) {
+    for (const [name, label] of [['外观', '字体'], ['命令提示', 'API 地址'], ['代理服务器', '代理地址']]) {
       await dialog.getByRole('tab', { name, exact: true }).click()
       if (name === '代理服务器') await dialog.getByRole('button', { name: '添加代理', exact: true }).click()
       const control = dialog.getByLabel(label, { exact: true })
@@ -55,6 +55,10 @@ for (const width of [1280, 375]) {
     expect(styles[0].font).toContain('Segoe UI')
     expect(styles[0].outlineWidth).toBe('1px')
     for (const style of styles.slice(1)) expect(style).toEqual(styles[0])
+    await dialog.getByRole('tab', { name: '端口转发', exact: true }).click()
+    await expect(dialog.getByRole('switch', { name: '允许其他设备访问', exact: true })).toHaveAttribute('aria-checked', 'false')
+    expect(await dialog.locator('.settings-main').evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1)
+    await dialog.screenshot({ path: join(screenshots, `端口转发-${width}.png`) })
   })
 }
 
@@ -72,7 +76,7 @@ test('port settings await saving on navigation and keep failed changes visible f
   const dialog = page.getByRole('dialog', { name: '设置', exact: true })
   const ports = dialog.getByRole('tab', { name: '端口转发', exact: true })
   await ports.click()
-  await dialog.getByLabel('本机监听地址', { exact: true }).selectOption('0.0.0.0')
+  await dialog.getByRole('switch', { name: '允许其他设备访问', exact: true }).check()
   await dialog.getByRole('tab', { name: '外观', exact: true }).click()
   await expect(dialog.getByRole('status')).toHaveText('正在保存…')
   await expect(dialog.locator('.ui-status-icon.codicon-loading')).toBeVisible()
@@ -80,8 +84,8 @@ test('port settings await saving on navigation and keep failed changes visible f
   await page.evaluate(() => (window as any).portSaveFixture.resolve())
   await expect(dialog.getByRole('heading', { name: '外观', exact: true })).toBeVisible()
   await ports.click()
-  await expect(dialog.getByLabel('本机监听地址', { exact: true })).toHaveValue('0.0.0.0')
-  await dialog.getByLabel('本机监听地址', { exact: true }).selectOption('127.0.0.1')
+  await expect(dialog.getByRole('switch', { name: '允许其他设备访问', exact: true })).toBeChecked()
+  await dialog.getByRole('switch', { name: '允许其他设备访问', exact: true }).uncheck()
   await dialog.getByRole('button', { name: '关闭', exact: true }).click()
   await expect(dialog.getByRole('status')).toHaveText('正在保存…')
   await page.evaluate(() => (window as any).portSaveFixture.reject(new Error('保存失败，请重试')))
@@ -91,4 +95,27 @@ test('port settings await saving on navigation and keep failed changes visible f
   await dialog.getByRole('button', { name: '关闭', exact: true }).click()
   await page.evaluate(() => (window as any).portSaveFixture.resolve())
   await expect(dialog).toBeHidden()
+})
+
+test('switches communicate state through position, support keyboard and keep detailed help on demand', async ({ page }) => {
+  await openSettings(page)
+  const dialog = page.getByRole('dialog', { name: '设置', exact: true })
+  await dialog.getByRole('tab', { name: '命令提示', exact: true }).click()
+  const toggle = dialog.getByRole('switch', { name: '命令提示', exact: true })
+  const thumb = toggle.locator('.settings-switch-thumb')
+  await expect(toggle).toBeChecked()
+  const enabledX = (await thumb.boundingBox())!.x
+  await toggle.focus()
+  await toggle.press('Space')
+  await expect(toggle).not.toBeChecked()
+  await expect.poll(async () => (await thumb.boundingBox())!.x).toBeLessThan(enabledX - 8)
+  await expect(dialog.getByRole('status')).toHaveText('已自动保存')
+  await dialog.locator('.settings-switch-label').filter({ hasText: /^命令提示$/ }).click()
+  await expect(toggle).toBeChecked()
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await expect(thumb).toHaveCSS('transition-duration', '0s')
+  await expect(dialog.getByText('历史仅存此浏览器', { exact: false })).toBeHidden()
+  await dialog.locator('.settings-help summary').click()
+  await expect(dialog.getByText('历史仅存此浏览器', { exact: false })).toBeVisible()
+  await expect(dialog.getByText('将输入与所选上下文发送至模型服务。', { exact: true })).toBeVisible()
 })

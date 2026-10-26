@@ -8,5 +8,6 @@ const kind = computed(() => props.error ? 'error' : props.state === 'saving' ? '
 </script>
 
 <template>
-  <UiStatus class="settings-save-status" :kind="kind" :label="error || status" :icon="state === 'pending' && !error ? 'clock' : undefined" />
+  <UiStatus class="settings-save-status" :kind="kind" :label="error || status" :icon-only="!error"
+    :icon="!error && state === 'pending' ? 'clock' : !error && state === 'idle' ? 'check' : undefined" />
 </template>

@@ -168,7 +168,7 @@ function roundTrip(port, payload) {
     assert.notEqual(actualPort, remotePort);
     await roundTrip(actualPort, Buffer.from('after blur commit'));
     await panel.getByRole('button', { name: '端口转发设置', exact: true }).click();
-    await page.locator('#port-bind-host').selectOption('0.0.0.0');
+    await page.getByRole('switch', { name: '允许其他设备访问', exact: true }).check();
     await until(async () => await page.evaluate(async () => {
       const { readPortBindHost } = await import('/src/services/storage.ts'); return await readPortBindHost() === '0.0.0.0';
     }), 'global listening address was not saved');
@@ -177,7 +177,7 @@ function roundTrip(port, payload) {
     actualPort = Number(await portInput.inputValue());
     await roundTrip(actualPort, Buffer.from('all interfaces binding'));
     await panel.getByRole('button', { name: '端口转发设置', exact: true }).click();
-    await page.locator('#port-bind-host').selectOption('127.0.0.1');
+    await page.getByRole('switch', { name: '允许其他设备访问', exact: true }).uncheck();
     await until(async () => await page.evaluate(async () => {
       const { readPortBindHost } = await import('/src/services/storage.ts'); return await readPortBindHost() === '127.0.0.1';
     }), 'loopback listening address was not restored');

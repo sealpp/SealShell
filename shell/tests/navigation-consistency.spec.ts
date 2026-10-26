@@ -20,7 +20,7 @@ test('settings categories share rounded selection, roving focus and keyboard act
   await suggestions.hover()
   await expect(suggestions).toHaveCSS('background-color', 'rgb(4, 57, 94)')
   await expect(nav.locator('[tabindex="0"]')).toHaveCount(1)
-  await page.getByLabel('启用本地命令提示', { exact: true }).focus()
+  await page.getByRole('switch', { name: '命令提示', exact: true }).focus()
   await expect(suggestions).toHaveCSS('background-color', 'rgb(55, 55, 61)')
   await suggestions.focus()
   await page.keyboard.press('End')

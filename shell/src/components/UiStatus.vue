@@ -7,12 +7,13 @@ const props = withDefaults(defineProps<{
   label: string
   icon?: string
   compact?: boolean
+  iconOnly?: boolean
 }>(), { kind: 'idle', compact: false })
 const glyph = computed(() => props.icon ?? ({ idle: 'info', busy: 'loading', success: 'check', warning: 'warning', error: 'error' }[props.kind]))
 </script>
 
 <template>
-  <span class="ui-status" :class="[`ui-status--${kind}`, { 'ui-status--compact': compact, error: kind === 'error' }]"
+  <span class="ui-status" :class="[`ui-status--${kind}`, { 'ui-status--compact': compact, 'ui-status--icon-only': iconOnly, error: kind === 'error' }]"
     :role="kind === 'error' ? 'alert' : 'status'" :title="label" aria-atomic="true">
     <span class="ui-status-icon codicon" :class="[`codicon-${glyph}`, { 'ui-status-icon--spin': kind === 'busy' && glyph === 'loading', 'ui-status-icon--pulse': kind === 'busy' && glyph !== 'loading' }]" aria-hidden="true" />
     <span class="ui-status-label">{{ label }}</span>
@@ -29,6 +30,8 @@ const glyph = computed(() => props.icon ?? ({ idle: 'info', busy: 'loading', suc
 .ui-status--error { color: var(--workbench-error); }
 .ui-status--compact { align-items: center; }
 .ui-status--compact .ui-status-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-status--icon-only { gap: 0; }
+.ui-status--icon-only .ui-status-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .ui-status-icon--spin { animation: status-spin 1.4s linear infinite; }
 .ui-status-icon--pulse { animation: status-pulse 1.6s ease-in-out infinite; }
 @keyframes status-spin { to { transform: rotate(360deg); } }

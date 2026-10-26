@@ -39,7 +39,7 @@ onBeforeUnmount(() => { void transport?.close('proxy_test_closed') })
 </script>
 
 <template>
-  <UiDialog :open="true" title="测试代理" description="测试通过代理连接目标的能力，不进行 SSH 登录。" width="460px" @close="emit('close')">
+  <UiDialog :open="true" title="测试代理" width="460px" @close="emit('close')">
     <p class="proxy-caption">{{ proxy.type === 'http' ? 'HTTP CONNECT' : 'SOCKS5' }} · {{ proxy.host }}:{{ proxy.port }}</p>
     <div class="proxy-grid">
       <div class="proxy-field"><label for="proxy-test-host">测试目标地址</label><input id="proxy-test-host" v-model="host" :readonly="!!target" placeholder="目标主机或域名" :disabled="running"></div>
