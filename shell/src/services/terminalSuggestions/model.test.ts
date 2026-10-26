@@ -3,6 +3,15 @@ import { commonCommandProvider } from './catalog'
 import { COMMAND_HISTORY_LIMIT, COMMAND_SUGGESTION_LIMIT, findCommandSuggestions, historyProvider, rememberCommand } from './model'
 
 describe('local command suggestions', () => {
+  it('recalls compounds by keywords and intents, with current directory usage first', () => {
+    let entries = rememberCommand([], 'python3 main.py', 1, { cwd: '/work', intent: '运行项目' })
+    entries = rememberCommand(entries, 'python3 other.py', 2, { cwd: '/other' })
+    expect(findCommandSuggestions('python', [historyProvider(entries, '/work')])[0].command).toBe('python3 main.py')
+    expect(findCommandSuggestions('运行项目', [historyProvider(entries)])[0].command).toBe('python3 main.py')
+    entries = rememberCommand(entries, 'cd /home/codes/demo && conda activate work && python main.py', 3)
+    expect(findCommandSuggestions('python main.py', [historyProvider(entries)]).map(item => item.command)).toContain('cd /home/codes/demo && conda activate work && python main.py')
+    expect(findCommandSuggestions('cd demo', [historyProvider(entries)])).toHaveLength(1)
+  })
   it('offers bundled commands without any history or network request', () => {
     expect(findCommandSuggestions('g', [commonCommandProvider])[0]?.command).toBe('git status')
     expect(findCommandSuggestions('gi', [commonCommandProvider])[0]?.command).toBe('git status')

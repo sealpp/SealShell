@@ -18,14 +18,22 @@
     import { commandSuggestions, loadSuggestionPreferences, loadSuggestionHistory, rememberSuggestionCommand } from '/src/services/terminalSuggestions/runtime'
     import { saveHost, readCommandHistory, recordCommandHistory, deleteHosts, deleteFolderTree, saveFolder } from '/src/services/storage'
     import { store } from '/src/stores/app'
+    import { initializeVault } from '/src/services/vault'
     import { watch } from 'vue'
 
     const sent = []
     let echo = true
+    let enhanced = false, feedback = false, cwd
+    const requests = []
     let adapter, terminal
     const write = text => new Promise(resolve => { adapter.beforeOutput(); terminal.write(text, resolve) })
     window.harness = {
       sent, write,
+      requests,
+      enhance: value => { enhanced = value; adapter.refresh() },
+      feedback: value => { feedback = value },
+      cwd: value => { cwd = value; adapter.refresh() },
+      respond: (index, commands) => { const request = requests[index]; request.publish(commands.map(command => ({ command, source: 'ai', priority: 4, uses: 0, lastUsed: 0 }))); request.resolve('') },
       accept: command => adapter.accept(command),
       echo: value => { echo = value },
       readHistory: (id = 'suggestions-a') => readCommandHistory(id),
@@ -47,6 +55,7 @@
         const ready = ref(false)
         watch(() => [commandSuggestions.enabled, commandSuggestions.rememberHistory, commandSuggestions.history['suggestions-a']], () => adapter?.refresh())
         onMounted(async () => {
+          await initializeVault()
           await loadSuggestionPreferences()
           const host = id => ({ id, name: id, address: 'test.invalid', port: 22, username: 'dev', folderId: null })
           await saveHost(host('suggestions-a'))
@@ -57,10 +66,14 @@
           adapter = attachCommandSuggestions(terminal, {
             enabled: () => commandSuggestions.enabled,
             active: () => true,
+            context: () => ({ key: `${enhanced}:${cwd}`, cwd }),
+            enhancementEnabled: () => enhanced,
+            enhance: (query, mode, signal, publish) => new Promise(resolve => { requests.push({ query, mode, signal, publish, resolve }) }),
             focusList: edge => list.value?.focus(edge),
             listContains: target => list.value?.contains(target) ?? false,
             providers: () => [commonCommandProvider, historyProvider(commandSuggestions.rememberHistory ? commandSuggestions.history['suggestions-a'] ?? [] : [])],
-            onCommand: command => { void rememberSuggestionCommand('suggestions-a', command) },
+            onCommand: (command, use) => { void rememberSuggestionCommand('suggestions-a', command, use) },
+            onAccept: (command, use) => { if (feedback) void rememberSuggestionCommand('suggestions-a', command, use) },
             onChange: value => {
               suggestion.value = value
               if (!value) return
@@ -74,6 +87,7 @@
             sent.push(data)
             if (!echo) return
             if (data === '\r') void write('\r\n' + 'dev@host:~$ ')
+            else if (data.startsWith('\x15')) void write('\r\x1b[Kdev@host:~$ ' + data.slice(1))
             else if (data === '\x7f') void write('\b \b')
             else if (!data.includes('\x1b')) void write(data)
           })
@@ -82,7 +96,7 @@
         })
         onBeforeUnmount(() => { adapter?.dispose(); terminal?.dispose() })
         return () => h('main', [
-          h('div', { class: 'terminal', ref: container }, suggestion.value ? h(TerminalCommandSuggestions, { ref: list, suggestion: suggestion.value, appearance: appearance.value, boundary: container.value, onAccept: command => adapter.accept(command), onDismiss: () => adapter.dismiss(), onTerminalKey: event => adapter.forwardKey(event) }) : []),
+          h('div', { class: 'terminal', ref: container }, suggestion.value ? h(TerminalCommandSuggestions, { ref: list, suggestion: suggestion.value, appearance: appearance.value, boundary: container.value, onAccept: command => adapter.accept(command), onDismiss: () => adapter.dismiss(), onTerminalKey: event => adapter.forwardKey(event), onLock: () => adapter.lock(), onIntent: query => adapter.setIntent(query), onRefresh: () => adapter.applyPending(), onRetry: () => adapter.retry() }) : []),
           h('div', { class: 'controls' }, [h('button', { onClick: () => { store.settingsSection = 'suggestions'; store.settingsModalOpen = true } }, '命令提示设置'), h('input', { 'aria-label': 'Other input' }), h('span', { id: 'ready' }, String(ready.value))]),
           store.settingsModalOpen ? h(SettingsDialog) : null,
           h(InteractionDialog),

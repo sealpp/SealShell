@@ -60,6 +60,13 @@ export class TerminalCommandLine {
 
   constructor(private terminal: Terminal, private onCommand: (command: string) => void) {}
 
+  expectReplacement(command: string): void {
+    if (!this.anchor) return
+    this.expectedCommand = command
+    this.edited = true
+    this.awaitingEdit = false
+  }
+
   input(data: string): void {
     if (data === '\r') {
       this.submitted?.marker.dispose()

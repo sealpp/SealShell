@@ -20,7 +20,8 @@ import TerminalCommandSuggestions from '../components/TerminalCommandSuggestions
 import { attachCommandSuggestions, type TerminalSuggestionView } from '../services/terminalSuggestions/controller'
 import { commonCommandProvider } from '../services/terminalSuggestions/catalog'
 import { historyProvider } from '../services/terminalSuggestions/model'
-import { commandSuggestions, loadSuggestionHistory, rememberSuggestionCommand } from '../services/terminalSuggestions/runtime'
+import { commandSuggestions, loadSuggestionHistory, loadRecommendationKey, rememberSuggestionCommand } from '../services/terminalSuggestions/runtime'
+import { createRecommender } from '../services/terminalSuggestions/recommender'
 import '@xterm/xterm/css/xterm.css'
 
 const props = defineProps<{ tabId: string; viewportTabIds?: () => string[] }>()
@@ -52,6 +53,7 @@ const unwatchTerminalMount = ref<() => void>()
 const tab = computed(() => store.tabs.find((t) => t.id === props.tabId))
 const isActive = computed(() => store.activeTerminalTabId === props.tabId)
 const encoder = new TextEncoder()
+const recommend = createRecommender(loadRecommendationKey)
 
 function historyError(error: unknown): void {
   commandSuggestions.error = error instanceof Error ? error.message : String(error)
@@ -81,7 +83,7 @@ const activeState = computed(() => {
   return 'online'
 })
 
-watch(() => [commandSuggestions.enabled, commandSuggestions.rememberHistory, commandSuggestions.history[tab.value?.hostId ?? ''], activeState.value], () => suggestions?.refresh())
+watch(() => [commandSuggestions.enabled, commandSuggestions.rememberHistory, commandSuggestions.revision, commandSuggestions.history[tab.value?.hostId ?? ''], tab.value?.cwd, tab.value?.sessionId, activeState.value], () => suggestions?.refresh())
 
 function fitAndResize() {
   if (!terminal || !fitAddon || !layoutObserved || !termEl.value?.isConnected) return
@@ -210,11 +212,21 @@ function initTerminal() {
     active: () => isActive.value,
     providers: () => [
       commonCommandProvider,
-      historyProvider(commandSuggestions.rememberHistory ? commandSuggestions.history[tab.value?.hostId ?? ''] ?? [] : []),
+      historyProvider(commandSuggestions.rememberHistory ? commandSuggestions.history[tab.value?.hostId ?? ''] ?? [] : [], tab.value?.cwd),
     ],
-    onCommand: command => {
+    context: () => ({ key: `${tab.value?.sessionId}:${tab.value?.cwd}:${commandSuggestions.revision}:${commandSuggestions.rememberHistory}`, cwd: tab.value?.cwd }),
+    automatic: () => commandSuggestions.recommendations.automatic,
+    enhancementEnabled: (query, mode) => commandSuggestions.recommendations.cloud || (commandSuggestions.recommendations.remoteContext && !!tab.value?.cwd && (mode === 'intent' || /^(cd|ls|cat|less|tail -f)\s/.test(query))),
+    enhance: (query, mode, signal, publish) => recommend({ query, mode, sessionId: tab.value?.sessionId ?? '', cwd: tab.value?.cwd,
+      history: commandSuggestions.rememberHistory ? commandSuggestions.history[tab.value?.hostId ?? ''] ?? [] : [],
+    }, { ...commandSuggestions.recommendations }, signal, publish),
+    onAccept: (command, use) => {
       const hostId = tab.value?.hostId
-      if (hostId) void rememberSuggestionCommand(hostId, command).catch(historyError)
+      if (hostId) void rememberSuggestionCommand(hostId, command, use).catch(historyError)
+    },
+    onCommand: (command, use) => {
+      const hostId = tab.value?.hostId
+      if (hostId) void rememberSuggestionCommand(hostId, command, use).catch(historyError)
     },
     onChange: showSuggestion,
     focusList: edge => suggestionList.value?.focus(edge),
@@ -351,6 +363,7 @@ onBeforeUnmount(() => {
         <TerminalCommandSuggestions
           v-if="suggestion" ref="suggestionList" :suggestion="suggestion" :appearance="suggestionAppearance" :boundary="termEl"
           @accept="suggestions?.accept($event)" @dismiss="suggestions?.dismiss()" @terminal-key="suggestions?.forwardKey($event)"
+          @lock="suggestions?.lock()" @intent="suggestions?.setIntent($event)" @refresh="suggestions?.applyPending()" @retry="suggestions?.retry()"
         />
       </div>
     </div>

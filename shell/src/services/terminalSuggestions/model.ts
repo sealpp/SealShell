@@ -57,9 +57,10 @@ export function matchesQuery(text: string, query: string): boolean {
   return query.toLocaleLowerCase().trim().split(/\s+/).every(token => text.toLocaleLowerCase().includes(token))
 }
 
-export function historyProvider(entries: readonly CommandHistoryEntry[]): CommandSuggestionProvider {
+export function historyProvider(entries: readonly CommandHistoryEntry[], cwd?: string): CommandSuggestionProvider {
   return {
-    suggestions: () => entries.map(entry => ({ ...entry, source: 'history', priority: 1 })),
+    suggestions: query => entries.filter(entry => matchesQuery([entry.command, ...entry.intents ?? []].join(' '), query))
+      .map(entry => ({ ...entry, source: 'history', priority: entry.contexts?.some(item => item.cwd === cwd) ? 3 : 1 })),
   }
 }
 
@@ -73,7 +74,7 @@ export function findCommandSuggestions(prefix: string, providers: readonly Comma
   const candidates = new Map<string, CommandSuggestion>()
   for (const provider of providers) {
     for (const candidate of provider.suggestions(prefix)) {
-      if (!canRememberCommand(candidate.command) || !candidate.command.startsWith(prefix) || candidate.command === prefix) continue
+      if (!canRememberCommand(candidate.command) || candidate.command === prefix) continue
       const previous = candidates.get(candidate.command)
       if (!previous || compare(candidate, previous) < 0) candidates.set(candidate.command, candidate)
     }

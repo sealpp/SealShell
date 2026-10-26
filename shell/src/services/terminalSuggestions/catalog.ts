@@ -14,7 +14,7 @@ const commands = [
 ]
 
 export const commonCommandProvider: CommandSuggestionProvider = {
-  suggestions: () => commands.map((command, index) => ({
+  suggestions: prefix => commands.map((command, index) => ({
     command, source: 'common', priority: 0, uses: commands.length - index, lastUsed: 0,
-  })),
+  })).filter(candidate => candidate.command.startsWith(prefix)),
 }
