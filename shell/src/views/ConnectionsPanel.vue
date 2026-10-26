@@ -179,7 +179,7 @@ onBeforeUnmount(() => {
       :context="rootContext"
       :can-open="(event) => event.target === event.currentTarget"
     >
-      <div class="conn-list" tabindex="0" @dragover="onDragOverRoot" @drop="onDropRoot">
+      <div class="conn-list workbench-selection-container" tabindex="0" @dragover="onDragOverRoot" @drop="onDropRoot">
         <CommandContextMenu
           v-for="node in visibleNodes"
           :key="nodeKey(node.kind, node.id)"
@@ -187,7 +187,7 @@ onBeforeUnmount(() => {
           :context="() => nodeContext(node)"
         >
           <div
-            class="conn-item"
+            class="conn-item workbench-list-item"
             :class="{ selected: isSelected(node), dragging: draggingKeys.includes(nodeKey(node.kind, node.id)), cut: cutKeys?.has(nodeKey(node.kind, node.id)), folder: node.kind === 'folder', 'root-host': node.kind === 'host' && node.depth === 0 }"
             :style="{ paddingLeft: `${8 + node.depth * 16}px` }"
             :draggable="true"
@@ -274,20 +274,10 @@ onBeforeUnmount(() => {
   padding-top: 0;
   padding-right: 8px;
   padding-bottom: 0;
-  background: transparent;
   cursor: pointer;
   user-select: none;
 }
 
-.conn-item:hover {
-  background: var(--workbench-list-hover-bg);
-}
-
-.conn-item.selected {
-  background: var(--workbench-list-inactive-bg);
-}
-
-.conn-list:focus-within .conn-item.selected { background: var(--workbench-list-active-bg); color: var(--vscode-list-activeSelectionForeground); }
 .conn-list:focus-visible { outline: none; }
 .conn-list:focus-visible .conn-item.selected { outline: 1px solid var(--workbench-focus-border); outline-offset: -1px; }
 

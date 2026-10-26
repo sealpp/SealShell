@@ -43,12 +43,12 @@ function onFocusOutside(event: FocusOutsideEvent): void {
         @focus-outside="onFocusOutside"
       >
         <div ref="panel" class="terminal-command-suggestions-panel" @keydown.capture="onKeydown">
-          <ListboxRoot ref="listbox" class="terminal-command-suggestions-body" selection-behavior="replace" :highlight-on-hover="true">
+          <ListboxRoot ref="listbox" class="terminal-command-suggestions-body workbench-selection-container" selection-behavior="replace" :highlight-on-hover="true">
             <ListboxContent aria-label="命令候选" class="terminal-command-suggestions-list">
               <ListboxItem
                 v-for="candidate in suggestion.candidates" :key="candidate.command"
                 :value="candidate.command" :data-source="candidate.source"
-                class="terminal-command-suggestion"
+                class="terminal-command-suggestion workbench-list-item"
                 :title="candidate.source === 'history' ? `${candidate.command}\n本地历史 · ${candidate.uses} 次` : candidate.command"
                 :aria-description="candidate.source === 'history' ? `本地历史，使用过 ${candidate.uses} 次` : undefined"
                 @mousedown.left.prevent="listbox?.highlightItem(candidate.command)"
@@ -70,9 +70,7 @@ function onFocusOutside(event: FocusOutsideEvent): void {
 .terminal-command-suggestions-panel { display: flex; flex-direction: column; min-height: 0; padding: 4px 0; }
 .terminal-command-suggestions-body { display: flex; flex-direction: column; min-height: 0; }
 .terminal-command-suggestions-list { overflow-y: auto; min-height: 0; outline: none; }
-.terminal-command-suggestion { display: flex; align-items: center; min-height: 22px; padding: 0 8px; cursor: pointer; outline: none; }
-.terminal-command-suggestion:hover { background: var(--workbench-list-hover-bg); }
-.terminal-command-suggestions:focus-within .terminal-command-suggestion[data-highlighted] { background: var(--workbench-list-active-bg); color: var(--workbench-text-strong); }
+.terminal-command-suggestion { display: flex; align-items: center; min-height: 22px; padding: 0 8px; cursor: pointer; }
 .terminal-command-suggestion code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; font: 12px/1.5 Consolas, ui-monospace, monospace; }
 .terminal-command-prefix { color: var(--workbench-link); }
 </style>

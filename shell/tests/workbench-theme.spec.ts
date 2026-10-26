@@ -25,6 +25,15 @@ test('keeps activity indicators centered and distinguishes focused and unfocused
   await expect(host).toHaveCSS('background-color', 'rgb(4, 57, 94)')
   await expect(host).toHaveCSS('height', '22px')
   await expect(host).toHaveCSS('border-left-width', '0px')
+  await expect(host).toHaveCSS('border-radius', '4px')
+  const insets = await host.evaluate(element => {
+    const row = element.getBoundingClientRect()
+    const list = element.closest('.conn-list')!.getBoundingClientRect()
+    return { left: row.left - list.left, right: list.right - row.right }
+  })
+  expect(insets).toEqual({ left: 4, right: 4 })
+  await host.hover()
+  await expect(host).toHaveCSS('background-color', 'rgb(4, 57, 94)')
   await page.locator('.workbench-menu-trigger').focus()
   await expect(host).toHaveCSS('background-color', 'rgb(55, 55, 61)')
   const before = await activity.boundingBox()

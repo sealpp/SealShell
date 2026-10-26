@@ -139,7 +139,7 @@ async function confirm(item: PickItem): Promise<void> {
 </script>
 
 <template>
-  <UiDialog :open="true" title="选择编码" width="480px" content-class="encoding-picker" @close="close">
+  <UiDialog :open="true" title="选择编码" width="480px" content-class="encoding-picker workbench-selection-container" @close="close">
     <input
       ref="inputEl"
       v-model="query"
@@ -152,7 +152,7 @@ async function confirm(item: PickItem): Promise<void> {
       <li
         v-for="(item, index) in filtered"
         :key="item.key"
-        class="picker-item"
+        class="picker-item workbench-list-item"
         :class="{ active: index === activeIndex }"
         role="option"
         :aria-selected="index === activeIndex"
@@ -200,16 +200,10 @@ async function confirm(item: PickItem): Promise<void> {
   min-height: 22px;
   box-sizing: border-box;
   padding: 0 8px;
-  border-radius: 0;
   color: var(--workbench-text);
   font-size: 13px;
   cursor: pointer;
   user-select: none;
-}
-
-.picker-item.active {
-  background: var(--workbench-list-active-bg);
-  color: var(--workbench-text-strong);
 }
 
 .picker-check {

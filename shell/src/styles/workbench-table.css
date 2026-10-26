@@ -15,7 +15,7 @@
 .workbench-table-scroll { overflow: auto; scrollbar-width: thin; }
 .workbench-table-scroll:focus-visible { outline: 1px solid var(--workbench-focus-border); outline-offset: -1px; }
 .workbench-list-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; min-height: 36px; box-sizing: border-box; padding: 5px 8px; background: var(--workbench-surface); border-bottom: 1px solid var(--workbench-table-border); flex-shrink: 0; }
-.workbench-list-toolbar button, .workbench-list-action { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; height: 22px; padding: 0 6px; border: 0; border-radius: 2px; background: transparent; color: inherit; cursor: pointer; }
+.workbench-list-toolbar button, .workbench-list-action { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; height: 22px; padding: 0 6px; border: 0; border-radius: var(--workbench-radius-small); background: transparent; color: inherit; cursor: pointer; }
 .workbench-list-toolbar button:hover:not(:disabled), .workbench-list-toolbar button[aria-pressed='true'], .workbench-list-action:hover:not(:disabled) { background: var(--workbench-toolbar-hover-bg); color: var(--workbench-text-strong); }
 .workbench-list-toolbar button:disabled, .workbench-list-action:disabled { opacity: .4; cursor: default; }
 .workbench-list-toolbar input, .workbench-list-toolbar select { box-sizing: border-box; height: 22px; padding: 0 8px; border: 1px solid var(--workbench-border); border-radius: 4px; background: var(--workbench-input-bg); color: inherit; }

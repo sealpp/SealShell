@@ -41,7 +41,7 @@ async function test() {
     <label class="proxy-toggle"><input type="checkbox" :checked="modelValue.enabled" @change="change({ enabled: ($event.target as HTMLInputElement).checked })">使用代理</label>
     <div v-if="modelValue.enabled" class="host-proxy-body">
       <TabsRoot v-model="mode">
-        <TabsList class="proxy-segments" aria-label="代理配置方式"><TabsTrigger value="inline">直接填写</TabsTrigger><TabsTrigger value="saved">从列表选择</TabsTrigger></TabsList>
+        <TabsList class="proxy-segments workbench-selection-container" aria-label="代理配置方式"><TabsTrigger class="workbench-segment" value="inline">直接填写</TabsTrigger><TabsTrigger class="workbench-segment" value="saved">从列表选择</TabsTrigger></TabsList>
         <TabsContent value="inline"><ProxyFields v-model="inline" :password-change="passwordChange" :saved-password="savedPassword" @update:password-change="emit('update:passwordChange', $event)" /></TabsContent>
         <TabsContent value="saved"><div class="proxy-field"><label for="host-saved-proxy">代理服务器</label><select id="host-saved-proxy" :value="modelValue.savedId ?? ''" @change="change({ savedId: ($event.target as HTMLSelectElement).value || null })"><option value="">不选择 / 清除引用</option><option v-for="profile in store.proxies" :key="profile.id" :value="profile.id">{{ profile.name }} · {{ profile.type === 'http' ? 'HTTP' : 'SOCKS5' }} · {{ profile.host }}:{{ profile.port }}</option></select><p v-if="!store.proxies.length" class="proxy-caption">请先在设置的代理服务器页面添加代理。</p></div></TabsContent>
       </TabsRoot>

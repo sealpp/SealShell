@@ -1,0 +1,30 @@
+.workbench-list-item {
+  box-sizing: border-box;
+  width: calc(100% - 2 * var(--workbench-list-inset));
+  margin-inline: var(--workbench-list-inset);
+}
+
+:is(.workbench-list-item, .workbench-segment) {
+  border-radius: var(--workbench-radius-small);
+  background: transparent;
+  outline: none;
+}
+
+:is(.workbench-list-item, .workbench-segment):hover:where(:not(:disabled):not([aria-disabled='true']):not([data-disabled])) {
+  background: var(--workbench-list-hover-bg);
+}
+
+:is(.workbench-list-item, .workbench-segment):is(.active, .selected, [aria-selected='true'], [data-highlighted]) {
+  background: var(--workbench-list-inactive-bg);
+  color: var(--workbench-text-strong);
+}
+
+.workbench-selection-container:focus-within :is(.workbench-list-item, .workbench-segment):is(.active, .selected, [aria-selected='true'], [data-highlighted]) {
+  background: var(--workbench-list-active-bg);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+:is(.workbench-list-item, .workbench-segment):focus-visible {
+  outline: 1px solid var(--workbench-focus-border);
+  outline-offset: -1px;
+}
