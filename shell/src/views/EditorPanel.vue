@@ -19,22 +19,37 @@ const ready = ref(false)
 const saving = ref(false)
 let view: editor.IStandaloneCodeEditor | undefined
 let document: ReturnType<typeof getEditorDocument> | undefined
+let resizeObserver: ResizeObserver | undefined
 let disposed = false
 
 function focusPane(): void { setBottomPanelActiveTab(tabId.value, 'editors') }
+function editorDimensions(): editor.IDimension | undefined {
+  const element = editorEl.value
+  if (element && element.clientWidth > 0 && element.clientHeight > 0) {
+    return { width: element.clientWidth, height: element.clientHeight }
+  }
+}
+function layoutEditor(): void {
+  const dimension = editorDimensions()
+  // Hidden panes keep their last layout; zero width wraps every character.
+  if (!dimension) return
+  if (view) view.layout(dimension)
+  else void mountEditor()
+}
 async function mountEditor(): Promise<void> {
   const current = tab.value
-  if (!current || current.state !== 'online' || !editorEl.value || view || loading.value) return
+  if (!current || current.state !== 'online' || !editorDimensions() || view || loading.value) return
   loading.value = true
   loadError.value = ''
   try {
     const { monaco, getEditorDocument } = await import('../services/editor/documents')
-    if (disposed || !editorEl.value || tab.value !== current || current.state !== 'online') return
+    const dimension = editorDimensions()
+    if (disposed || !editorEl.value || !dimension || tab.value !== current || current.state !== 'online') return
     document = getEditorDocument(current)
     view = monaco.editor.create(editorEl.value, {
       model: document.model,
       theme: 'sealshell-dark-modern',
-      automaticLayout: true,
+      dimension,
       fontFamily: 'Consolas, "Cascadia Mono", "SFMono-Regular", monospace',
       fontSize: 14,
       lineHeight: 20,
@@ -76,9 +91,19 @@ async function save(): Promise<void> {
 }
 function openFind(): void { view?.focus(); void view?.getAction('actions.find')?.run() }
 
-watch([() => tab.value?.state, editorEl], () => { void mountEditor() }, { flush: 'post' })
+watch(editorEl, element => {
+  resizeObserver?.disconnect()
+  resizeObserver = undefined
+  if (element) {
+    resizeObserver = new ResizeObserver(layoutEditor)
+    resizeObserver.observe(element)
+    layoutEditor()
+  }
+}, { flush: 'post' })
+watch(() => tab.value?.state, layoutEditor, { flush: 'post' })
 onBeforeUnmount(() => {
   disposed = true
+  resizeObserver?.disconnect()
   if (view && document && !document.model.isDisposed()) document.viewState = view.saveViewState()
   view?.dispose()
   view = undefined

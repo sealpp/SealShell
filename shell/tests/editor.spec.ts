@@ -126,6 +126,63 @@ test('keeps same-path files isolated, retains undo through hiding and releases m
   await expect.poll(() => page.evaluate(async () => { const { monaco } = await import('/src/services/editor/runtime.ts'); return monaco.editor.getModels().length })).toBe(0)
 })
 
+for (const deviceScaleFactor of [1, 1.5]) {
+  test.describe(`editor layout at ${deviceScaleFactor * 100}% DPI`, () => {
+    test.use({ viewport: { width: 1500, height: 900 }, deviceScaleFactor })
+
+    test('keeps wrapping bounded while hidden and fits the resized pane on return', async ({ page }) => {
+      await page.evaluate(() => (window as any).editorFixture.add('large', '/large.txt', 'a moderately long line with words for wrapping '.repeat(4).concat('\n').repeat(3000)))
+      const large = pane(page, 'large')
+      await expect(large.locator('.monaco-editor')).toBeVisible()
+      const layout = () => page.evaluate(async () => {
+        const { monaco } = await import('/src/services/editor/runtime.ts')
+        const editor = monaco.editor.getEditors().find(view => view.getModel()?.uri.authority === 'large')!
+        return { width: editor.getLayoutInfo().width, column: editor.getOption(monaco.editor.EditorOption.wrappingInfo).wrappingColumn }
+      })
+      await expect.poll(async () => (await layout()).column).toBeGreaterThan(20)
+      const visible = await layout()
+      await page.getByRole('tab', { name: '文件列表', exact: true }).click()
+      await expect(large).toBeHidden()
+      // Let ResizeObserver and the editor's deferred layout react to display:none.
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+      expect(await layout()).toEqual(visible)
+      await page.setViewportSize({ width: 780, height: 850 })
+      await page.getByRole('tab', { name: '文件编辑', exact: true }).click()
+      await expect.poll(async () => (await layout()).width).toBeLessThan(visible.width)
+      await expect.poll(() => large.evaluate(el => Math.abs(el.querySelector('.monaco-editor')!.getBoundingClientRect().width - el.querySelector('.editor-host')!.clientWidth))).toBeLessThan(2)
+      const resized = await layout()
+      expect(resized.column).toBeGreaterThan(20)
+      await page.getByRole('button', { name: '切换底栏', exact: true }).click()
+      await expect(large).toBeHidden()
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+      expect(await layout()).toEqual(resized)
+      await page.getByRole('button', { name: '切换底栏', exact: true }).click()
+      await expect(large).toBeVisible()
+      await large.locator('.view-lines').click()
+      await page.keyboard.press('Alt+z')
+      await expect.poll(async () => (await layout()).column).toBe(-1)
+    })
+  })
+}
+
+test('defers an editor whose chunk finishes loading while its pane is hidden', async ({ page }) => {
+  let release!: () => void
+  const blocked = new Promise<void>(resolve => { release = resolve })
+  await page.route('**/src/services/editor/documents.ts', async route => { await blocked; await route.continue() })
+  await page.goto('/tests/editor-harness.html')
+  await expect(pane(page).getByRole('status')).toHaveText('正在加载编辑器…')
+  await page.getByRole('tab', { name: '文件列表', exact: true }).click()
+  release()
+  await expect(pane(page).getByRole('status', { includeHidden: true })).toHaveCount(0)
+  expect(await page.evaluate(async () => { const { monaco } = await import('/src/services/editor/runtime.ts'); return monaco.editor.getModels().length })).toBe(0)
+  await page.getByRole('tab', { name: '文件编辑', exact: true }).click()
+  await expect(pane(page).locator('.monaco-editor')).toBeVisible()
+  await expect.poll(() => page.evaluate(async () => {
+    const { monaco } = await import('/src/services/editor/runtime.ts')
+    return monaco.editor.getEditors()[0].getOption(monaco.editor.EditorOption.wrappingInfo).wrappingColumn
+  })).toBeGreaterThan(20)
+})
+
 test('can close a tab while the editor chunk is still loading without creating an orphan model', async ({ page }) => {
   // Use a fresh navigation so the dynamic module is not already evaluated.
   let release!: () => void
