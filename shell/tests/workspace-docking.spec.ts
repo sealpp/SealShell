@@ -51,6 +51,33 @@ test('keeps fixed categories and shows only the selected category instances', as
   await expect(page.locator('.workspace-category-view.active .workspace-instance-label')).toContainText('README.md')
 })
 
+test('releases closed file group DOM while the workspace stays alive', async ({ page }) => {
+  await page.evaluate(() => { (window as any).closedGroupRefs = [] })
+  for (let index = 0; index < 4; index++) {
+    await page.evaluate(() => window.__workspaceHarnessAddFile?.())
+    await page.locator('.workspace-instance[data-tab-id="file-d"] .workspace-instance-label').click()
+    await expect(page.locator('.file-panel[data-file-tab="file-d"]')).toBeVisible()
+    // The always-rendered panel gets its cached position on animation frames.
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    await page.evaluate(() => {
+      const group = [...document.querySelectorAll('.workspace-category-view.active .dv-groupview')]
+        .find(element => element.getBoundingClientRect().width > 0)!
+      ;(window as any).closedGroupRefs.push(new WeakRef(group.querySelector('.dv-content-container')!))
+    })
+    await page.locator('.workspace-instance[data-tab-id="file-d"] .workspace-instance-close').click()
+    await expect(page.locator('.file-panel[data-file-tab="file-d"]')).toHaveCount(0)
+  }
+  const cdp = await page.context().newCDPSession(page)
+  try {
+    await expect.poll(async () => {
+      await cdp.send('HeapProfiler.collectGarbage')
+      await cdp.send('HeapProfiler.collectGarbage')
+      return page.evaluate(() => (window as any).closedGroupRefs.filter((ref: WeakRef<Element>) => ref.deref()).length)
+    }).toBe(0)
+  } finally { await cdp.detach() }
+  await expect(page.locator('.workspace-category-view.active .workspace-instance')).toHaveCount(3)
+})
+
 test('opens a new editor without recursing through the hidden file dock layout', async ({ page }) => {
   await page.evaluate(() => window.__workspaceHarnessOpenEditor?.())
   const activeView = page.locator('.workspace-category-view.active')

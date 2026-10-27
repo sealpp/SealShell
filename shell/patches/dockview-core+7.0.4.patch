@@ -1,0 +1,92 @@
+diff --git a/node_modules/dockview-core/dist/package/main.cjs.js b/node_modules/dockview-core/dist/package/main.cjs.js
+index 4f8826a..2eb4598 100644
+--- a/node_modules/dockview-core/dist/package/main.cjs.js
++++ b/node_modules/dockview-core/dist/package/main.cjs.js
+@@ -1198,6 +1198,17 @@ class Splitview {
+          */
+         this.relayout([...lowPriorityIndexes, index], highPriorityIndexes);
+     }
++    // View disposal must not share a closure context with longer-lived sashes.
++    createViewItem(container, view, viewSize) {
++        const disposable = view.onDidChange((newSize) => this.onDidChange(viewItem, newSize.size));
++        const viewItem = new ViewItem(container, view, viewSize, {
++            dispose: () => {
++                disposable.dispose();
++                container.remove();
++            },
++        });
++        return viewItem;
++    }
+     addView(view, size = { type: 'distribute' }, index = this.viewItems.length, skipLayout) {
+         const container = document.createElement('div');
+         container.className = 'dv-view';
+@@ -1215,13 +1226,7 @@ class Splitview {
+         else {
+             viewSize = view.minimumSize;
+         }
+-        const disposable = view.onDidChange((newSize) => this.onDidChange(viewItem, newSize.size));
+-        const viewItem = new ViewItem(container, view, viewSize, {
+-            dispose: () => {
+-                disposable.dispose();
+-                container.remove();
+-            },
+-        });
++        const viewItem = this.createViewItem(container, view, viewSize);
+         if (index === this.viewItems.length) {
+             this.viewContainer.appendChild(container);
+         }
+@@ -14144,6 +14149,7 @@ const AllModules = [
+ class PositionCache {
+     constructor() {
+-        this.cache = new Map();
++        // Cached measurements must not keep detached panel elements alive.
++        this.cache = new WeakMap();
+         this.currentFrameId = 0;
+         this.rafId = null;
+     }
+diff --git a/node_modules/dockview-core/dist/package/main.esm.mjs b/node_modules/dockview-core/dist/package/main.esm.mjs
+index 99dd087..f3ab0cc 100644
+--- a/node_modules/dockview-core/dist/package/main.esm.mjs
++++ b/node_modules/dockview-core/dist/package/main.esm.mjs
+@@ -1194,6 +1194,17 @@ class Splitview {
+          */
+         this.relayout([...lowPriorityIndexes, index], highPriorityIndexes);
+     }
++    // View disposal must not share a closure context with longer-lived sashes.
++    createViewItem(container, view, viewSize) {
++        const disposable = view.onDidChange((newSize) => this.onDidChange(viewItem, newSize.size));
++        const viewItem = new ViewItem(container, view, viewSize, {
++            dispose: () => {
++                disposable.dispose();
++                container.remove();
++            },
++        });
++        return viewItem;
++    }
+     addView(view, size = { type: 'distribute' }, index = this.viewItems.length, skipLayout) {
+         const container = document.createElement('div');
+         container.className = 'dv-view';
+@@ -1211,13 +1222,7 @@ class Splitview {
+         else {
+             viewSize = view.minimumSize;
+         }
+-        const disposable = view.onDidChange((newSize) => this.onDidChange(viewItem, newSize.size));
+-        const viewItem = new ViewItem(container, view, viewSize, {
+-            dispose: () => {
+-                disposable.dispose();
+-                container.remove();
+-            },
+-        });
++        const viewItem = this.createViewItem(container, view, viewSize);
+         if (index === this.viewItems.length) {
+             this.viewContainer.appendChild(container);
+         }
+@@ -14140,6 +14145,7 @@ const AllModules = [
+ class PositionCache {
+     constructor() {
+-        this.cache = new Map();
++        // Cached measurements must not keep detached panel elements alive.
++        this.cache = new WeakMap();
+         this.currentFrameId = 0;
+         this.rafId = null;
+     }
