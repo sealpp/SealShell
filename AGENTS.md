@@ -37,5 +37,6 @@ After finishing local testing or browser validation, kill the PWA Vite dev serve
 
 - `pitfalls.md`：实现踩坑、根因和修复规则。
 - `debugging.md`：问题排查纪律——先复现、逐层收敛定位根因、修复针对根因、禁止创可贴式补丁与冗余防御分支。
+- `ai-quality.md`：AI 使用需求、Golden Dataset、可观测性与逐案例回归的维护约定。涉及 AI 行为、提示词、上下文、模型或相关重构时，先按该文档维护场景与验证记录。
 
 排查问题时先遵循 debugging 文档；修复可复用问题后先合并、删减或改写 pitfalls 文档，再提交代码；不要在本文件复制正文或追加一次性 workaround。
