@@ -246,3 +246,27 @@ test('preserves edits made during an in-flight save', async ({ page }) => {
   await expect.poll(() => page.evaluate(() => (window as any).editorFixture.writes.length)).toBe(2)
   expect(await page.evaluate(() => new TextDecoder().decode(new Uint8Array((window as any).editorFixture.writes[1].bytes)))).toBe('new_unsaved_changes')
 })
+
+test('unregisters per-editor commands when panes close and keeps reopened shortcuts usable', async ({ page }) => {
+  const commands = () => page.evaluate(() => (window as any).editorFixture.editorCommands())
+  await expect.poll(commands).toHaveLength(2)
+  for (let index = 0; index < 4; index++) {
+    const id = index ? `reopened-${index}` : 'python'
+    if (index) {
+      await page.evaluate(id => (window as any).editorFixture.add(id, '/note.txt', 'original'), id)
+      await expect(pane(page, id).locator('.monaco-editor')).toBeVisible()
+    }
+    await expect.poll(commands).toHaveLength(2)
+    await replace(page, `saved-${index}`, id)
+    await page.keyboard.press('Control+s')
+    await expect(pane(page, id).getByRole('button', { name: '保存', exact: true })).toBeDisabled()
+    await page.keyboard.press('Alt+z')
+    expect(await page.evaluate(async () => {
+      const { monaco } = await import('/src/services/editor/runtime.ts')
+      return monaco.editor.getEditors()[0].getOption(monaco.editor.EditorOption.wordWrap)
+    })).toBe('off')
+    await pane(page, id).getByRole('button', { name: '关闭', exact: true }).click()
+    await expect(pane(page, id)).toHaveCount(0)
+    await expect.poll(commands).toEqual([])
+  }
+})

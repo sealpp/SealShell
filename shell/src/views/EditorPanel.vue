@@ -20,6 +20,7 @@ const saving = ref(false)
 let view: editor.IStandaloneCodeEditor | undefined
 let document: ReturnType<typeof getEditorDocument> | undefined
 let resizeObserver: ResizeObserver | undefined
+const viewSubscriptions: Array<{ dispose(): void }> = []
 let disposed = false
 
 function focusPane(): void { setBottomPanelActiveTab(tabId.value, 'editors') }
@@ -71,12 +72,12 @@ async function mountEditor(): Promise<void> {
       ariaLabel: `文件内容：${current.label}`,
     })
     if (document.viewState) view.restoreViewState(document.viewState)
-    view.onDidFocusEditorText(focusPane)
-    view.addAction({ id: 'sealshell.save', label: '保存文件', keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS], run: save })
-    view.addAction({ id: 'sealshell.toggleWordWrap', label: '切换自动换行', keybindings: [monaco.KeyMod.Alt | monaco.KeyCode.KeyZ], run: () => {
+    viewSubscriptions.push(view.onDidFocusEditorText(focusPane))
+    viewSubscriptions.push(view.addAction({ id: 'sealshell.save', label: '保存文件', keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS], run: save }))
+    viewSubscriptions.push(view.addAction({ id: 'sealshell.toggleWordWrap', label: '切换自动换行', keybindings: [monaco.KeyMod.Alt | monaco.KeyCode.KeyZ], run: () => {
       document!.wordWrap = document!.wordWrap === 'on' ? 'off' : 'on'
       view!.updateOptions({ wordWrap: document!.wordWrap })
-    } })
+    } }))
     ready.value = true
   } catch (error) { loadError.value = error instanceof Error ? error.message : String(error) }
   finally { loading.value = false }
@@ -105,6 +106,8 @@ onBeforeUnmount(() => {
   disposed = true
   resizeObserver?.disconnect()
   if (view && document && !document.model.isDisposed()) document.viewState = view.saveViewState()
+  for (const subscription of viewSubscriptions) subscription.dispose()
+  viewSubscriptions.length = 0
   view?.dispose()
   view = undefined
   document = undefined
