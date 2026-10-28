@@ -59,8 +59,8 @@ export function parseDirectoryFacts(output: string): DirectoryFacts {
     } else if (!/[\x00-\x1f\x7f]/.test(value) && value.length <= 2048) {
       if (kind === 'cwd') facts.cwd = value
       if (kind === 'home' && value.startsWith('/')) facts.home = value
-      if (kind === 'dir' && facts.directories.length < 120) facts.directories.push(value)
-      if (kind === 'file' && facts.files.length < 80) facts.files.push(value)
+      if (kind === 'dir' && facts.directories.length < 240) facts.directories.push(value)
+      if (kind === 'file' && facts.files.length < 240) facts.files.push(value)
       if (kind === 'tool') facts.tools.push(value)
       if (kind === 'limited' && value === 'yes') facts.limited = true
       if (kind === 'done' && value === 'yes') done = true
@@ -72,11 +72,30 @@ export function parseDirectoryFacts(output: string): DirectoryFacts {
   return facts
 }
 
-/** A single additional level under already observed local/peer directories, matching a literal prefix. */
-export function nearbyPathProbe(cwd: string, roots: readonly string[], fragment: string): string {
-  if (!cwd.startsWith('/') || /[\x00-\x1f\x7f]/.test(cwd) || fragment.length < 3 || /[/\x00-\x1f\x7f]/.test(fragment)
+/** Read one bounded level; omit the fragment for model context, or filter by a literal prefix for local lookup. */
+export function nearbyPathProbe(cwd: string, roots: readonly string[], fragment: string | undefined): string {
+  if (!cwd.startsWith('/') || /[\x00-\x1f\x7f]/.test(cwd) || fragment !== undefined && (fragment.length < 3 || /[/\x00-\x1f\x7f]/.test(fragment))
     || roots.length > 121 || roots.some(root => !root.startsWith('/') || /[\x00-\x1f\x7f]/.test(root)
       || root !== cwd && parentPath(root) !== cwd && parentPath(root) !== parentPath(cwd))) throw new Error('路径查找范围不可用')
+  if (fragment === undefined) return `# sealshell-recommendation-context tree
+test "$(uname -s)" = Linux || exit 2
+printf 'cwd\\0%s\\0' ${shellQuote(cwd)}
+total=0
+for root in ${roots.map(shellQuote).join(' ')}; do
+  case "$root" in /proc|/sys|/dev|/run) continue;; esac
+  [ ! -L "$root" ] && [ -d "$root" ] && [ -r "$root" ] && [ -x "$root" ] || continue
+  for kind in dir file; do
+    count=0
+    for p in "\${root%/}"/* "\${root%/}"/.[!.]*; do
+      [ -e "$p" ] || continue
+      if [ -d "$p" ]; then [ "$kind" = dir ] || continue; else [ "$kind" = file ] || continue; fi
+      count=$((count+1)); if [ "$count" -gt 16 ]; then printf 'limited\\0yes\\0'; break; fi
+      total=$((total+1)); if [ "$total" -gt 240 ]; then printf 'limited\\0yes\\0'; break 3; fi
+      printf '%s\\0%s\\0' "$kind" "$p"
+    done
+  done
+done
+printf 'done\\0yes\\0'`
   return `# sealshell-recommendation-context nearby
 test "$(uname -s)" = Linux || exit 2
 printf 'cwd\\0%s\\0' ${shellQuote(cwd)}
@@ -114,7 +133,7 @@ export function probeDirectory(sessionId: string, cwd: string, signal: AbortSign
   return probeFacts(sessionId, directoryProbe(cwd, executable), signal)
 }
 
-export function probeNearbyPaths(sessionId: string, cwd: string, roots: string[], fragment: string, signal: AbortSignal): Promise<DirectoryFacts> {
+export function probeNearbyPaths(sessionId: string, cwd: string, roots: string[], fragment: string | undefined, signal: AbortSignal): Promise<DirectoryFacts> {
   return probeFacts(sessionId, nearbyPathProbe(cwd, roots, fragment), signal)
 }
 
