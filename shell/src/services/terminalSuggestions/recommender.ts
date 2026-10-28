@@ -31,6 +31,7 @@ export function createRecommender(key: () => Promise<string>, ports: Recommendat
     publish: (items: CommandSuggestion[]) => void, progress?: (activity: RecommendationActivity) => void): Promise<string> => {
     setSession(request.sessionId)
     const pathCommand = hasPathCommand(request.query), input = parsePathCommand(request.query)
+    let handledPath = pathCommand
     if (pathCommand && (!input || !settings.remoteContext || !request.cwd)) return ''
     const abort = new AbortController()
     const cancel = () => abort.abort(signal.reason)
@@ -40,10 +41,11 @@ export function createRecommender(key: () => Promise<string>, ports: Recommendat
     let facts: DirectoryFacts | undefined
     let contextError = false
     async function read(directory: string): Promise<DirectoryFacts> {
-      const key = `${request.sessionId}\0${directory}`, hit = cache.get(key)
+      const executable = input?.evidence === 'context' ? input.verb : undefined
+      const key = `${request.sessionId}\0${directory}\0${executable ?? ''}`, hit = cache.get(key)
       if (hit && Date.now() - hit.time < 30_000) return hit.facts
       progress?.('context')
-      const result = await ports.context(request.sessionId, directory, abort.signal)
+      const result = await ports.context(request.sessionId, directory, abort.signal, executable)
       abort.signal.throwIfAborted()
       cache.set(key, { time: Date.now(), facts: result })
       if (cache.size > 6) cache.delete(cache.keys().next().value!)
@@ -64,9 +66,13 @@ export function createRecommender(key: () => Promise<string>, ports: Recommendat
             } catch { if (explicit) contextError = true; abort.signal.throwIfAborted() }
           }
         }
-        if (facts) publish(pathSuggestions(request.query, facts))
+        if (facts) {
+          const paths = pathSuggestions(request.query, facts)
+          if (paths.length) handledPath = true
+          publish(paths)
+        }
       }
-      if (settings.cloud && !pathCommand) {
+      if (settings.cloud && !handledPath) {
         const apiKey = await ports.key()
         abort.signal.throwIfAborted()
         progress?.('ai')

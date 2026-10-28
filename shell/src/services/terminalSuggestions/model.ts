@@ -1,4 +1,4 @@
-import { preservesPathIntent } from './paths'
+import { commandPreference, preservesPathIntent } from './paths'
 
 export interface CommandHistoryEntry {
   command: string
@@ -65,8 +65,9 @@ export function historyProvider(entries: readonly CommandHistoryEntry[], cwd?: s
   }
 }
 
-function compare(a: CommandSuggestion, b: CommandSuggestion): number {
-  return b.priority - a.priority || b.uses - a.uses || b.lastUsed - a.lastUsed
+export function compareSuggestions(query: string, a: CommandSuggestion, b: CommandSuggestion): number {
+  return commandPreference(query, b.command) - commandPreference(query, a.command)
+    || b.priority - a.priority || b.uses - a.uses || b.lastUsed - a.lastUsed
     || a.command.length - b.command.length || a.command.localeCompare(b.command)
 }
 
@@ -77,8 +78,8 @@ export function findCommandSuggestions(prefix: string, providers: readonly Comma
     for (const candidate of provider.suggestions(prefix)) {
       if (!canRememberCommand(candidate.command) || candidate.command === prefix || !preservesPathIntent(prefix, candidate.command)) continue
       const previous = candidates.get(candidate.command)
-      if (!previous || compare(candidate, previous) < 0) candidates.set(candidate.command, candidate)
+      if (!previous || compareSuggestions(prefix, candidate, previous) < 0) candidates.set(candidate.command, candidate)
     }
   }
-  return [...candidates.values()].sort(compare).slice(0, COMMAND_SUGGESTION_LIMIT)
+  return [...candidates.values()].sort((a, b) => compareSuggestions(prefix, a, b)).slice(0, COMMAND_SUGGESTION_LIMIT)
 }

@@ -1,7 +1,7 @@
 import { getSshSession } from '../ssh'
 import { connectSsh } from '../ssh/connection'
 import type { CommandSuggestion } from './model'
-import { completePaths, shellQuote } from './paths'
+import { alternativePaths, completePaths, shellQuote, commandName } from './paths'
 export { shellQuote } from './paths'
 
 export interface DirectoryFacts {
@@ -13,9 +13,10 @@ export interface DirectoryFacts {
   tools: string[]
 }
 
-/** Fixed read-only operations. User/model text can only occupy a quoted path. */
-export function directoryProbe(cwd: string): string {
+/** Fixed read-only operations; quoted user text is a path or command-v lookup, never executable code. */
+export function directoryProbe(cwd: string, executable?: string): string {
   if (!cwd.startsWith('/') || /[\x00-\x1f\x7f]/.test(cwd)) throw new Error('当前目录不可用')
+  if (executable && commandName(executable) !== executable) throw new Error('命令名称不可用')
   return `# sealshell-recommendation-context
 test "$(uname -s)" = Linux || exit 2
 cd -- ${shellQuote(cwd)} || exit 1
@@ -34,7 +35,7 @@ for p in "$parent"/*; do
   n=$((n+1)); [ "$n" -le 40 ] || break
   printf 'dir\\0%s\\0' "$p"
 done
-for t in python python3 conda uv npm pnpm yarn cmake make ninja docker ss journalctl; do
+for t in python python3 conda uv npm pnpm yarn cmake make ninja docker ss journalctl ls eza exa grep rg ${executable ? shellQuote(executable) : ''}; do
   command -v "$t" >/dev/null 2>&1 && printf 'tool\\0%s\\0' "$t"
 done
 if [ -f package.json ] && [ ! -L package.json ]; then
@@ -65,15 +66,16 @@ export function parseDirectoryFacts(output: string): DirectoryFacts {
   }
   if (!done || !facts.cwd.startsWith('/')) throw new Error('目录探测未完成')
   facts.directories = [...new Set(facts.directories)]
+  facts.tools = [...new Set(facts.tools)]
   return facts
 }
 
-export async function probeDirectory(sessionId: string, cwd: string, signal: AbortSignal): Promise<DirectoryFacts> {
+export async function probeDirectory(sessionId: string, cwd: string, signal: AbortSignal, executable?: string): Promise<DirectoryFacts> {
   const info = getSshSession(sessionId)
   if (!info) throw new Error('SSH 会话不可用')
   const connection = await connectSsh(info, signal)
   try {
-    const result = await connection.worker.exec(directoryProbe(cwd), { timeoutMs: 3000, maxOutputBytes: 48 * 1024 })
+    const result = await connection.worker.exec(directoryProbe(cwd, executable), { timeoutMs: 3000, maxOutputBytes: 48 * 1024 })
     signal.throwIfAborted()
     if (result.exitCode !== 0) throw new Error('目录探测不可用')
     return parseDirectoryFacts(new TextDecoder().decode(result.stdout))
@@ -81,5 +83,7 @@ export async function probeDirectory(sessionId: string, cwd: string, signal: Abo
 }
 
 export function pathSuggestions(query: string, facts: DirectoryFacts): CommandSuggestion[] {
-  return completePaths(query, facts).map(command => ({ command, source: 'directory', priority: 2, uses: 0, lastUsed: 0 }))
+  const commands = completePaths(query, facts)
+  return [...commands, ...alternativePaths(query, commands, facts.tools)].slice(0, 8)
+    .map(command => ({ command, source: 'directory', priority: 2, uses: 0, lastUsed: 0 }))
 }

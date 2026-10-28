@@ -9,6 +9,19 @@ const request = { sessionId: 'one', cwd: '/work', query: 'cd demolinux', history
 const settings = { ...defaults, cloud: true }
 
 describe('verified path discovery', () => {
+  it('discovers an unlisted executable without running it, then completes from filesystem evidence', async () => {
+    const context = vi.fn(async (_id: string, directory: string, _signal: AbortSignal, executable?: string) => ({
+      ...root, cwd: directory, files: ['/work/app.log'], tools: executable === 'custom-cli' ? ['custom-cli'] : [],
+    }))
+    const generate = vi.fn(), key = vi.fn()
+    const run = createRecommender(key, { context, generate, key }), publish = vi.fn()
+    await run({ ...request, query: 'custom-cli app.lgo' }, settings, new AbortController().signal, publish)
+    expect(context.mock.calls[0][3]).toBe('custom-cli')
+    expect(publish.mock.calls[0][0][0].command).toBe("custom-cli '/work/app.log'")
+    expect(generate).not.toHaveBeenCalled(); expect(key).not.toHaveBeenCalled()
+    await run({ ...request, query: 'custom-cli app' }, settings, new AbortController().signal, vi.fn())
+    expect(context).toHaveBeenCalledTimes(1)
+  })
   it('follows a recent listing with one bounded lookup and reuses its facts across commands', async () => {
     const context = vi.fn(async (_id: string, directory: string) => directory === '/work/codes' ? project : root)
     const generate = vi.fn(), key = vi.fn()

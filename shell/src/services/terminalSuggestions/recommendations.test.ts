@@ -48,7 +48,7 @@ describe('recommendation composition', () => {
   it('quotes verified paths, including Unicode and whitespace, for non-prefix completion', () => {
     expect(pathSuggestions('cd 项目', facts)[0].command).toBe("cd -- '/work/项目 a'")
     expect(pathSuggestions('cat main', facts)[0].command).toBe("cat -- '/work/main.py'")
-    expect(pathSuggestions('rm main', facts)).toEqual([])
+    expect(pathSuggestions('rm main', facts)[0].command).toBe("rm '/work/main.py'")
   })
   it('caches context by session and cwd and routes explicit paths without cloud generation', async () => {
     const context = vi.fn().mockResolvedValue(facts)
@@ -63,11 +63,11 @@ describe('recommendation composition', () => {
     expect(publish.mock.calls[0][0][0].command).toContain('项目 a')
     progress.mockClear()
     expect(await run(request, settings, new AbortController().signal, publish, progress)).toContain('503')
-    expect(progress.mock.calls).toEqual([['ai']])
-    expect(context).toHaveBeenCalledTimes(1)
+    expect(progress.mock.calls).toEqual([['context'], ['ai']])
+    expect(context).toHaveBeenCalledTimes(2)
     await run({ ...request, sessionId: 'b' }, settings, new AbortController().signal, publish)
     await run({ ...request, cwd: '/elsewhere' }, settings, new AbortController().signal, publish)
-    expect(context).toHaveBeenCalledTimes(3)
+    expect(context).toHaveBeenCalledTimes(4)
   })
   it('cancels timed out work and ignores a late provider that disregards cancellation', async () => {
     vi.useFakeTimers()
@@ -105,5 +105,9 @@ it.skipIf(!existsSync(bash))('executes the bounded probe in a real shell with li
     expect(result.stdout).not.toContain('PRIVATE-ENV')
     expect(existsSync(join(root, 'sentinel'))).toBe(false)
     expect(() => parseDirectoryFacts(result.stdout.slice(0, 20))).toThrow('未完成')
+    const lookup = spawnSync(bash, ['--noprofile', '--norc', '-c', 'uname() { printf Linux; };\n' + directoryProbe(path, 'wc')], { encoding: 'utf8', timeout: 10000, windowsHide: true })
+    expect(lookup.status, lookup.stderr).toBe(0)
+    expect(parseDirectoryFacts(lookup.stdout).tools).toContain('wc')
+    expect(() => directoryProbe(path, 'wc; touch sentinel')).toThrow('命令名称')
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
