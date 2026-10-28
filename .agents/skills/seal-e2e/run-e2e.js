@@ -231,6 +231,8 @@ async function main() {
       const directory = path.join(trustDirectory, 'remote', 'codes', 'demo_linux');
       fs.mkdirSync(directory, { recursive: true });
       fs.mkdirSync(path.join(trustDirectory, 'remote', 'codes', 'destination'), { recursive: true });
+      fs.mkdirSync(path.join(trustDirectory, 'remote', 'demo'), { recursive: true });
+      fs.mkdirSync(path.join(trustDirectory, 'nearby-data', 'abdemo'), { recursive: true });
       fs.writeFileSync(path.join(directory, 'entry.txt'), 'path-fixture-ok\n');
       const target = loginDirectory + '/codes/demo_linux';
       let modelCalls = 0;
@@ -243,18 +245,33 @@ async function main() {
         await saveSuggestionPreferences(true, true, { ...commandSuggestions.recommendations,
           cloud: true, remoteContext: true, baseUrl: 'https://path-model.invalid', model: 'unused' }, 'synthetic-key');
         await rememberSuggestionCommand(window.sealE2eStore.tabs[0].hostId, 'cd /archive/demolinux', { cwd: window.sealE2eStore.tabs[0].cwd });
+        await rememberSuggestionCommand(window.sealE2eStore.tabs[0].hostId, 'cd /archive/abdemo', { cwd: '/another-session' });
       });
-      await page.locator('.xterm-helper-textarea').focus();
-      await page.keyboard.type('ls codes/');
-      await page.keyboard.press('Enter');
-      await page.waitForFunction(() => Object.values(window.sealRecommendationState.history).flat().some(item => item.command === 'ls codes/'));
       const waitForPrompt = () => page.waitForFunction(() => {
         const rows = [...document.querySelectorAll('.xterm-rows > div')].map(row => row.textContent).filter(text => text.trim());
         return window.sealIsShellPrompt(rows[rows.length - 1]);
       });
+      const candidates = page.getByRole('listbox', { name: '命令候选' }).getByRole('option');
+      const nearbyTarget = loginDirectory.slice(0, loginDirectory.lastIndexOf('/')) + '/nearby-data/abdemo';
+      await page.locator('.xterm-helper-textarea').focus();
+      await waitForPrompt();
+      // No preceding listing or usable history: discover a peer's child, not a local typo.
+      await page.keyboard.type('cd abdemo');
+      await candidates.filter({ has: page.getByText(`cd -- '${nearbyTarget}'`, { exact: true }) }).waitFor();
+      if (await candidates.first().getAttribute('data-source') !== 'directory') throw new Error('nearby target was supplied by history');
+      if ((await candidates.locator('code').allTextContents()).some(command => command.includes('/archive/') || command.endsWith("/demo'"))) throw new Error('history or a weak typo displaced the discovered target');
+      await candidates.first().click();
+      if (readMockSshState().shell_cwds['1'] !== loginDirectory) throw new Error('nearby path acceptance executed before Enter');
+      await page.keyboard.press('Enter');
+      await waitForSourceDirectory(nearbyTarget);
+      await sendSourceCommand(`cd -- '${loginDirectory}'`);
+      await waitForSourceDirectory(loginDirectory);
+      await waitForPrompt();
+      await page.keyboard.type('ls codes/');
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => Object.values(window.sealRecommendationState.history).flat().some(item => item.command === 'ls codes/'));
       await waitForPrompt();
       await page.keyboard.type('cd demolinux');
-      const candidates = page.getByRole('listbox', { name: '命令候选' }).getByRole('option');
       await candidates.filter({ has: page.getByText(`cd -- '${target}'`, { exact: true }) }).waitFor();
       const navigation = await candidates.locator('code').allTextContents();
       if (navigation.some(command => !command.startsWith('cd '))) throw new Error(`navigation intent changed: ${navigation}`);
@@ -303,7 +320,7 @@ async function main() {
       await sendSourceCommand(`cd -- '${loginDirectory}'`);
       await waitForSourceDirectory(loginDirectory);
       await page.evaluate(() => { window.sealRecommendationState.recommendations.cloud = false; });
-      console.log('real path completion: recent ls lookup, cd/ls/cat, unprofiled sort, grep pattern, cp operands, acceptance without execution, zero model calls');
+      console.log('real path completion: cold peer-directory lookup, directory source over stale history, recent ls lookup, cd/ls/cat, unprofiled sort, grep pattern, cp operands, acceptance without execution, zero model calls');
     }
     async function duplicate(trigger, expectedDirectory) {
       const shellNumber = readMockSshState().shell + 1;
