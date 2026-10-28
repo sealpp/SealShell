@@ -222,7 +222,7 @@ function initTerminal() {
     automatic: () => commandSuggestions.recommendations.automatic,
     enhancementEnabled: query => hasPathCommand(query)
       ? commandSuggestions.recommendations.remoteContext && !!tab.value?.cwd && !!parsePathCommand(query)
-      : commandSuggestions.recommendations.cloud,
+      : commandSuggestions.recommendations.cloud || (commandSuggestions.recommendations.remoteContext && !!tab.value?.cwd && !!parsePathCommand(query)),
     enhance: (query, signal, publish, progress) => recommend({ query, sessionId: tab.value?.sessionId ?? '', cwd: tab.value?.cwd,
       history: commandSuggestions.rememberHistory ? commandSuggestions.history[tab.value?.hostId ?? ''] ?? [] : [],
     }, { ...commandSuggestions.recommendations }, signal, publish, progress),

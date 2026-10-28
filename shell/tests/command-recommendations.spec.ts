@@ -68,6 +68,19 @@ test('buffers late AI suggestions while selecting, applies them explicitly, and 
   expect(await page.evaluate(() => (window as any).harness.requests[1].signal.aborted)).toBe(true)
 })
 
+test('puts the user command ahead of a compatible alternative and excludes a different goal', async ({ page }) => {
+  await page.evaluate(() => (window as any).harness.enhance(true))
+  await page.keyboard.type('ls -la demo')
+  await expect.poll(() => requests(page)).toBe(1)
+  await respond(page, 0, ["eza -la '/work/demo'", "cd '/work/demo'", "ls -la '/work/demo'"])
+  await expect(options(page)).toHaveCount(2)
+  await expect(options(page).first()).toContainText("ls -la '/work/demo'")
+  await expect(options(page).nth(1)).toContainText("eza -la '/work/demo'")
+  await options(page).nth(1).click()
+  expect(await page.evaluate(() => (window as any).harness.sent.at(-1))).toBe("\x15eza -la '/work/demo'")
+  expect(await history(page)).toEqual([])
+})
+
 test('shows directory and AI work graphically, respects reduced motion and preserves selection', async ({ page }) => {
   await page.evaluate(() => (window as any).harness.enhance(true))
   await page.keyboard.type('git ')
