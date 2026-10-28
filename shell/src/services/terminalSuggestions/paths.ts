@@ -246,7 +246,7 @@ export function searchDirectory(input: PathCommand, cwd: string, home?: string):
 }
 
 function closeSpelling(a: string, b: string): boolean {
-  const limit = a.length >= 6 ? 2 : a.length >= 3 ? 1 : 0
+  const limit = a.length >= 8 ? 2 : a.length >= 3 ? 1 : 0
   if (!limit || Math.abs(a.length - b.length) > limit) return false
   let previous = Array.from({ length: b.length + 1 }, (_, i) => i), older = previous
   for (let i = 1; i <= a.length; i++) {

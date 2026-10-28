@@ -1,7 +1,7 @@
 import { getSshSession } from '../ssh'
 import { connectSsh } from '../ssh/connection'
 import type { CommandSuggestion } from './model'
-import { alternativePaths, completePaths, shellQuote, commandName } from './paths'
+import { alternativePaths, completePaths, shellQuote, commandName, parentPath } from './paths'
 export { shellQuote } from './paths'
 
 export interface DirectoryFacts {
@@ -11,6 +11,7 @@ export interface DirectoryFacts {
   files: string[]
   scripts: string[]
   tools: string[]
+  limited?: boolean
 }
 
 /** Fixed read-only operations; quoted user text is a path or command-v lookup, never executable code. */
@@ -61,6 +62,7 @@ export function parseDirectoryFacts(output: string): DirectoryFacts {
       if (kind === 'dir' && facts.directories.length < 120) facts.directories.push(value)
       if (kind === 'file' && facts.files.length < 80) facts.files.push(value)
       if (kind === 'tool') facts.tools.push(value)
+      if (kind === 'limited' && value === 'yes') facts.limited = true
       if (kind === 'done' && value === 'yes') done = true
     }
   }
@@ -70,16 +72,50 @@ export function parseDirectoryFacts(output: string): DirectoryFacts {
   return facts
 }
 
-export async function probeDirectory(sessionId: string, cwd: string, signal: AbortSignal, executable?: string): Promise<DirectoryFacts> {
+/** A single additional level under already observed local/peer directories, matching a literal prefix. */
+export function nearbyPathProbe(cwd: string, roots: readonly string[], fragment: string): string {
+  if (!cwd.startsWith('/') || /[\x00-\x1f\x7f]/.test(cwd) || fragment.length < 3 || /[/\x00-\x1f\x7f]/.test(fragment)
+    || roots.length > 121 || roots.some(root => !root.startsWith('/') || /[\x00-\x1f\x7f]/.test(root)
+      || root !== cwd && parentPath(root) !== cwd && parentPath(root) !== parentPath(cwd))) throw new Error('路径查找范围不可用')
+  return `# sealshell-recommendation-context nearby
+test "$(uname -s)" = Linux || exit 2
+printf 'cwd\\0%s\\0' ${shellQuote(cwd)}
+n=0
+for phase in exact prefix; do
+for root in ${roots.map(shellQuote).join(' ')}; do
+  case "$root" in /proc|/sys|/dev|/run) continue;; esac
+  [ ! -L "$root" ] || continue
+  [ -d "$root" ] && [ -r "$root" ] && [ -x "$root" ] || continue
+  if [ "$phase" = exact ]; then set -- "\${root%/}"/${shellQuote(fragment)}; else set -- "\${root%/}"/${shellQuote(fragment)}*; fi
+  for p; do
+    [ -e "$p" ] || continue
+    [ "$phase" = prefix ] && [ "\${p##*/}" = ${shellQuote(fragment)} ] && continue
+    n=$((n+1)); if [ "$n" -gt 64 ]; then printf 'limited\\0yes\\0'; break 3; fi
+    if [ -d "$p" ]; then printf 'dir\\0%s\\0' "$p"; else printf 'file\\0%s\\0' "$p"; fi
+  done
+done
+done
+printf 'done\\0yes\\0'`
+}
+
+async function probeFacts(sessionId: string, script: string, signal: AbortSignal): Promise<DirectoryFacts> {
   const info = getSshSession(sessionId)
   if (!info) throw new Error('SSH 会话不可用')
   const connection = await connectSsh(info, signal)
   try {
-    const result = await connection.worker.exec(directoryProbe(cwd, executable), { timeoutMs: 3000, maxOutputBytes: 48 * 1024 })
+    const result = await connection.worker.exec(script, { timeoutMs: 3000, maxOutputBytes: 48 * 1024 })
     signal.throwIfAborted()
     if (result.exitCode !== 0) throw new Error('目录探测不可用')
     return parseDirectoryFacts(new TextDecoder().decode(result.stdout))
   } finally { await connection.close() }
+}
+
+export function probeDirectory(sessionId: string, cwd: string, signal: AbortSignal, executable?: string): Promise<DirectoryFacts> {
+  return probeFacts(sessionId, directoryProbe(cwd, executable), signal)
+}
+
+export function probeNearbyPaths(sessionId: string, cwd: string, roots: string[], fragment: string, signal: AbortSignal): Promise<DirectoryFacts> {
+  return probeFacts(sessionId, nearbyPathProbe(cwd, roots, fragment), signal)
 }
 
 export function pathSuggestions(query: string, facts: DirectoryFacts): CommandSuggestion[] {

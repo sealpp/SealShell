@@ -53,7 +53,7 @@ describe('recommendation composition', () => {
   it('caches context by session and cwd and routes explicit paths without cloud generation', async () => {
     const context = vi.fn().mockResolvedValue(facts)
     const generate = vi.fn().mockRejectedValue(new Error('云端推荐失败（HTTP 503）'))
-    const run = createRecommender(async () => 'fake', { context, generate, key: async () => 'fake' })
+    const run = createRecommender(async () => 'fake', { discover: vi.fn(async (_id, cwd) => ({ cwd, directories: [], files: [], scripts: [], tools: [] })), context, generate, key: async () => 'fake' })
     const publish = vi.fn()
     const progress = vi.fn()
     const settings = { ...defaults, cloud: true }
@@ -73,7 +73,7 @@ describe('recommendation composition', () => {
     vi.useFakeTimers()
     let resolve!: (items: typeof candidate[]) => void
     let providerSignal!: AbortSignal
-    const run = createRecommender(async () => 'fake', { context: vi.fn().mockResolvedValue(facts), key: async () => 'fake',
+    const run = createRecommender(async () => 'fake', { discover: vi.fn(), context: vi.fn().mockResolvedValue(facts), key: async () => 'fake',
       generate: (_request, _facts, _settings, _key, signal) => { providerSignal = signal; return new Promise(done => { resolve = done }) } })
     const publish = vi.fn()
     const result = run(request, { ...defaults, cloud: true, remoteContext: false }, new AbortController().signal, publish)

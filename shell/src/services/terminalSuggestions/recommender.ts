@@ -1,18 +1,19 @@
-import { pathSuggestions, probeDirectory, type DirectoryFacts } from './context'
+import { pathSuggestions, probeDirectory, probeNearbyPaths, type DirectoryFacts } from './context'
 import { generateRecommendations, type RecommendationQuery } from './cloud'
 import type { CommandSuggestion, RecommendationActivity } from './model'
 import type { RecommendationSettings } from './settings'
-import { hasPathCommand, parsePathCommand, resolvePath, searchDirectory } from './paths'
+import { hasPathCommand, parsePathCommand, resolvePath, searchDirectory, parentPath } from './paths'
 
 export interface RecommendationRequest extends RecommendationQuery { sessionId: string }
 interface RecommendationPorts {
   context: typeof probeDirectory
+  discover: typeof probeNearbyPaths
   generate: typeof generateRecommendations
   key(): Promise<string>
 }
 
 /** Per-terminal context cache; cancellation owns only the background connection. */
-export function createRecommender(key: () => Promise<string>, ports: RecommendationPorts = { context: probeDirectory, generate: generateRecommendations, key }) {
+export function createRecommender(key: () => Promise<string>, ports: RecommendationPorts = { context: probeDirectory, discover: probeNearbyPaths, generate: generateRecommendations, key }) {
   const cache = new Map<string, { time: number; facts: DirectoryFacts }>()
   let recent: { sessionId: string; cwd: string; directory: string } | undefined
   let sessionId = ''
@@ -40,6 +41,7 @@ export function createRecommender(key: () => Promise<string>, ports: Recommendat
     const deadline = setTimeout(() => abort.abort(new Error('推荐超时，请重试')), 8000)
     let facts: DirectoryFacts | undefined
     let contextError = false
+    let discoveryError = false
     async function read(directory: string): Promise<DirectoryFacts> {
       const executable = input?.evidence === 'context' ? input.verb : undefined
       const key = `${request.sessionId}\0${directory}\0${executable ?? ''}`, hit = cache.get(key)
@@ -65,6 +67,29 @@ export function createRecommender(key: () => Promise<string>, ports: Recommendat
                 files: [...new Set([...facts.files, ...extra.files])] }
             } catch { if (explicit) contextError = true; abort.signal.throwIfAborted() }
           }
+          const knownPaths = input.kind === 'directory' ? facts.directories : input.kind === 'file' ? facts.files : [...facts.directories, ...facts.files]
+          if (!explicit && !input.home && input.fragment.length >= 3
+            && (input.evidence !== 'context' || facts.tools.includes(input.verb))
+            && !knownPaths.includes(resolvePath(input.fragment, request.cwd)!)) {
+            const availableRoots = [...new Set([request.cwd, ...facts.directories.filter(path => parentPath(path) === request.cwd
+              || parentPath(path) === parentPath(request.cwd!))])]
+            const roots = availableRoots.slice(0, 121)
+            facts.limited ||= availableRoots.length > roots.length
+            const cacheKey = `${request.sessionId}\0nearby\0${request.cwd}\0${input.fragment}\0${roots.join('\0')}`
+            try {
+              let extra = cache.get(cacheKey)
+              if (!extra || Date.now() - extra.time >= 30_000) {
+                progress?.('context')
+                const result = await ports.discover(request.sessionId, request.cwd, roots, input.fragment, abort.signal)
+                abort.signal.throwIfAborted()
+                extra = { time: Date.now(), facts: result }
+                cache.set(cacheKey, extra)
+                if (cache.size > 6) cache.delete(cache.keys().next().value!)
+              }
+              facts = { ...facts, directories: [...new Set([...facts.directories, ...extra.facts.directories])],
+                files: [...new Set([...facts.files, ...extra.facts.files])], limited: facts.limited || extra.facts.limited }
+            } catch { discoveryError = true; abort.signal.throwIfAborted() }
+          }
         }
         if (facts) {
           const paths = pathSuggestions(request.query, facts)
@@ -80,7 +105,7 @@ export function createRecommender(key: () => Promise<string>, ports: Recommendat
         abort.signal.throwIfAborted()
         publish(candidates)
       }
-      return contextError ? '目录读取暂不可用' : ''
+      return contextError ? '目录读取暂不可用' : discoveryError ? '附近路径查找暂不可用' : facts?.limited ? '路径结果已达上限，仅显示已核实匹配' : ''
     } catch (error) {
       if (signal.aborted) throw error
       if (abort.signal.aborted) return '推荐超时，请重试'
