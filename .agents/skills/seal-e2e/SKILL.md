@@ -188,11 +188,13 @@ loopback 后用 SSH 隧道访问。容器 sshd 设置 `LANG=C.UTF-8`，并为测
 
 命令推荐回归在 `shell/tests/command-recommendations.spec.ts`：真实 xterm 直接输入与完整命令替换、Ctrl+I/原目标框快捷键不打开本地输入、边缘工作动效与静默完成、长等待/异常提示、减少动态效果下的同行文字、迟到结果冻结/刷新、目录变更取消、采纳与提交分别记忆、云端配置加密，以及生产 ShellTerminal 经真实云端适配器请求（响应由路由 fixture 提供）。既有 `command-suggestions.spec.ts` 保留前缀、远端灰字和延迟回显回归。`recommendations.test.ts` 另用实际 Bash 执行固定只读目录探测，验证特殊路径引用和元数据提取；Windows 仅覆盖 Git Bash shell 语义，不代表真实 Linux PTY 行编辑。
 
-SSH runner 验证目录探测使用独立 PWA/WASM SSH exec 连接、零新增交互 shell，以及完成后释放连接。启用 `SEAL_E2E_BASH`/`SEAL_E2E_ZSH` 时，探测脚本实际读取 fixture 文件；Windows 只模拟 uname 的 Linux 平台门槛，输出显式按 UTF-8 解码。该分支通过真实 xterm 输入 `ls codes/`、近似目录名 cd、带选项 ls 和文件名 cat，验证有限补查、原命令优先、旧历史不抢占、选择只填入、执行后的实际目录/内容和零云端调用。另验证无专用命令元数据的 sort 补齐文件、grep 保留搜索模式并实际命中文本，以及 cp 保留源参数并补齐目标目录；复制在采纳时尚未发生，Enter 后检查目标文件内容。截图保存到系统临时 `seal-e2e/path-completion.png`。online 不表示 OSC 目录已到达，首次目录探测须等到当前 cwd 已报告；命令已记入历史也不表示新提示符已返回，连续交互须等待实际提示符。原生子 shell 退出后的 Windows 文件句柄可能略后释放，fixture 删除使用有限重试，失败仍报错。
+SSH runner 验证目录探测使用独立 PWA/WASM SSH exec 连接、零新增交互 shell，以及完成后释放连接。启用 `SEAL_E2E_BASH`/`SEAL_E2E_ZSH` 时，探测脚本实际读取 fixture 文件；Windows 只模拟 uname 的 Linux 平台门槛，输出显式按 UTF-8 解码。AI 分支无需先 ls 子目录：从实际目录快照找到带分隔符名称，确认它进入正式生成请求，受控响应同时返回 cd 和错误 ls，最终浮层来源须为 ai 且保持 cd。此处路由 fixture 只证明编排与交互，真实模型质量须另跑私有评测入口。关闭 AI 的分支继续验证目录来源、带选项 ls、文件 cat、无专用语法的 sort、保留模式的 grep 和保留源参数的 cp，且没有额外云端请求。所有采纳只填入，Enter 后核对实际目录、内容或复制结果。截图保存到系统临时 `seal-e2e/path-completion.png`。online 不表示 OSC 目录已到达，首次探测须等待 cwd；命令记入历史也不表示新提示符已返回。原生子 shell 退出后的 Windows 文件句柄可能略后释放，fixture 删除使用有限重试，失败仍报错。
 
 未启用真实 shell 时，mock 的固定 NUL 字段只验证协议链路，不替代真实目录语义。Git Bash 的管道输入也不能代替真正 Linux PTY。使用真实服务商的 smoke 只发送合成目录/命令，不把 Key 放测试源码、截图、trace 或构建环境；Key 从本地忽略文件读取。云端延迟与整个推荐流程延迟应分别报告。
 
 路径发现还须验证冷启动：未先执行 ls、同主机其他 cwd 的历史包含旧路径、当前层存在误导近似名时，从同级目录的下一层找到精确目标。SSH runner 检查实际候选的 `data-source=directory`、排除旧历史与近似误目标、采纳后未执行、Enter 后实际 cwd 改变。附近探测的字面前缀引用、精确名称先于截断、64 项上限及不递归由原生 Bash 单元测试补充；不同会话的事实和缓存隔离由编排测试补充。
+
+上段 directory 来源仅指关闭 AI 的辅助模式。AI 开启时不能把“零模型调用”作为路径验收标准；需要检查实际请求次数、送入模型的目录事实和最终 ai 来源。原生 Bash 另验证无名称前置过滤的目录快照及采样上限。生产组件浏览器测试覆盖 cwd 未知/目录上下文关闭时仍发出模型请求，诊断模块只保留页面内请求元数据，不保存输入、路径、响应或凭据。
 
 Vite 配置会从已锁定的 npm 依赖复制以下运行时资源到开发/构建 public 目录：
 

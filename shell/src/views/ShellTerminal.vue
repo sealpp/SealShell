@@ -23,7 +23,7 @@ import { commonCommandProvider } from '../services/terminalSuggestions/catalog'
 import { historyProvider } from '../services/terminalSuggestions/model'
 import { commandSuggestions, loadSuggestionHistory, loadRecommendationKey, rememberSuggestionCommand } from '../services/terminalSuggestions/runtime'
 import { createRecommender } from '../services/terminalSuggestions/recommender'
-import { hasPathCommand, parsePathCommand } from '../services/terminalSuggestions/paths'
+import { parsePathCommand } from '../services/terminalSuggestions/paths'
 import '@xterm/xterm/css/xterm.css'
 
 const props = defineProps<{ tabId: string; viewportTabIds?: () => string[] }>()
@@ -214,15 +214,15 @@ function initTerminal() {
     providers: () => [{ suggestions: query => {
       // Verified path results own this list when directory completion is enabled.
       // Showing old history first would pin a potentially wrong directory above them.
-      if (commandSuggestions.recommendations.remoteContext && commandSuggestions.recommendations.automatic && tab.value?.cwd && parsePathCommand(query)) return []
+      if (commandSuggestions.recommendations.automatic && parsePathCommand(query)
+        && (commandSuggestions.recommendations.cloud || commandSuggestions.recommendations.remoteContext && tab.value?.cwd)) return []
       return [...commonCommandProvider.suggestions(query),
         ...historyProvider(commandSuggestions.rememberHistory ? commandSuggestions.history[tab.value?.hostId ?? ''] ?? [] : [], tab.value?.cwd).suggestions(query)]
     } }],
     context: () => ({ key: `${tab.value?.sessionId}:${tab.value?.cwd}:${commandSuggestions.revision}:${commandSuggestions.rememberHistory}`, cwd: tab.value?.cwd }),
     automatic: () => commandSuggestions.recommendations.automatic,
-    enhancementEnabled: query => hasPathCommand(query)
-      ? commandSuggestions.recommendations.remoteContext && !!tab.value?.cwd && !!parsePathCommand(query)
-      : commandSuggestions.recommendations.cloud || (commandSuggestions.recommendations.remoteContext && !!tab.value?.cwd && !!parsePathCommand(query)),
+    enhancementEnabled: query => commandSuggestions.recommendations.cloud
+      || (commandSuggestions.recommendations.remoteContext && !!tab.value?.cwd && !!parsePathCommand(query)),
     enhance: (query, signal, publish, progress) => recommend({ query, sessionId: tab.value?.sessionId ?? '', cwd: tab.value?.cwd,
       history: commandSuggestions.rememberHistory ? commandSuggestions.history[tab.value?.hostId ?? ''] ?? [] : [],
     }, { ...commandSuggestions.recommendations }, signal, publish, progress),

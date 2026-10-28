@@ -236,14 +236,21 @@ async function main() {
       fs.writeFileSync(path.join(directory, 'entry.txt'), 'path-fixture-ok\n');
       const target = loginDirectory + '/codes/demo_linux';
       let modelCalls = 0;
-      await page.route('https://path-model.invalid/**', route => { modelCalls++; return route.abort(); });
+      await page.route('https://path-model.invalid/**', route => {
+        modelCalls++;
+        const body = JSON.parse(route.request().postDataJSON().messages[1].content);
+        if (body.input !== 'cd demolinux' || !body.facts.directories.includes(target)) throw new Error('model did not receive the current terminal directory tree');
+        return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ choices: [{ message: { content: JSON.stringify({
+          suggestions: [{ command: `ls '${target}'` }, { command: `cd -- '${target}'` }],
+        }) } }] }) });
+      });
       await page.evaluate(async () => {
         const { commandSuggestions, saveSuggestionPreferences, rememberSuggestionCommand } = await import('/src/services/terminalSuggestions/runtime.ts');
         const { isShellPrompt } = await import('/src/services/terminalSuggestions/commandLine.ts');
         window.sealRecommendationState = commandSuggestions;
         window.sealIsShellPrompt = isShellPrompt;
         await saveSuggestionPreferences(true, true, { ...commandSuggestions.recommendations,
-          cloud: true, remoteContext: true, baseUrl: 'https://path-model.invalid', model: 'unused' }, 'synthetic-key');
+          cloud: false, remoteContext: true, baseUrl: 'https://path-model.invalid', model: 'controlled-response' }, 'synthetic-key');
         await rememberSuggestionCommand(window.sealE2eStore.tabs[0].hostId, 'cd /archive/demolinux', { cwd: window.sealE2eStore.tabs[0].cwd });
         await rememberSuggestionCommand(window.sealE2eStore.tabs[0].hostId, 'cd /archive/abdemo', { cwd: '/another-session' });
       });
@@ -267,12 +274,10 @@ async function main() {
       await sendSourceCommand(`cd -- '${loginDirectory}'`);
       await waitForSourceDirectory(loginDirectory);
       await waitForPrompt();
-      await page.keyboard.type('ls codes/');
-      await page.keyboard.press('Enter');
-      await page.waitForFunction(() => Object.values(window.sealRecommendationState.history).flat().some(item => item.command === 'ls codes/'));
-      await waitForPrompt();
+      await page.evaluate(() => { window.sealRecommendationState.recommendations.cloud = true; });
       await page.keyboard.type('cd demolinux');
       await candidates.filter({ has: page.getByText(`cd -- '${target}'`, { exact: true }) }).waitFor();
+      if (await candidates.first().getAttribute('data-source') !== 'ai' || modelCalls !== 1) throw new Error('path input bypassed AI generation');
       const navigation = await candidates.locator('code').allTextContents();
       if (navigation.some(command => !command.startsWith('cd '))) throw new Error(`navigation intent changed: ${navigation}`);
       await candidates.first().click();
@@ -281,6 +286,7 @@ async function main() {
       await page.keyboard.press('Enter');
       await waitForSourceDirectory(target);
       await waitForMockSshState(state => state.shell_cwds['1'] === target, 'the real shell to enter the corrected directory');
+      await page.evaluate(() => { window.sealRecommendationState.recommendations.cloud = false; });
       await waitForPrompt();
       await page.keyboard.type('ls -la ../demo_li');
       await candidates.filter({ has: page.getByText(`ls -la -- '${target}'`, { exact: true }) }).waitFor();
@@ -315,12 +321,12 @@ async function main() {
       await page.keyboard.press('Enter');
       await waitForPrompt();
       if (fs.readFileSync(path.join(trustDirectory, 'remote', 'codes', 'destination', 'entry.txt'), 'utf8') !== 'path-fixture-ok\n') throw new Error('copy completion changed the source or destination');
-      if (modelCalls) throw new Error('explicit path completion called the model');
+      if (modelCalls !== 1) throw new Error('local completion unexpectedly called the model');
       await page.screenshot({ path: path.join(TMP_DIR, 'path-completion.png') });
       await sendSourceCommand(`cd -- '${loginDirectory}'`);
       await waitForSourceDirectory(loginDirectory);
       await page.evaluate(() => { window.sealRecommendationState.recommendations.cloud = false; });
-      console.log('real path completion: cold peer-directory lookup, directory source over stale history, recent ls lookup, cd/ls/cat, unprofiled sort, grep pattern, cp operands, acceptance without execution, zero model calls');
+      console.log('real recommendations: cold directory tree reaches the model, AI source preserves cd, local mode remains available, acceptance without execution');
     }
     async function duplicate(trigger, expectedDirectory) {
       const shellNumber = readMockSshState().shell + 1;

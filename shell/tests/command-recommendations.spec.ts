@@ -243,6 +243,39 @@ test('saves cloud configuration with encrypted credentials and preserves it acro
   expect(await page.evaluate(async () => (await import('/src/services/terminalSuggestions/runtime.ts')).loadRecommendationKey())).toBe('')
 })
 
+test('the production terminal requests AI for a path even without directory context', async ({ page }) => {
+  await page.route('**/src/services/ws.ts', route => route.fulfill({ contentType: 'application/javascript', body: `
+    export * from '/src/services/ws.ts?actual';
+    let output;
+    const encoder = new TextEncoder();
+    export function resizeTerminal() {}
+    export function setTerminalOutputHandler(id, handler) {
+      output = handler;
+      if (handler) setTimeout(() => { handler(encoder.encode('dev@host:~$ ')); window.productionReady = true; }, 0);
+    }
+    export function sendTerminalInput(id, payload) { output?.(payload); }
+  ` }))
+  let payload: any
+  await page.route('https://model.example/v1/chat/completions', async route => {
+    payload = route.request().postDataJSON()
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ choices: [{ message: { content: '{"suggestions":[]}' } }] }) })
+  })
+  await page.goto('/tests/terminal-suggestions-harness.html')
+  await page.waitForFunction(() => (window as any).productionReady)
+  await page.evaluate(async () => {
+    const { initializeVault } = await import('/src/services/vault.ts')
+    const { saveSuggestionPreferences } = await import('/src/services/terminalSuggestions/runtime.ts')
+    await initializeVault()
+    await saveSuggestionPreferences(true, true, { cloud: true, automatic: true, remoteContext: false, shareHistory: false, baseUrl: 'https://model.example/v1', model: 'test-model' }, 'synthetic-key')
+  })
+  await input(page).focus()
+  await page.keyboard.type('cd demo')
+  await expect(page.locator('.terminal-command-suggestions')).toContainText('AI 暂未找到匹配建议')
+  expect(JSON.parse(payload.messages[1].content).input).toBe('cd demo')
+  const trace = await page.evaluate(async () => (await import('/src/services/terminalSuggestions/diagnostics.ts')).recentRecommendationTraces().at(-1))
+  expect(trace).toMatchObject({ route: 'ai', modelCalled: true, context: 'disabled', outcome: 'empty' })
+})
+
 test('the production terminal composes a real cloud adapter request and inserts its whole response', async ({ page }) => {
   await page.route('**/src/services/ws.ts', route => route.fulfill({ contentType: 'application/javascript', body: `
     export * from '/src/services/ws.ts?actual';
