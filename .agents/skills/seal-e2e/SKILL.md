@@ -148,7 +148,7 @@ loopback 后用 SSH 隧道访问。容器 sshd 设置 `LANG=C.UTF-8`，并为测
 
 ## 选择器
 
-`shell/tests/settings-consistency.spec.ts` 比较所有设置页的实际标题、表单尺寸和聚焦样式，覆盖窄窗、开关位置与键盘操作、按需帮助，以及端口设置慢保存时切页、关闭、失败重试；截图存系统临时目录 `seal-e2e/settings`。推荐状态通过 `command-recommendations.spec.ts` 的受控请求检查目录读取、AI 生成、完成和异常，保留候选焦点并验证减少动态效果；同时验证图形反馈仍有完整的悬停/读屏文案、无候选时不留宽空框，以及密钥未编辑时保留、显式清除后移除。实际云端适配器的等待与完成截图存 `seal-e2e/command-suggestions`。表格密度调整须检查表头单元的真实边界与首行点击，避免内部固定高度溢出行容器；不得用强制点击绕过。
+`shell/tests/settings-consistency.spec.ts` 比较所有设置页的实际标题、表单尺寸和聚焦样式，覆盖窄窗、开关位置与键盘操作、按需帮助，以及端口设置慢保存时切页、关闭、失败重试；截图存系统临时目录 `seal-e2e/settings`。推荐状态通过 `command-recommendations.spec.ts` 的受控请求检查不同内部阶段共用底部光效、无文字长等待、完成和异常，保留候选焦点并验证减少动态效果下的静态底部渐变；同时验证统一的隐藏读屏说明、无候选时的紧凑无文字工作框，以及密钥未编辑时保留、显式清除后移除。实际云端适配器的等待与完成截图存 `seal-e2e/command-suggestions`。表格密度调整须检查表头单元的真实边界与首行点击，避免内部固定高度溢出行容器；不得用强制点击绕过。
 
 `shell/tests/workbench-theme.spec.ts` 使用实际工作台验证活动栏的内缩圆角伪元素、选中/悬停/键盘焦点及图标位置稳定、列表聚焦/失焦选择、菜单 Portal 与 Dockview 标签的主题，以及终端配色改变后外围保持独立。Codicons 检查包含本地字体与断网后首次打开弹窗；不配对真实 Node，不操作用户主机。配色或密度变更时同步相关 UI 套件的视觉断言，并运行生产构建及 `node shell/tests/editor-offline.mjs`，验证编辑器首次离线加载的主题和字体。
 
@@ -186,7 +186,7 @@ loopback 后用 SSH 隧道访问。容器 sshd 设置 `LANG=C.UTF-8`，并为测
 
 ## PWA WASM 资源
 
-命令推荐回归在 `shell/tests/command-recommendations.spec.ts`：真实 xterm 直接输入与完整命令替换、Ctrl+I/原目标框快捷键不打开本地输入、边缘工作动效与静默完成、长等待/异常提示、减少动态效果下的同行文字、迟到结果冻结/刷新、目录变更取消、采纳与提交分别记忆、云端配置加密，以及生产 ShellTerminal 经真实云端适配器请求（响应由路由 fixture 提供）。既有 `command-suggestions.spec.ts` 保留前缀、远端灰字和延迟回显回归。`recommendations.test.ts` 另用实际 Bash 执行固定只读目录探测，验证特殊路径引用和元数据提取；Windows 仅覆盖 Git Bash shell 语义，不代表真实 Linux PTY 行编辑。
+命令推荐回归在 `shell/tests/command-recommendations.spec.ts`：真实 xterm 直接输入与完整命令替换、Ctrl+I/原目标框快捷键不打开本地输入、底部统一工作动效与静默完成、无文字长等待/异常提示、减少动态效果下的静态光带、迟到结果冻结/刷新、目录变更取消、采纳与提交分别记忆、云端配置加密，以及生产 ShellTerminal 经真实云端适配器请求（响应由路由 fixture 提供）。既有 `command-suggestions.spec.ts` 保留前缀、远端灰字和延迟回显回归。`recommendations.test.ts` 另用实际 Bash 执行固定只读目录探测，验证特殊路径引用和元数据提取；Windows 仅覆盖 Git Bash shell 语义，不代表真实 Linux PTY 行编辑。
 
 SSH runner 验证目录探测使用独立 PWA/WASM SSH exec 连接、零新增交互 shell，以及完成后释放连接。启用 `SEAL_E2E_BASH`/`SEAL_E2E_ZSH` 时，探测脚本实际读取 fixture 文件；Windows 只模拟 uname 的 Linux 平台门槛，输出显式按 UTF-8 解码。AI 分支无需先 ls 子目录：从实际目录快照找到带分隔符名称，确认它进入正式生成请求，受控响应同时返回 cd 和错误 ls，最终浮层来源须为 ai 且保持 cd。此处路由 fixture 只证明编排与交互，真实模型质量须另跑私有评测入口。关闭 AI 的分支继续验证目录来源、带选项 ls、文件 cat、无专用语法的 sort、保留模式的 grep 和保留源参数的 cp，且没有额外云端请求。所有采纳只填入，Enter 后核对实际目录、内容或复制结果。截图保存到系统临时 `seal-e2e/path-completion.png`。online 不表示 OSC 目录已到达，首次探测须等待 cwd；命令记入历史也不表示新提示符已返回。原生子 shell 退出后的 Windows 文件句柄可能略后释放，fixture 删除使用有限重试，失败仍报错。
 

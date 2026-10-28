@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, type CSSProperties } from 'vue'
+import { computed, ref, type CSSProperties } from 'vue'
 import { ListboxContent, ListboxItem, ListboxRoot, PopoverAnchor, PopoverContent, PopoverPortal, PopoverRoot, type FocusOutsideEvent } from 'reka-ui'
 import type { TerminalSuggestionView } from '../services/terminalSuggestions/controller'
 import { usePortalTarget } from '../ui/portal'
@@ -13,27 +13,13 @@ const portalTarget = usePortalTarget(computed(() => props.boundary))
 const sourceIcons: Record<string, string> = { history: 'history', ai: 'sparkle', directory: 'folder' }
 const hasContent = computed(() => props.suggestion.candidates.length > 0 || props.suggestion.loading || props.suggestion.status || props.suggestion.pending || props.suggestion.loading === false)
 const working = computed(() => !!props.suggestion.loading && !props.suggestion.status)
-const waitingLong = ref(false)
-const showFeedback = computed(() => !!props.suggestion.status || waitingLong.value || !props.suggestion.candidates.length)
-const activityLabel = computed(() => props.suggestion.activity === 'ai' ? '生成中' : props.suggestion.activity === 'context' ? '读目录' : '查找中')
-watch(() => [working.value, props.suggestion.activity, props.suggestion.prefix], (_, __, onCleanup) => {
-  waitingLong.value = false
-  if (!working.value) return
-  const timer = setTimeout(() => { waitingLong.value = true }, 8000)
-  onCleanup(() => clearTimeout(timer))
-}, { immediate: true })
+const showFeedback = computed(() => !!props.suggestion.status || (props.suggestion.loading === false && !props.suggestion.candidates.length && !props.suggestion.pending))
 const feedback = computed(() => {
   const view = props.suggestion
   if (view.status) return { kind: 'warning' as const, label: view.status }
-  if (view.loading) return {
-    kind: 'busy' as const,
-    icon: view.activity === 'ai' ? 'sparkle' : undefined,
-    label: waitingLong.value && view.candidates.length
-      ? `${view.activity === 'ai' ? 'AI 仍在生成' : view.activity === 'context' ? '仍在读取目录' : '仍在查找建议'}，可先用已有建议`
-      : view.activity === 'ai' ? 'AI 正在生成建议' : view.activity === 'context' ? '正在读取目录' : '正在查找建议',
-  }
+  if (view.loading) return { kind: 'busy' as const, label: '正在准备建议' }
   if (view.loading === false) return { kind: 'idle' as const, label: view.pending ? `有 ${view.pending} 条新建议待显示` : view.candidates.length ? '建议已更新' : '暂无匹配建议' }
-  return { kind: 'idle' as const, icon: 'clock', label: view.enhanced ? '输入停顿后补充建议' : '本地命令建议' }
+  return { kind: 'idle' as const, label: '命令建议' }
 })
 
 defineExpose({
@@ -63,8 +49,7 @@ function onFocusOutside(event: FocusOutsideEvent): void {
     <PopoverAnchor as-child><span class="terminal-command-anchor" :style="appearance" aria-hidden="true" /></PopoverAnchor>
     <PopoverPortal :to="portalTarget">
       <PopoverContent
-        class="terminal-command-suggestions" :class="{ 'has-enhancement': suggestion.enhanced, 'status-only': !suggestion.candidates.length, 'is-working': working, 'is-ai-working': working && suggestion.activity === 'ai' }" aria-label="命令提示"
-        :title="working ? feedback.label : undefined"
+        class="terminal-command-suggestions" :class="{ 'has-enhancement': suggestion.enhanced, 'status-only': !suggestion.candidates.length, 'is-working': working }" aria-label="命令提示"
         side="bottom" align="start" :side-offset="4" :collision-padding="8"
         :collision-boundary="boundary" :prioritize-position="true"
         @open-auto-focus.prevent @close-auto-focus.prevent
@@ -72,9 +57,6 @@ function onFocusOutside(event: FocusOutsideEvent): void {
       >
         <span class="terminal-command-announcement" role="status" aria-atomic="true">{{ feedback.label }}</span>
         <div ref="panel" class="terminal-command-suggestions-panel" :class="{ 'has-candidates': suggestion.candidates.length }" @keydown.capture="onKeydown" @pointerenter="emit('lock')" @focusin="emit('lock')">
-          <span v-if="working && suggestion.candidates.length" class="terminal-command-inline-activity" aria-hidden="true">
-            <span class="codicon codicon-loading" /><span class="terminal-command-activity-label">{{ activityLabel }}</span>
-          </span>
           <ListboxRoot ref="listbox" class="terminal-command-suggestions-body workbench-selection-container" selection-behavior="replace" :highlight-on-hover="true">
             <ListboxContent aria-label="命令候选" :aria-busy="working" class="terminal-command-suggestions-list">
               <ListboxItem
@@ -93,7 +75,7 @@ function onFocusOutside(event: FocusOutsideEvent): void {
             </ListboxContent>
           </ListboxRoot>
           <div v-if="showFeedback || suggestion.pending" class="terminal-command-status">
-            <UiStatus v-if="showFeedback" v-bind="feedback" :compact="!suggestion.status && !waitingLong" aria-hidden="true" />
+            <UiStatus v-if="showFeedback" v-bind="feedback" :compact="!suggestion.status" aria-hidden="true" />
             <button v-if="suggestion.pending" type="button" :aria-label="`显示 ${suggestion.pending} 条新建议`" :title="`显示 ${suggestion.pending} 条新建议`" @click="emit('refresh')"><span class="codicon codicon-refresh" aria-hidden="true" /><span>{{ suggestion.pending }}</span></button>
           </div>
         </div>
@@ -103,17 +85,11 @@ function onFocusOutside(event: FocusOutsideEvent): void {
 </template>
 
 <style>
-@property --terminal-command-activity-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
 .terminal-command-anchor { position: absolute; width: 1px; pointer-events: none; }
 .terminal-command-suggestions { position: relative; width: max-content; min-width: min(180px, var(--reka-popover-content-available-width)); max-width: min(420px, calc(100vw - 16px), var(--reka-popover-content-available-width)); max-height: var(--reka-popover-content-available-height); display: flex; flex-direction: column; overflow: hidden; z-index: 80; border: 1px solid var(--vscode-editorWidget-border); border-radius: var(--workbench-radius); background: var(--vscode-editorWidget-background); color: var(--workbench-text); box-shadow: 0 4px 12px var(--vscode-widget-shadow); }
-.terminal-command-suggestions::before { content: ''; position: absolute; inset: 0; z-index: 1; padding: 1.5px; border-radius: inherit; pointer-events: none; opacity: 0; background: conic-gradient(from var(--terminal-command-activity-angle), transparent 0deg 270deg, color-mix(in srgb, var(--workbench-link) 15%, transparent) 296deg, var(--workbench-link) 344deg, transparent 360deg); mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); mask-composite: exclude; transition: opacity 180ms ease; }
-.terminal-command-suggestions.is-ai-working::before { opacity: .9; animation: terminal-command-flow 3.2s linear infinite; }
+.terminal-command-suggestions::before { content: ''; position: absolute; bottom: 0; left: 0; z-index: 1; width: 40%; height: 2px; pointer-events: none; opacity: 0; background: linear-gradient(90deg, transparent, var(--workbench-link), transparent); filter: drop-shadow(0 -1px 3px color-mix(in srgb, var(--workbench-link) 35%, transparent)); transition: opacity 180ms ease; }
+.terminal-command-suggestions.is-working::before { opacity: .9; animation: terminal-command-flow 1.8s ease-in-out infinite alternate; }
 .terminal-command-announcement { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.terminal-command-inline-activity { position: absolute; top: 6px; right: 8px; display: flex; align-items: center; color: var(--workbench-text-muted); pointer-events: none; }
-.terminal-command-inline-activity .codicon { font-size: 16px; animation: terminal-command-spin 1.4s linear infinite; }
-.terminal-command-activity-label { display: none; font: 400 12px/18px var(--workbench-font-family); }
-.is-ai-working .terminal-command-inline-activity { display: none; }
-.is-working:not(.is-ai-working) .terminal-command-suggestion:first-child { padding-right: 32px; }
 .terminal-command-suggestions-panel { display: flex; flex-direction: column; min-height: 0; padding: 4px 0; }
 .terminal-command-suggestions-body { display: flex; flex-direction: column; min-height: 0; }
 .terminal-command-suggestions-list { overflow-y: auto; min-height: 0; outline: none; }
@@ -124,19 +100,14 @@ function onFocusOutside(event: FocusOutsideEvent): void {
 .terminal-command-prefix { color: var(--workbench-link); }
 .terminal-command-suggestions.has-enhancement { width: 420px; }
 .terminal-command-suggestions.status-only { width: max-content; min-width: 32px; }
+.terminal-command-suggestions.status-only.is-working { width: 120px; min-height: 14px; }
 .terminal-command-status { display: flex; align-items: center; gap: 8px; box-sizing: border-box; min-height: 28px; flex-shrink: 0; padding: 3px 8px; }
 .has-candidates .terminal-command-status { margin-top: 4px; border-top: 1px solid var(--workbench-border-muted); }
 .terminal-command-status .ui-status { flex: 1; }
-.is-ai-working .terminal-command-status .ui-status-icon { display: none; }
 .terminal-command-status button { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; padding: 2px 4px; border-radius: var(--workbench-radius-small); color: var(--workbench-link); background: transparent; border: 0; font: 400 12px/18px var(--workbench-font-family); cursor: pointer; }
 .terminal-command-status button:hover { background: var(--workbench-toolbar-hover-bg); }
-@keyframes terminal-command-flow { to { --terminal-command-activity-angle: 360deg; } }
-@keyframes terminal-command-spin { to { transform: rotate(360deg); } }
+@keyframes terminal-command-flow { from { transform: translateX(0); } to { transform: translateX(150%); } }
 @media (prefers-reduced-motion: reduce) {
-  .terminal-command-suggestions::before, .terminal-command-suggestions.is-ai-working::before { opacity: 0; animation: none; transition: none; }
-  .is-working .terminal-command-inline-activity { display: flex; }
-  .terminal-command-inline-activity .codicon { display: none; animation: none; }
-  .terminal-command-activity-label { display: inline; }
-  .is-working .terminal-command-suggestion:first-child { padding-right: 64px; }
+  .terminal-command-suggestions::before, .terminal-command-suggestions.is-working::before { animation: none; transition: none; transform: translateX(75%); }
 }
 </style>
