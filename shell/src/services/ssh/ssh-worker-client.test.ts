@@ -1,5 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { SshWorkerClient } from './ssh-worker-client'
+import { encodeTerminalInput } from '../terminalEncoding'
 
 function workerFixture() {
   const events: any[] = []
@@ -12,6 +13,13 @@ function workerFixture() {
   }
   return { worker, events, get terminated() { return terminated }, client: new SshWorkerClient(worker as unknown as Worker) }
 }
+
+it.each(['gbk', 'gb18030'])('sends only the encoded Chinese bytes to the SSH worker for %s', encoding => {
+  const fixture = workerFixture()
+  fixture.client.send(encodeTerminalInput('中文', encoding))
+  expect(fixture.events[0].type).toBe('input')
+  expect([...new Uint8Array(fixture.events[0].payload)]).toEqual([0xd6, 0xd0, 0xce, 0xc4])
+})
 
 it('terminates the owned worker and rejects pending commands when an exec deadline expires', async () => {
   vi.useFakeTimers()

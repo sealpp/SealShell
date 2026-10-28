@@ -7,5 +7,6 @@ export function encodeTerminalInput(text: string, encoding: string | undefined):
   const canonical = encodingDecoder(encoding)
   if (canonical === 'utf-8') return utf8.encode(text)
   // The logical and visual Hebrew labels use the same byte encoding.
-  return encode(text, canonical === 'iso-8859-8-i' ? 'iso-8859-8' : canonical)
+  // Normalize Buffer slices so Worker transfers cannot include spare capacity.
+  return new Uint8Array(encode(text, canonical === 'iso-8859-8-i' ? 'iso-8859-8' : canonical))
 }
