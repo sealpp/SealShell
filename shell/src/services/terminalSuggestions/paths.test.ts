@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { pathSuggestions } from './context'
 import { findCommandSuggestions, historyProvider, rememberCommand } from './model'
+import { preservesPathIntent } from './paths'
 
 const facts = { cwd: '/work', home: '/home/dev', directories: ['/work/demo_web', '/work/demo-web', '/work/codes', '/work/codes/client', '/work/Documents', '/home/dev/projects'],
   files: ['/work/app.log', '/work/README.md', '/work/team\'s notes.txt', '/work/codes/client.json'], scripts: [], tools: [] }
@@ -47,6 +48,17 @@ describe('path argument completion', () => {
   })
   it('allows literal shell characters only when they were quoted', () => {
     expect(commands("ls 'semi'", { ...facts, files: ['/work/semi;colon'] })).toEqual(["ls -- '/work/semi;colon'"])
+  })
+  it('offers children for an empty operand and preserves an operand named --', () => {
+    expect(commands('cd ', { ...facts, directories: ['/work', '/work/codes'] })).toEqual(["cd -- '/work/codes'"])
+    expect(preservesPathIntent('ls -- -- app', "ls -- '/work/app.log'")).toBe(false)
+    expect(preservesPathIntent('ls -- -- app', "ls -- -- '/work/app.log'")).toBe(true)
+    expect(preservesPathIntent('ls', 'ls -la')).toBe(true)
+    expect(preservesPathIntent('ls', 'cd /work')).toBe(false)
+    expect(preservesPathIntent('ls -l', 'ls -la')).toBe(true)
+    expect(preservesPathIntent('ls -l', "ls -la'")).toBe(false)
+    expect(preservesPathIntent('ls -', 'ls -la')).toBe(true)
+    expect(preservesPathIntent('ls -l app', 'ls -la /work/app.log')).toBe(false)
   })
 })
 

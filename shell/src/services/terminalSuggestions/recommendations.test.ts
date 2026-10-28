@@ -50,18 +50,19 @@ describe('recommendation composition', () => {
     expect(pathSuggestions('cat main', facts)[0].command).toBe("cat -- '/work/main.py'")
     expect(pathSuggestions('rm main', facts)).toEqual([])
   })
-  it('caches context by session and cwd, retains local paths when the cloud fails', async () => {
+  it('caches context by session and cwd and routes explicit paths without cloud generation', async () => {
     const context = vi.fn().mockResolvedValue(facts)
     const generate = vi.fn().mockRejectedValue(new Error('云端推荐失败（HTTP 503）'))
     const run = createRecommender(async () => 'fake', { context, generate, key: async () => 'fake' })
     const publish = vi.fn()
     const progress = vi.fn()
     const settings = { ...defaults, cloud: true }
-    expect(await run({ ...request, query: 'cd 项目' }, settings, new AbortController().signal, publish, progress)).toContain('503')
-    expect(progress.mock.calls).toEqual([['context'], ['ai']])
+    expect(await run({ ...request, query: 'cd 项目' }, settings, new AbortController().signal, publish, progress)).toBe('')
+    expect(progress.mock.calls).toEqual([['context']])
+    expect(generate).not.toHaveBeenCalled()
     expect(publish.mock.calls[0][0][0].command).toContain('项目 a')
     progress.mockClear()
-    await run(request, settings, new AbortController().signal, publish, progress)
+    expect(await run(request, settings, new AbortController().signal, publish, progress)).toContain('503')
     expect(progress.mock.calls).toEqual([['ai']])
     expect(context).toHaveBeenCalledTimes(1)
     await run({ ...request, sessionId: 'b' }, settings, new AbortController().signal, publish)

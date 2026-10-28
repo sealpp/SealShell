@@ -13,7 +13,7 @@ const specs: Record<string, CommandSpec> = {
 }
 
 export const shellQuote = (text: string) => `'${text.replace(/'/g, "'\\''")}'`
-export function hasPathCommand(input: string): boolean { return /^(cd|ls|cat|less|head|tail|stat|du)(?:\s|$)/.test(input) }
+export function hasPathCommand(input: string): boolean { return /^(cd|ls|cat|less|head|tail|stat|du)\s/.test(input) }
 
 function words(input: string): Word[] | undefined {
   if (/[\x00-\x1f\x7f]/.test(input) || /^\s/.test(input)) return undefined
@@ -35,7 +35,7 @@ function words(input: string): Word[] | undefined {
       else value += char
     } else if (char === '"' || char === "'") quote = char
     else if (char === ' ') { result.push({ value, start, closed: true, home }); value = ''; start = -1 }
-    else if (';&|<>($`*?[]{}!)'.includes(char)) return undefined
+    else if (';&|<>($`*?[]{}!#)'.includes(char)) return undefined
     else value += char
   }
   if (start >= 0) result.push({ value, start, closed: !quote, home })
@@ -93,8 +93,15 @@ export function parsePathCommand(input: string): PathCommand | undefined {
 
 /** All sources must preserve the user's command, options, and preceding operands. */
 export function preservesPathIntent(input: string, candidate: string): boolean {
-  if (!hasPathCommand(input)) return true
+  if (!hasPathCommand(input)) return !specs[input] || words(candidate)?.[0]?.value === input
   const from = parsePathCommand(input), to = parsePathCommand(candidate)
+  if (!from) {
+    // Before a path operand, retain ordinary prefix completion of short flags.
+    const before = words(input), after = words(candidate), spec = before && specs[before[0]!.value]
+    return !!spec && before![0]!.value !== 'cd' && before!.length === 2 && after?.length === 2
+      && candidate.startsWith(input) && before![1]!.closed && after.every(word => word.closed) && before![1]!.value.startsWith('-') && after[1]!.value.startsWith('-')
+      && [...before![1]!.value.slice(1), ...after[1]!.value.slice(1)].every(flag => spec.flags.includes(flag))
+  }
   return !!from && !!to && to.closed && !!to.fragment && from.verb === to.verb
     && from.fixed.length === to.fixed.length && from.fixed.every((word, index) => word === to.fixed[index])
 }

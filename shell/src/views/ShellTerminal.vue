@@ -22,6 +22,7 @@ import { commonCommandProvider } from '../services/terminalSuggestions/catalog'
 import { historyProvider } from '../services/terminalSuggestions/model'
 import { commandSuggestions, loadSuggestionHistory, loadRecommendationKey, rememberSuggestionCommand } from '../services/terminalSuggestions/runtime'
 import { createRecommender } from '../services/terminalSuggestions/recommender'
+import { hasPathCommand, parsePathCommand } from '../services/terminalSuggestions/paths'
 import '@xterm/xterm/css/xterm.css'
 
 const props = defineProps<{ tabId: string; viewportTabIds?: () => string[] }>()
@@ -210,13 +211,18 @@ function initTerminal() {
   suggestions = attachCommandSuggestions(terminal, {
     enabled: () => commandSuggestions.enabled && tab.value?.state === 'online',
     active: () => isActive.value,
-    providers: () => [
-      commonCommandProvider,
-      historyProvider(commandSuggestions.rememberHistory ? commandSuggestions.history[tab.value?.hostId ?? ''] ?? [] : [], tab.value?.cwd),
-    ],
+    providers: () => [{ suggestions: query => {
+      // Verified path results own this list when directory completion is enabled.
+      // Showing old history first would pin a potentially wrong directory above them.
+      if (commandSuggestions.recommendations.remoteContext && commandSuggestions.recommendations.automatic && tab.value?.cwd && parsePathCommand(query)) return []
+      return [...commonCommandProvider.suggestions(query),
+        ...historyProvider(commandSuggestions.rememberHistory ? commandSuggestions.history[tab.value?.hostId ?? ''] ?? [] : [], tab.value?.cwd).suggestions(query)]
+    } }],
     context: () => ({ key: `${tab.value?.sessionId}:${tab.value?.cwd}:${commandSuggestions.revision}:${commandSuggestions.rememberHistory}`, cwd: tab.value?.cwd }),
     automatic: () => commandSuggestions.recommendations.automatic,
-    enhancementEnabled: query => commandSuggestions.recommendations.cloud || (commandSuggestions.recommendations.remoteContext && !!tab.value?.cwd && /^(cd|ls|cat|less|tail -f)\s/.test(query)),
+    enhancementEnabled: query => hasPathCommand(query)
+      ? commandSuggestions.recommendations.remoteContext && !!tab.value?.cwd && !!parsePathCommand(query)
+      : commandSuggestions.recommendations.cloud,
     enhance: (query, signal, publish, progress) => recommend({ query, sessionId: tab.value?.sessionId ?? '', cwd: tab.value?.cwd,
       history: commandSuggestions.rememberHistory ? commandSuggestions.history[tab.value?.hostId ?? ''] ?? [] : [],
     }, { ...commandSuggestions.recommendations }, signal, publish, progress),
@@ -225,6 +231,7 @@ function initTerminal() {
       if (hostId) void rememberSuggestionCommand(hostId, command, use).catch(historyError)
     },
     onCommand: (command, use) => {
+      if (commandSuggestions.recommendations.remoteContext) recommend.observeCommand(command, tab.value?.sessionId ?? '', use?.cwd)
       const hostId = tab.value?.hostId
       if (hostId) void rememberSuggestionCommand(hostId, command, use).catch(historyError)
     },
