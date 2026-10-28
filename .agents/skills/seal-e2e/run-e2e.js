@@ -193,13 +193,14 @@ async function main() {
     console.log(`shell starts at the fitted ${initialTerminalSize.columns}x${initialTerminalSize.rows} before its first output`);
 
     // The actual PWA/WASM exec path uses a separate connection and releases it.
+    if (NATIVE_SHELL) fs.mkdirSync(path.join(trustDirectory, 'remote', 'project one'), { recursive: true });
     const beforeRecommendation = readMockSshState();
-    const recommendationFacts = await page.evaluate(async () => {
+    const recommendationFacts = await page.evaluate(async native => {
       const { probeDirectory } = await import('/src/services/terminalSuggestions/context.ts');
       const tab = window.sealE2eStore.tabs[0];
-      return probeDirectory(tab.sessionId, '/workspace', new AbortController().signal);
-    });
-    if (!recommendationFacts.directories.includes('/workspace/project one')) throw new Error('recommendation context missing');
+      return probeDirectory(tab.sessionId, native ? tab.cwd : '/workspace', new AbortController().signal);
+    }, !!NATIVE_SHELL);
+    if (!recommendationFacts.directories.includes(recommendationFacts.cwd + '/project one')) throw new Error('recommendation context missing');
     await waitForMockSshState(state => state.active_connections === beforeRecommendation.active_connections
       && state.connections === beforeRecommendation.connections + 1 && state.shell === beforeRecommendation.shell,
     'recommendation probe connection to close without creating an interactive shell');
@@ -224,6 +225,61 @@ async function main() {
         const source = window.sealE2eStore.tabs.find(tab => tab.id === id);
         sendTerminalInput(source.sessionId, new TextEncoder().encode(`${command}\r`));
       }, { id: sourceTabId, command });
+    }
+    if (NATIVE_SHELL) {
+      const directory = path.join(trustDirectory, 'remote', 'codes', 'demo_linux');
+      fs.mkdirSync(directory, { recursive: true });
+      fs.writeFileSync(path.join(directory, 'entry.txt'), 'path-fixture-ok\n');
+      const target = loginDirectory + '/codes/demo_linux';
+      let modelCalls = 0;
+      await page.route('https://path-model.invalid/**', route => { modelCalls++; return route.abort(); });
+      await page.evaluate(async () => {
+        const { commandSuggestions, saveSuggestionPreferences, rememberSuggestionCommand } = await import('/src/services/terminalSuggestions/runtime.ts');
+        const { isShellPrompt } = await import('/src/services/terminalSuggestions/commandLine.ts');
+        window.sealRecommendationState = commandSuggestions;
+        window.sealIsShellPrompt = isShellPrompt;
+        await saveSuggestionPreferences(true, true, { ...commandSuggestions.recommendations,
+          cloud: true, remoteContext: true, baseUrl: 'https://path-model.invalid', model: 'unused' }, 'synthetic-key');
+        await rememberSuggestionCommand(window.sealE2eStore.tabs[0].hostId, 'cd /archive/demolinux', { cwd: window.sealE2eStore.tabs[0].cwd });
+      });
+      await page.locator('.xterm-helper-textarea').focus();
+      await page.keyboard.type('ls codes/');
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => Object.values(window.sealRecommendationState.history).flat().some(item => item.command === 'ls codes/'));
+      const waitForPrompt = () => page.waitForFunction(() => {
+        const rows = [...document.querySelectorAll('.xterm-rows > div')].map(row => row.textContent).filter(text => text.trim());
+        return window.sealIsShellPrompt(rows[rows.length - 1]);
+      });
+      await waitForPrompt();
+      await page.keyboard.type('cd demolinux');
+      const candidates = page.getByRole('listbox', { name: '命令候选' }).getByRole('option');
+      await candidates.filter({ has: page.getByText(`cd -- '${target}'`, { exact: true }) }).waitFor();
+      const navigation = await candidates.locator('code').allTextContents();
+      if (navigation.some(command => !command.startsWith('cd '))) throw new Error(`navigation intent changed: ${navigation}`);
+      await candidates.first().click();
+      await page.waitForTimeout(200);
+      if (readMockSshState().shell_cwds['1'] !== loginDirectory) throw new Error('path acceptance executed before Enter');
+      await page.keyboard.press('Enter');
+      await waitForSourceDirectory(target);
+      await waitForMockSshState(state => state.shell_cwds['1'] === target, 'the real shell to enter the corrected directory');
+      await waitForPrompt();
+      await page.keyboard.type('ls -la ../demo_li');
+      await candidates.filter({ has: page.getByText(`ls -la -- '${target}'`, { exact: true }) }).waitFor();
+      await candidates.first().click();
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => document.querySelector('.xterm-rows')?.textContent.includes('entry.txt'));
+      await waitForPrompt();
+      await page.keyboard.type('cat entry.tx');
+      await candidates.filter({ has: page.getByText(`cat -- '${target}/entry.txt'`, { exact: true }) }).waitFor();
+      await candidates.first().click();
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => document.querySelector('.xterm-rows')?.textContent.includes('path-fixture-ok'));
+      if (modelCalls) throw new Error('explicit path completion called the model');
+      await page.screenshot({ path: path.join(TMP_DIR, 'path-completion.png') });
+      await sendSourceCommand(`cd -- '${loginDirectory}'`);
+      await waitForSourceDirectory(loginDirectory);
+      await page.evaluate(() => { window.sealRecommendationState.recommendations.cloud = false; });
+      console.log('real path completion: recent ls lookup, cd correction, ls options, file completion, acceptance without execution, zero model calls');
     }
     async function duplicate(trigger, expectedDirectory) {
       const shellNumber = readMockSshState().shell + 1;
@@ -470,7 +526,8 @@ async function main() {
       } else proc.kill();
     }
     await Promise.all(children.map(proc => proc.exitCode !== null ? Promise.resolve() : new Promise(resolve => proc.once('exit', resolve))));
-    fs.rmSync(trustDirectory, { recursive: true, force: true });
+    // Windows may release terminated shell file handles just after process exit.
+    await fs.promises.rm(trustDirectory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     console.log('cleaned up');
   }
 }

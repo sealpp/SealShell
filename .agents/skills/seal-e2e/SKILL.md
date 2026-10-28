@@ -186,7 +186,9 @@ loopback 后用 SSH 隧道访问。容器 sshd 设置 `LANG=C.UTF-8`，并为测
 
 命令推荐回归在 `shell/tests/command-recommendations.spec.ts`：真实 xterm 直接输入与完整命令替换、Ctrl+I/原目标框快捷键不打开本地输入、迟到结果冻结/刷新、目录变更取消、采纳与提交分别记忆、云端配置加密，以及生产 ShellTerminal 经真实云端适配器请求（响应由路由 fixture 提供）。既有 `command-suggestions.spec.ts` 保留前缀、远端灰字和延迟回显回归。`recommendations.test.ts` 另用实际 Bash 执行固定只读目录探测，验证特殊路径引用和元数据提取；Windows 仅覆盖 Git Bash shell 语义，不代表真实 Linux PTY 行编辑。
 
-SSH runner 验证目录探测使用独立 PWA/WASM SSH exec 连接、零新增交互 shell，以及完成后释放连接；mock 的固定 NUL 字段只验证协议链路，不替代真实目录语义测试。使用真实服务商的 smoke 只发送合成目录/命令，不把 Key 放测试源码、截图、trace 或构建环境；Key 从本地忽略文件读取。云端延迟与整个推荐流程延迟应分别报告。
+SSH runner 验证目录探测使用独立 PWA/WASM SSH exec 连接、零新增交互 shell，以及完成后释放连接。启用 `SEAL_E2E_BASH`/`SEAL_E2E_ZSH` 时，探测脚本实际读取 fixture 文件；Windows 只模拟 uname 的 Linux 平台门槛，输出显式按 UTF-8 解码。该分支通过真实 xterm 输入 `ls codes/`、近似目录名 cd、带选项 ls 和文件名 cat，验证有限补查、原命令稳定、旧历史不抢占、选择只填入、执行后的实际目录/内容和零云端调用。截图保存到系统临时 `seal-e2e/path-completion.png`。命令已记入历史不表示新提示符已返回；连续交互必须等待实际提示符，再开始下一次输入。原生子 shell 退出后的 Windows 文件句柄可能略后释放，fixture 删除使用有限重试，失败仍报错。
+
+未启用真实 shell 时，mock 的固定 NUL 字段只验证协议链路，不替代真实目录语义。Git Bash 的管道输入也不能代替真正 Linux PTY。使用真实服务商的 smoke 只发送合成目录/命令，不把 Key 放测试源码、截图、trace 或构建环境；Key 从本地忽略文件读取。云端延迟与整个推荐流程延迟应分别报告。
 
 Vite 配置会从已锁定的 npm 依赖复制以下运行时资源到开发/构建 public 目录：
 

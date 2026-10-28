@@ -117,6 +117,11 @@ def command_output(command: str) -> tuple[str, int]:
     if command.startswith("# sealshell-recommendation-context"):
         call_count["recommendation_probe"] = call_count.get("recommendation_probe", 0) + 1
         write_state()
+        if shell_path:
+            # Execute the production probe against actual fixture files. Git Bash
+            # supplies POSIX tools on Windows; only the platform gate is emulated.
+            result = subprocess.run([shell_path, "-c", 'uname() { printf Linux; };\n' + command], capture_output=True, text=True, encoding="utf-8", timeout=5)
+            return result.stdout, result.returncode
         return "cwd\0/workspace\0dir\0/workspace/project one\0file\0/workspace/main.py\0tool\0python3\0done\0yes\0", 0
     if command == "cat /proc/net/tcp /proc/net/tcp6 2>/dev/null":
         control = os.environ.get("MOCK_PORTS_CONTROL_PATH")

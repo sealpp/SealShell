@@ -31,6 +31,22 @@ test('replaces the whole Unicode command from non-prefix history without executi
   await expect.poll(async () => (await history(page))[0].uses).toBe(2)
 })
 
+for (const item of [
+  { input: 'cd demo', good: "cd -- '/work/demo'", bad: ['ls /work/demo', 'cd /work/demo && ls'] },
+  { input: 'ls -la demo', good: "ls -la -- '/work/demo'", bad: ['cd /work/demo', 'ls /work/demo', 'ls -la /work/demo && cat /etc/passwd'] },
+  { input: 'tail -n 20 app', good: "tail -n 20 -- '/work/app.log'", bad: ['cat /work/app.log', 'tail -n 100 /work/app.log'] },
+]) test(`preserves command and arguments in the visible list: ${item.input}`, async ({ page }) => {
+  await page.evaluate(() => (window as any).harness.enhance(true))
+  await page.keyboard.type(item.input)
+  await expect.poll(() => requests(page)).toBe(1)
+  await respond(page, 0, [...item.bad, item.good])
+  await expect(options(page)).toHaveCount(1)
+  await expect(options(page).first()).toContainText(item.good)
+  await options(page).first().click()
+  expect(await page.evaluate(() => (window as any).harness.sent.at(-1))).toBe('\x15' + item.good)
+  expect(await history(page)).toEqual([])
+})
+
 test('buffers late AI suggestions while selecting, applies them explicitly, and rejects stale results', async ({ page }) => {
   await page.evaluate(() => (window as any).harness.enhance(true))
   await page.keyboard.type('git ')
