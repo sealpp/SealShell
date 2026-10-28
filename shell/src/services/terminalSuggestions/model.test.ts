@@ -9,7 +9,7 @@ describe('local command suggestions', () => {
     expect(findCommandSuggestions('python', [historyProvider(entries, '/work')])[0].command).toBe('python3 main.py')
     entries = rememberCommand(entries, 'cd /home/codes/demo && conda activate work && python main.py', 3)
     expect(findCommandSuggestions('python main.py', [historyProvider(entries)]).map(item => item.command)).toContain('cd /home/codes/demo && conda activate work && python main.py')
-    expect(findCommandSuggestions('cd demo', [historyProvider(entries)])).toHaveLength(1)
+    expect(findCommandSuggestions('cd demo', [historyProvider(entries)])).toHaveLength(0)
   })
   it('offers bundled commands without any history or network request', () => {
     expect(findCommandSuggestions('g', [commonCommandProvider])[0]?.command).toBe('git status')

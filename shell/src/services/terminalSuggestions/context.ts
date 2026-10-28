@@ -1,16 +1,17 @@
 import { getSshSession } from '../ssh'
 import { connectSsh } from '../ssh/connection'
-import { matchesQuery, type CommandSuggestion } from './model'
+import type { CommandSuggestion } from './model'
+import { completePaths, shellQuote } from './paths'
+export { shellQuote } from './paths'
 
 export interface DirectoryFacts {
   cwd: string
+  home?: string
   directories: string[]
   files: string[]
   scripts: string[]
   tools: string[]
 }
-
-export const shellQuote = (text: string) => `'${text.replace(/'/g, "'\\''")}'`
 
 /** Fixed read-only operations. User/model text can only occupy a quoted path. */
 export function directoryProbe(cwd: string): string {
@@ -19,6 +20,7 @@ export function directoryProbe(cwd: string): string {
 test "$(uname -s)" = Linux || exit 2
 cd -- ${shellQuote(cwd)} || exit 1
 printf 'cwd\\0%s\\0' "$PWD"
+[ -d "$HOME" ] && printf 'home\\0%s\\0' "$HOME"
 n=0
 for p in "$PWD"/* "$PWD"/.[!.]*; do
   [ -e "$p" ] || continue
@@ -54,6 +56,7 @@ export function parseDirectoryFacts(output: string): DirectoryFacts {
       } catch { /* A truncated or invalid manifest supplies no script facts. */ }
     } else if (!/[\x00-\x1f\x7f]/.test(value) && value.length <= 2048) {
       if (kind === 'cwd') facts.cwd = value
+      if (kind === 'home' && value.startsWith('/')) facts.home = value
       if (kind === 'dir' && facts.directories.length < 120) facts.directories.push(value)
       if (kind === 'file' && facts.files.length < 80) facts.files.push(value)
       if (kind === 'tool') facts.tools.push(value)
@@ -78,10 +81,5 @@ export async function probeDirectory(sessionId: string, cwd: string, signal: Abo
 }
 
 export function pathSuggestions(query: string, facts: DirectoryFacts): CommandSuggestion[] {
-  const match = /^(cd|ls|cat|less|tail -f)\s+(.*)$/.exec(query)
-  if (!match) return []
-  const verb = match[1]!, fragment = match[2]!.replace(/^['"]|['"]$/g, '')
-  const paths = verb === 'cd' ? facts.directories : verb === 'ls' ? [...facts.directories, ...facts.files] : facts.files
-  return paths.filter(path => !fragment || matchesQuery(path, fragment)).slice(0, 8)
-    .map(path => ({ command: `${verb} -- ${shellQuote(path)}`, source: 'directory', priority: 2, uses: 0, lastUsed: 0 }))
+  return completePaths(query, facts).map(command => ({ command, source: 'directory', priority: 2, uses: 0, lastUsed: 0 }))
 }

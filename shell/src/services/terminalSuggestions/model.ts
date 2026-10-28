@@ -1,3 +1,5 @@
+import { preservesPathIntent } from './paths'
+
 export interface CommandHistoryEntry {
   command: string
   uses: number
@@ -73,7 +75,7 @@ export function findCommandSuggestions(prefix: string, providers: readonly Comma
   const candidates = new Map<string, CommandSuggestion>()
   for (const provider of providers) {
     for (const candidate of provider.suggestions(prefix)) {
-      if (!canRememberCommand(candidate.command) || candidate.command === prefix) continue
+      if (!canRememberCommand(candidate.command) || candidate.command === prefix || !preservesPathIntent(prefix, candidate.command)) continue
       const previous = candidates.get(candidate.command)
       if (!previous || compare(candidate, previous) < 0) candidates.set(candidate.command, candidate)
     }

@@ -1,5 +1,6 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
 import { TerminalCommandLine } from './commandLine'
+import { preservesPathIntent } from './paths'
 import { canRememberCommand, COMMAND_SUGGESTION_LIMIT, findCommandSuggestions, type CommandSuggestion, type CommandSuggestionProvider, type CommandUse, type RecommendationActivity } from './model'
 
 export interface TerminalSuggestionView {
@@ -61,7 +62,7 @@ export function attachCommandSuggestions(terminal: Terminal, options: Suggestion
   }
   function publish(items: readonly CommandSuggestion[]): void {
     const all = new Map(pool.map(item => [item.command, item]))
-    for (const item of items) if (canRememberCommand(item.command) && item.command !== linePrefix) all.set(item.command, item)
+    for (const item of items) if (canRememberCommand(item.command) && item.command !== linePrefix && preservesPathIntent(linePrefix ?? '', item.command)) all.set(item.command, item)
     pool = [...all.values()].sort((a, b) => b.priority - a.priority || b.uses - a.uses || b.lastUsed - a.lastUsed)
     if (!view) return
     const existing = new Set(view.candidates.map(item => item.command))
