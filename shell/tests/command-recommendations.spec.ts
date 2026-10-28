@@ -103,7 +103,8 @@ test('uses one bottom light across preparation stages and preserves selection wi
   await expect(popup).not.toHaveAttribute('title')
   await expect(options(page).first()).toBeFocused()
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  await expect.poll(() => popup.evaluate(element => getComputedStyle(element, '::before').animationDuration)).toBe('3.6s')
+  await expect.poll(() => popup.evaluate(element => getComputedStyle(element, '::before').animationName)).toBe('none')
+  await expect(popup.locator('.terminal-command-static-activity')).toBeVisible()
   await expect.poll(() => popup.evaluate(element => getComputedStyle(element, '::before').opacity)).toBe('0.9')
   await expect(popup.getByText(/生成中|读目录|查找中|正在读取/)).toHaveCount(0)
   expect((await popup.boundingBox())!.height).toBe(initialHeight)
@@ -111,6 +112,7 @@ test('uses one bottom light across preparation stages and preserves selection wi
   await respond(page, 0, ['git log --all --graph'])
   await expect(status).toHaveText('有 1 条新建议待显示')
   await expect(popup.locator('.codicon-check')).toHaveCount(0)
+  await expect(popup.locator('.terminal-command-static-activity')).toHaveCount(0)
   await expect.poll(() => popup.evaluate(element => getComputedStyle(element, '::before').opacity)).toBe('0')
   await expect(page.getByRole('button', { name: '显示 1 条新建议' })).toBeVisible()
   expect(await options(page).allTextContents()).toEqual(before)
@@ -120,7 +122,7 @@ test('uses one bottom light across preparation stages and preserves selection wi
   await expect(popup.locator('.terminal-command-status')).toHaveCount(0)
 })
 
-for (const reducedMotion of ['no-preference', 'reduce'] as const) test(`moves the working light and reserves one candidate row with motion preference: ${reducedMotion}`, async ({ page }) => {
+for (const reducedMotion of ['no-preference', 'reduce'] as const) test(`adapts working feedback without changing the candidate row height: ${reducedMotion}`, async ({ page }) => {
   await page.emulateMedia({ reducedMotion })
   await page.evaluate(() => (window as any).harness.enhance(true))
   await page.keyboard.insertText('查看当前目录')
@@ -128,9 +130,17 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) test(`moves th
   const popup = page.locator('.terminal-command-suggestions')
   const glowX = () => popup.evaluate(element => new DOMMatrixReadOnly(getComputedStyle(element, '::before').transform).m41)
   const emptyHeight = (await popup.boundingBox())!.height
-  const startX = await glowX()
-  // Observe elapsed time: setting currentTime by hand would not detect a stopped animation.
-  await expect.poll(async () => Math.abs(await glowX() - startX)).toBeGreaterThan(8)
+  const staticMarker = popup.locator('.terminal-command-static-activity')
+  if (reducedMotion === 'reduce') {
+    await expect(staticMarker).toBeVisible()
+    await expect.poll(() => popup.evaluate(element => getComputedStyle(element, '::before').animationName)).toBe('none')
+    await expect.poll(() => popup.evaluate(element => getComputedStyle(element, '::before').transform)).toBe('none')
+  } else {
+    await expect(staticMarker).toBeHidden()
+    const startX = await glowX()
+    // Observe elapsed time: setting currentTime by hand would not detect a stopped animation.
+    await expect.poll(async () => Math.abs(await glowX() - startX)).toBeGreaterThan(8)
+  }
   await page.evaluate(() => {
     const request = (window as any).harness.requests[0]
     request.progress('ai')
@@ -138,10 +148,19 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) test(`moves th
   })
   await expect(options(page)).toHaveCount(1)
   expect((await popup.boundingBox())!.height).toBe(emptyHeight)
-  const populatedX = await glowX()
-  await expect.poll(async () => Math.abs(await glowX() - populatedX)).toBeGreaterThan(16)
+  if (reducedMotion === 'reduce') {
+    const before = await popup.evaluate(element => ({ line: getComputedStyle(element, '::before').transform, marker: element.querySelector('.terminal-command-static-activity')!.getBoundingClientRect().toJSON() }))
+    await page.waitForTimeout(300)
+    expect(await popup.evaluate(element => ({ line: getComputedStyle(element, '::before').transform, marker: element.querySelector('.terminal-command-static-activity')!.getBoundingClientRect().toJSON() }))).toEqual(before)
+    await expect(popup.locator('.terminal-command-status')).toHaveCount(0)
+    await expect(staticMarker).toBeVisible()
+  } else {
+    const populatedX = await glowX()
+    await expect.poll(async () => Math.abs(await glowX() - populatedX)).toBeGreaterThan(16)
+  }
   await respond(page, 0, [])
   await expect.poll(() => popup.evaluate(element => getComputedStyle(element, '::before').opacity)).toBe('0')
+  await expect(staticMarker).toHaveCount(0)
   expect((await popup.boundingBox())!.height).toBe(emptyHeight)
 })
 

@@ -56,6 +56,7 @@ function onFocusOutside(event: FocusOutsideEvent): void {
         @focus-outside="onFocusOutside"
       >
         <span class="terminal-command-announcement" role="status" aria-atomic="true">{{ feedback.label }}</span>
+        <span v-if="working" class="terminal-command-static-activity codicon codicon-ellipsis" aria-hidden="true" />
         <div ref="panel" class="terminal-command-suggestions-panel" :class="{ 'has-candidates': suggestion.candidates.length }" @keydown.capture="onKeydown" @pointerenter="emit('lock')" @focusin="emit('lock')">
           <ListboxRoot ref="listbox" class="terminal-command-suggestions-body workbench-selection-container" selection-behavior="replace" :highlight-on-hover="true">
             <ListboxContent aria-label="命令候选" :aria-busy="working" class="terminal-command-suggestions-list">
@@ -90,6 +91,7 @@ function onFocusOutside(event: FocusOutsideEvent): void {
 .terminal-command-suggestions::before { content: ''; position: absolute; bottom: 0; left: 0; z-index: 1; width: 40%; height: 2px; pointer-events: none; opacity: 0; background: linear-gradient(90deg, transparent, var(--workbench-link), transparent); filter: drop-shadow(0 -1px 3px color-mix(in srgb, var(--workbench-link) 35%, transparent)); transition: opacity 180ms ease; }
 .terminal-command-suggestions.is-working::before { opacity: .9; animation: terminal-command-flow 1.8s ease-in-out infinite alternate; }
 .terminal-command-announcement { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.terminal-command-suggestions .terminal-command-static-activity.codicon { display: none; position: absolute; bottom: -4px; left: calc(50% - 10px); width: 20px; color: var(--workbench-link); font-size: 16px; line-height: 16px; text-align: center; pointer-events: none; }
 .terminal-command-suggestions-panel { display: flex; flex-direction: column; min-height: 0; padding: 4px 0; }
 .terminal-command-suggestions-body { display: flex; flex-direction: column; min-height: 0; }
 .terminal-command-suggestions-list { overflow-y: auto; min-height: 0; outline: none; }
@@ -109,7 +111,7 @@ function onFocusOutside(event: FocusOutsideEvent): void {
 .terminal-command-status button:hover { background: var(--workbench-toolbar-hover-bg); }
 @keyframes terminal-command-flow { from { transform: translateX(0); } to { transform: translateX(150%); } }
 @media (prefers-reduced-motion: reduce) {
-  .terminal-command-suggestions::before { transition: none; }
-  .terminal-command-suggestions.is-working::before { animation-duration: 3.6s; }
+  .terminal-command-suggestions::before, .terminal-command-suggestions.is-working::before { animation: none; transition: none; transform: none; left: 8px; width: calc(100% - 16px); height: 1px; filter: none; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--workbench-link) 35%, transparent), transparent); }
+  .terminal-command-suggestions .terminal-command-static-activity.codicon { display: inline-block; }
 }
 </style>
