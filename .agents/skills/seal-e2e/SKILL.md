@@ -154,6 +154,8 @@ loopback 后用 SSH 隧道访问。容器 sshd 设置 `LANG=C.UTF-8`，并为测
 
 `shell/tests/command-suggestions.spec.ts` 使用真实 xterm、独立 IndexedDB 和可延迟的回显夹具验证本地命令提示；另用实际 `ShellTerminal` 组件接入受控会话输入/输出，确认悬浮列表、首字符触发、鼠标与直接上下键选择、选中后 Enter 只补入、session 与历史落盘。覆盖导航后继续输入/退格/Tab、Esc 关闭后远端上下键恢复、Right 临时收起后输入重触发、远端灰字接受与新输入回显交错、行内光标暂停后缀补入、Right/Tab/未选中 Enter 保留、受控远端灰字共存、断网词库、单字符历史、频率、连接隔离、刷新、密码无回显、IME/选择/焦点、备用屏幕、多行粘贴、并发计数与删除清理、中文跨软换行、窄窗格边缘翻转和 resize。主题提示符回归须覆盖带颜色的多行下边框、无标记下边框、zsh 箭头与 Powerline，分别验证首字符候选、后缀补入及不含主题文字的历史；边框与标记分段到达时应恢复，后续变成文件树、密码或续行提示时不应留下历史。此 UI 套件不启动 Node，不操作用户远端；截图保存在系统临时目录 `seal-e2e/command-suggestions/`，不能把受控 ANSI 回显通过解释为任意插件、自定义提示符或真实 SSH 的完整验收。
 
+`shell/tests/terminal-input.spec.ts` 在实际 `ShellTerminal` 的发送边界检查中文粘贴、Chromium CDP 组合输入与 GBK 字节，并将回显逐字节分块验证解码。它不连接远端 Bash，不替代系统输入法或真实 PTY 的 locale、readline、退格及提示符宽度验收。
+
 `配对`、`登录`、`新建连接` 文字可能出现在菜单和弹窗中，必须限定作用域：
 
 - Dialog 内容：`.workbench-dialog-content`

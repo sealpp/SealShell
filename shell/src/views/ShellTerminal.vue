@@ -14,6 +14,7 @@ import { TERMINAL_MENU_ID } from '../services/actions/menuIds'
 import type { CommandContext } from '../services/context'
 import { getTerminalFontFamily, getTerminalTheme } from '../services/terminalPreferences'
 import { encodingDecoder } from '../services/encodings'
+import { encodeTerminalInput } from '../services/terminalEncoding'
 import { registerTerminalDirectoryHandlers } from '../services/terminalDirectory'
 import { publishTerminalSize } from '../services/terminalSize'
 import TerminalCommandSuggestions from '../components/TerminalCommandSuggestions.vue'
@@ -53,7 +54,6 @@ const unwatchTerminalMount = ref<() => void>()
 
 const tab = computed(() => store.tabs.find((t) => t.id === props.tabId))
 const isActive = computed(() => store.activeTerminalTabId === props.tabId)
-const encoder = new TextEncoder()
 const recommend = createRecommender(loadRecommendationKey)
 
 function historyError(error: unknown): void {
@@ -249,7 +249,7 @@ function initTerminal() {
 
   terminal.onData((data: string) => {
     if (tab.value?.sessionId) {
-      sendTerminalInput(tab.value.sessionId, encoder.encode(data))
+      sendTerminalInput(tab.value.sessionId, encodeTerminalInput(data, tab.value.encoding))
     }
   })
 
