@@ -222,6 +222,36 @@ export function commandPreference(input: string, candidate: string): number {
   return from && to && equivalentPathCommands(from, to) ? 1 : 0
 }
 
+/** Preserve constraints we can parse without requiring a CLI profile to admit model output. */
+export function preservesGeneratedIntent(input: string, candidate: string): boolean {
+  if (!explicitGoalCompatible(input, candidate)) return false
+  const parsed = parsePathCommand(input)
+  if (parsed && parsed.evidence !== 'context') return preservesPathIntent(input, candidate)
+  if (hasPathCommand(input)) {
+    const from = words(input), to = words(candidate)
+    if (!from || !to || from[0]?.value !== to[0]?.value || !to.every(word => word.closed)) return false
+    if (candidate.startsWith(input)) return true
+    return from.length === to.length && from.slice(0, -1).every((word, index) => word.value === to[index]?.value)
+  }
+  return true
+}
+
+/** Ground a literal path completion in facts and render its verified absolute spelling. */
+export function groundGeneratedPath(input: string, candidate: string, facts: PathFacts | undefined): string | undefined {
+  const from = parsePathCommand(input), to = parsePathCommand(candidate)
+  if (!from || from.evidence === 'context' || !to) return candidate
+  if (!facts) return undefined
+  const path = resolvePath(to.fragment, facts.cwd, facts.home, to.home)
+  const known = to.kind === 'directory' ? facts.directories : to.kind === 'file' ? facts.files : [...facts.directories, ...facts.files]
+  if (path && known.includes(path)) return to.prefix + shellQuote(path)
+  // The established read/navigation profiles require existing targets; an unfamiliar
+  // CLI may instead be creating an output, which this literal parser cannot decide.
+  if (specs[from.verb.split('/').at(-1)!]) return undefined
+  if (path && path === resolvePath(from.fragment, facts.cwd, facts.home, from.home)
+    && (parentPath(path) === facts.cwd || facts.directories.includes(parentPath(path)))) return to.prefix + shellQuote(path)
+  return candidate
+}
+
 export function resolvePath(path: string, cwd: string, home?: string, expandHome = false): string | undefined {
   if (expandHome && path.startsWith('~')) {
     if (!home || path !== '~' && !path.startsWith('~/')) return undefined

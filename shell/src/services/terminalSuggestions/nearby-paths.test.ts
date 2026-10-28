@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const facts = { cwd: '/work/home', directories: ['/work/home/demo', '/work/data'], files: [], scripts: [], tools: [] }
-const settings = { ...defaultRecommendationSettings, cloud: true }
+const settings = { ...defaultRecommendationSettings, cloud: false }
 const request = { query: 'cd abdemo', cwd: facts.cwd, sessionId: 'one', history: [{ command: 'cd /archive/abdemo', uses: 100, lastUsed: 1 }] }
 
 it('discovers a nearby exact target before publishing, ignores history and isolates session facts', async () => {
@@ -55,7 +55,7 @@ it('discards late discovery after cancellation and reports an incomplete lookup'
   await expect(pending).rejects.toThrow()
   expect(publish).not.toHaveBeenCalled()
   discover.mockRejectedValueOnce(new Error('unavailable'))
-  expect(await run(request, settings, new AbortController().signal, vi.fn())).toBe('附近路径查找暂不可用')
+  expect(await run(request, settings, new AbortController().signal, vi.fn())).toBe('目录读取暂不可用')
 })
 
 const gitExec = process.platform === 'win32' ? execFileSync('git', ['--exec-path'], { encoding: 'utf8', windowsHide: true }).trim() : ''
@@ -65,11 +65,12 @@ it.skipIf(!existsSync(bash))('uses real bounded shell lookups, prioritizing exac
   try {
     const cwd = join(fixture, 'home'), peer = join(fixture, 'data')
     mkdirSync(cwd); mkdirSync(peer); mkdirSync(join(peer, 'abdemo'))
+    mkdirSync(join(peer, 'demo_linux'))
     mkdirSync(join(peer, "odd'$(touch sentinel)"))
     mkdirSync(join(peer, 'hidden', 'abdemo'), { recursive: true })
     for (let i = 0; i < 70; i++) mkdirSync(join(cwd, `abdemo-${i}`))
     const path = (value: string) => value.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, drive: string) => `/${drive.toLowerCase()}`)
-    const read = (fragment: string) => {
+    const read = (fragment: string | undefined) => {
       const result = spawnSync(bash, ['--noprofile', '--norc', '-c', 'uname() { printf Linux; };\n' + nearbyPathProbe(path(cwd), [path(cwd), path(peer)], fragment)],
         { cwd: fixture, encoding: 'utf8', timeout: 10000, windowsHide: true })
       expect(result.status, result.stderr).toBe(0)
@@ -81,6 +82,10 @@ it.skipIf(!existsSync(bash))('uses real bounded shell lookups, prioritizing exac
     expect(found.limited).toBe(true)
     expect(found.directories).not.toContain(path(peer) + '/hidden/abdemo')
     expect(read("odd'$(touch sentinel)").directories).toEqual([path(peer) + "/odd'$(touch sentinel)"])
+    const tree = read(undefined)
+    expect(tree.directories).toContain(path(peer) + '/demo_linux')
+    expect(tree.directories).not.toContain(path(peer) + '/hidden/abdemo')
+    expect(tree.limited).toBe(true)
     expect(existsSync(join(fixture, 'sentinel'))).toBe(false)
     expect(() => nearbyPathProbe(path(cwd), ['/unrelated/deep/root'], 'abdemo')).toThrow('范围')
   } finally { rmSync(fixture, { recursive: true, force: true }) }

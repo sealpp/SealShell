@@ -2,11 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { createRecommender } from './recommender'
 import { defaultRecommendationSettings as defaults } from './settings'
 import type { DirectoryFacts } from './context'
+import { recentRecommendationTraces } from './diagnostics'
 
 const root: DirectoryFacts = { cwd: '/work', home: '/home/dev', directories: ['/work/codes'], files: [], scripts: [], tools: [] }
 const project: DirectoryFacts = { ...root, cwd: '/work/codes', directories: ['/work/codes/demo_linux'], files: ['/work/codes/app.log'] }
 const request = { sessionId: 'one', cwd: '/work', query: 'cd demolinux', history: [] }
-const settings = { ...defaults, cloud: true }
+const settings = { ...defaults, cloud: false }
 const noNearby = async (_id: string, cwd: string): Promise<DirectoryFacts> => ({ cwd, directories: [], files: [], scripts: [], tools: [] })
 
 describe('verified path discovery', () => {
@@ -74,6 +75,7 @@ describe('verified path discovery', () => {
     await run(request, { ...settings, remoteContext: false }, new AbortController().signal, vi.fn())
     await run({ ...request, query: 'ls *.log' }, settings, new AbortController().signal, vi.fn())
     expect(context).not.toHaveBeenCalled(); expect(generate).not.toHaveBeenCalled(); expect(key).not.toHaveBeenCalled()
+    expect(recentRecommendationTraces().at(-1)).toMatchObject({ route: 'local', context: 'skipped', modelCalled: false })
   })
   it('treats a recent input only as a clue, retaining current facts if it is not a directory', async () => {
     const context = vi.fn().mockResolvedValueOnce(root).mockRejectedValueOnce(new Error('not a directory'))

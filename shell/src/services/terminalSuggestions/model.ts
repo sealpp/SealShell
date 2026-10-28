@@ -1,4 +1,4 @@
-import { commandPreference, preservesPathIntent } from './paths'
+import { commandPreference, preservesPathIntent, preservesGeneratedIntent } from './paths'
 
 export interface CommandHistoryEntry {
   command: string
@@ -71,12 +71,15 @@ export function compareSuggestions(query: string, a: CommandSuggestion, b: Comma
     || a.command.length - b.command.length || a.command.localeCompare(b.command)
 }
 
+export const preservesSuggestionIntent = (query: string, item: CommandSuggestion) =>
+  (item.source === 'ai' ? preservesGeneratedIntent : preservesPathIntent)(query, item.command)
+
 export function findCommandSuggestions(prefix: string, providers: readonly CommandSuggestionProvider[]): CommandSuggestion[] {
   if (!canRememberCommand(prefix)) return []
   const candidates = new Map<string, CommandSuggestion>()
   for (const provider of providers) {
     for (const candidate of provider.suggestions(prefix)) {
-      if (!canRememberCommand(candidate.command) || candidate.command === prefix || !preservesPathIntent(prefix, candidate.command)) continue
+      if (!canRememberCommand(candidate.command) || candidate.command === prefix || !preservesSuggestionIntent(prefix, candidate)) continue
       const previous = candidates.get(candidate.command)
       if (!previous || compareSuggestions(prefix, candidate, previous) < 0) candidates.set(candidate.command, candidate)
     }

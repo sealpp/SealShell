@@ -3,6 +3,7 @@ import { generateRecommendations, type RecommendationQuery } from './cloud'
 import type { CommandSuggestion, RecommendationActivity } from './model'
 import type { RecommendationSettings } from './settings'
 import { hasPathCommand, parsePathCommand, resolvePath, searchDirectory, parentPath } from './paths'
+import { beginRecommendationTrace } from './diagnostics'
 
 export interface RecommendationRequest extends RecommendationQuery { sessionId: string }
 interface RecommendationPorts {
@@ -12,7 +13,21 @@ interface RecommendationPorts {
   key(): Promise<string>
 }
 
-/** Per-terminal context cache; cancellation owns only the background connection. */
+async function timed<T>(signal: AbortSignal, milliseconds: number, operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const abort = new AbortController()
+  const cancel = () => abort.abort(signal.reason)
+  signal.addEventListener('abort', cancel, { once: true })
+  if (signal.aborted) cancel()
+  const deadline = setTimeout(() => abort.abort(new Error('推荐超时，请重试')), milliseconds)
+  try {
+    abort.signal.throwIfAborted()
+    const value = await operation(abort.signal)
+    abort.signal.throwIfAborted()
+    return value
+  } finally { clearTimeout(deadline); signal.removeEventListener('abort', cancel) }
+}
+
+/** Per-terminal facts; AI generation is selected by settings, never by the local path parser. */
 export function createRecommender(key: () => Promise<string>, ports: RecommendationPorts = { context: probeDirectory, discover: probeNearbyPaths, generate: generateRecommendations, key }) {
   const cache = new Map<string, { time: number; facts: DirectoryFacts }>()
   let recent: { sessionId: string; cwd: string; directory: string } | undefined
@@ -31,86 +46,91 @@ export function createRecommender(key: () => Promise<string>, ports: Recommendat
   const run = async (request: RecommendationRequest, settings: RecommendationSettings, signal: AbortSignal,
     publish: (items: CommandSuggestion[]) => void, progress?: (activity: RecommendationActivity) => void): Promise<string> => {
     setSession(request.sessionId)
-    const pathCommand = hasPathCommand(request.query), input = parsePathCommand(request.query)
-    let handledPath = pathCommand
-    if (pathCommand && (!input || !settings.remoteContext || !request.cwd)) return ''
-    const abort = new AbortController()
-    const cancel = () => abort.abort(signal.reason)
-    signal.addEventListener('abort', cancel, { once: true })
-    if (signal.aborted) cancel()
-    const deadline = setTimeout(() => abort.abort(new Error('推荐超时，请重试')), 8000)
-    let facts: DirectoryFacts | undefined
-    let contextError = false
-    let discoveryError = false
-    async function read(directory: string): Promise<DirectoryFacts> {
-      const executable = input?.evidence === 'context' ? input.verb : undefined
-      const key = `${request.sessionId}\0${directory}\0${executable ?? ''}`, hit = cache.get(key)
+    const input = parsePathCommand(request.query)
+    const trace = beginRecommendationTrace(request.sessionId, settings.cloud,
+      !settings.remoteContext ? 'disabled' : !request.cwd ? 'missing-cwd'
+        : !settings.cloud && hasPathCommand(request.query) && !input ? 'skipped' : 'loading')
+    let facts: DirectoryFacts | undefined, contextError = false
+    const publishResult = (items: CommandSuggestion[]) => {
+      signal.throwIfAborted()
+      trace.sources = [...new Set(items.map(item => item.source))]; trace.candidates = items.length
+      publish(items)
+    }
+    const merge = (extra: DirectoryFacts) => {
+      if (!facts) { facts = extra; return }
+      facts = { ...facts, directories: [...new Set([...facts.directories, ...extra.directories])],
+        files: [...new Set([...facts.files, ...extra.files])], limited: facts.limited || extra.limited }
+    }
+    async function cached(key: string, operation: () => Promise<DirectoryFacts>, signal: AbortSignal): Promise<DirectoryFacts> {
+      const hit = cache.get(key)
       if (hit && Date.now() - hit.time < 30_000) return hit.facts
       progress?.('context')
-      const result = await ports.context(request.sessionId, directory, abort.signal, executable)
-      abort.signal.throwIfAborted()
+      const result = await operation()
+      signal.throwIfAborted()
       cache.set(key, { time: Date.now(), facts: result })
       if (cache.size > 6) cache.delete(cache.keys().next().value!)
       return result
     }
     try {
-      if (settings.remoteContext && request.cwd) {
-        try { facts = await read(request.cwd) }
-        catch { contextError = true; abort.signal.throwIfAborted() }
-        if (facts && input) {
-          const explicit = searchDirectory(input, request.cwd, facts.home)
-          const directory = explicit ?? (recent?.sessionId === request.sessionId && recent.cwd === request.cwd ? recent.directory : undefined)
-          if (directory && directory !== request.cwd) {
-            try {
-              const extra = await read(directory)
-              facts = { ...facts, directories: [...new Set([...facts.directories, extra.cwd, ...extra.directories])],
-                files: [...new Set([...facts.files, ...extra.files])] }
-            } catch { if (explicit) contextError = true; abort.signal.throwIfAborted() }
-          }
-          const knownPaths = input.kind === 'directory' ? facts.directories : input.kind === 'file' ? facts.files : [...facts.directories, ...facts.files]
-          if (!explicit && !input.home && input.fragment.length >= 3
-            && (input.evidence !== 'context' || facts.tools.includes(input.verb))
-            && !knownPaths.includes(resolvePath(input.fragment, request.cwd)!)) {
-            const availableRoots = [...new Set([request.cwd, ...facts.directories.filter(path => parentPath(path) === request.cwd
-              || parentPath(path) === parentPath(request.cwd!))])]
-            const roots = availableRoots.slice(0, 121)
-            facts.limited ||= availableRoots.length > roots.length
-            const cacheKey = `${request.sessionId}\0nearby\0${request.cwd}\0${input.fragment}\0${roots.join('\0')}`
-            try {
-              let extra = cache.get(cacheKey)
-              if (!extra || Date.now() - extra.time >= 30_000) {
-                progress?.('context')
-                const result = await ports.discover(request.sessionId, request.cwd, roots, input.fragment, abort.signal)
-                abort.signal.throwIfAborted()
-                extra = { time: Date.now(), facts: result }
-                cache.set(cacheKey, extra)
-                if (cache.size > 6) cache.delete(cache.keys().next().value!)
-              }
-              facts = { ...facts, directories: [...new Set([...facts.directories, ...extra.facts.directories])],
-                files: [...new Set([...facts.files, ...extra.facts.files])], limited: facts.limited || extra.facts.limited }
-            } catch { discoveryError = true; abort.signal.throwIfAborted() }
-          }
-        }
-        if (facts) {
-          const paths = pathSuggestions(request.query, facts)
-          if (paths.length) handledPath = true
-          publish(paths)
+      if (settings.remoteContext && request.cwd && (settings.cloud || !hasPathCommand(request.query) || input)) {
+        try {
+          await timed(signal, 6000, async contextSignal => {
+            const cwd = request.cwd!
+            const executable = input?.evidence === 'context' ? input.verb : undefined
+            const read = (directory: string) => cached(`${request.sessionId}\0${directory}\0${executable ?? ''}`,
+              () => ports.context(request.sessionId, directory, contextSignal, executable), contextSignal)
+            facts = await read(cwd)
+            const explicit = input && searchDirectory(input, cwd, facts.home)
+            const directory = explicit ?? (recent?.sessionId === request.sessionId && recent.cwd === cwd ? recent.directory : undefined)
+            if (directory && directory !== cwd) {
+              try { const extra = await read(directory); merge({ ...extra, directories: [extra.cwd, ...extra.directories] }) }
+              catch { if (explicit) contextError = true; contextSignal.throwIfAborted() }
+            }
+            const known = input?.kind === 'directory' ? facts!.directories : input?.kind === 'file' ? facts!.files : [...facts!.directories, ...facts!.files]
+            const localLookup = input && !input.home && input.fragment.length >= 3
+              && (input.evidence !== 'context' || facts!.tools.includes(input.verb)) && !known.includes(resolvePath(input.fragment, cwd)!)
+            if (!explicit && (settings.cloud || localLookup)) {
+              const children = facts!.directories.filter(path => parentPath(path) === cwd)
+              const peers = facts!.directories.filter(path => path !== cwd && parentPath(path) === parentPath(cwd))
+              // Give both nearby scopes a context budget; no input-name filtering before the model.
+              const roots = settings.cloud ? [...new Set([...children.slice(0, 6), ...peers.slice(0, 6)])]
+                : [...new Set([cwd, ...children, ...peers])].slice(0, 121)
+              const limited = settings.cloud ? children.length > 6 || peers.length > 6 : children.length + peers.length + 1 > 121
+              const fragment = settings.cloud ? undefined : input!.fragment
+              if (roots.length) merge(await cached(`${request.sessionId}\0${settings.cloud ? 'tree' : 'nearby'}\0${cwd}\0${fragment ?? ''}\0${roots.join('\0')}`,
+                () => ports.discover(request.sessionId, cwd, roots, fragment, contextSignal), contextSignal))
+              if (limited) facts = { ...facts!, limited: true }
+            }
+          })
+          trace.context = contextError || facts?.limited ? 'partial' : 'ready'
+        } catch { signal.throwIfAborted(); contextError = true; trace.context = facts ? 'partial' : 'failed' }
+      }
+      trace.directories = facts?.directories.length ?? 0; trace.files = facts?.files.length ?? 0
+      if (settings.cloud) {
+        try {
+          const candidates = await timed(signal, 8000, async modelSignal => {
+            const apiKey = await ports.key()
+            modelSignal.throwIfAborted()
+            progress?.('ai')
+            return ports.generate(request, facts, settings, apiKey, modelSignal, () => { trace.modelCalled = true })
+          })
+          publishResult(candidates)
+          trace.outcome = candidates.length ? 'complete' : 'empty'
+          return candidates.length ? '' : 'AI 暂未找到匹配建议'
+        } catch (error) {
+          signal.throwIfAborted()
+          const fallback = facts ? pathSuggestions(request.query, facts) : []
+          trace.fallback = fallback.length > 0; trace.outcome = 'failed'
+          if (fallback.length) publishResult(fallback)
+          const message = error instanceof Error && !/fetch|network|load failed/i.test(error.message) ? error.message : '云端暂不可用，请检查网络及 API 配置'
+          return message + (fallback.length ? '；已提供本地目录建议' : '')
         }
       }
-      if (settings.cloud && !handledPath) {
-        const apiKey = await ports.key()
-        abort.signal.throwIfAborted()
-        progress?.('ai')
-        const candidates = await ports.generate(request, facts, settings, apiKey, abort.signal)
-        abort.signal.throwIfAborted()
-        publish(candidates)
-      }
-      return contextError ? '目录读取暂不可用' : discoveryError ? '附近路径查找暂不可用' : facts?.limited ? '路径结果已达上限，仅显示已核实匹配' : ''
-    } catch (error) {
-      if (signal.aborted) throw error
-      if (abort.signal.aborted) return '推荐超时，请重试'
-      return error instanceof Error && !/fetch|network|load failed/i.test(error.message) ? error.message : '云端暂不可用，请检查网络及 API 配置'
-    } finally { clearTimeout(deadline); signal.removeEventListener('abort', cancel) }
+      const candidates = facts ? pathSuggestions(request.query, facts) : []
+      publishResult(candidates)
+      trace.outcome = candidates.length ? 'complete' : 'empty'
+      return contextError ? '目录读取暂不可用' : facts?.limited ? '路径结果已达上限，仅显示已核实匹配' : ''
+    } catch (error) { trace.outcome = 'cancelled'; throw error }
   }
   return Object.assign(run, { observeCommand })
 }
