@@ -103,7 +103,7 @@ test('uses one bottom light across preparation stages and preserves selection wi
   await expect(popup).not.toHaveAttribute('title')
   await expect(options(page).first()).toBeFocused()
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  await expect.poll(() => popup.evaluate(element => getComputedStyle(element, '::before').animationName)).toBe('none')
+  await expect.poll(() => popup.evaluate(element => getComputedStyle(element, '::before').animationDuration)).toBe('3.6s')
   await expect.poll(() => popup.evaluate(element => getComputedStyle(element, '::before').opacity)).toBe('0.9')
   await expect(popup.getByText(/生成中|读目录|查找中|正在读取/)).toHaveCount(0)
   expect((await popup.boundingBox())!.height).toBe(initialHeight)
@@ -118,6 +118,31 @@ test('uses one bottom light across preparation stages and preserves selection wi
   await page.getByRole('button', { name: '显示 1 条新建议' }).click()
   await expect(options(page).first()).toContainText('git log --all --graph')
   await expect(popup.locator('.terminal-command-status')).toHaveCount(0)
+})
+
+for (const reducedMotion of ['no-preference', 'reduce'] as const) test(`moves the working light and reserves one candidate row with motion preference: ${reducedMotion}`, async ({ page }) => {
+  await page.emulateMedia({ reducedMotion })
+  await page.evaluate(() => (window as any).harness.enhance(true))
+  await page.keyboard.insertText('查看当前目录')
+  await expect.poll(() => requests(page)).toBe(1)
+  const popup = page.locator('.terminal-command-suggestions')
+  const glowX = () => popup.evaluate(element => new DOMMatrixReadOnly(getComputedStyle(element, '::before').transform).m41)
+  const emptyHeight = (await popup.boundingBox())!.height
+  const startX = await glowX()
+  // Observe elapsed time: setting currentTime by hand would not detect a stopped animation.
+  await expect.poll(async () => Math.abs(await glowX() - startX)).toBeGreaterThan(8)
+  await page.evaluate(() => {
+    const request = (window as any).harness.requests[0]
+    request.progress('ai')
+    request.publish([{ command: 'ls', source: 'ai', priority: 4, uses: 0, lastUsed: 0 }])
+  })
+  await expect(options(page)).toHaveCount(1)
+  expect((await popup.boundingBox())!.height).toBe(emptyHeight)
+  const populatedX = await glowX()
+  await expect.poll(async () => Math.abs(await glowX() - populatedX)).toBeGreaterThan(16)
+  await respond(page, 0, [])
+  await expect.poll(() => popup.evaluate(element => getComputedStyle(element, '::before').opacity)).toBe('0')
+  expect((await popup.boundingBox())!.height).toBe(emptyHeight)
 })
 
 test('finishes silently without growing the suggestion panel', async ({ page }) => {
@@ -320,12 +345,13 @@ test('the production terminal composes a real cloud adapter request and inserts 
   await expect(popup.locator('.terminal-command-status')).toHaveCount(0)
   await expect.poll(() => popup.evaluate(element => getComputedStyle(element, '::before').animationName)).toBe('terminal-command-flow')
   expect((await popup.boundingBox())!.width).toBeLessThan(150)
-  expect((await popup.boundingBox())!.height).toBeLessThan(20)
+  const emptyHeight = (await popup.boundingBox())!.height
   const directory = join(tmpdir(), 'seal-e2e', 'command-suggestions')
   await mkdir(directory, { recursive: true })
   await page.screenshot({ path: join(directory, 'cloud-working.png') })
   releaseCloud()
   await expect(options(page).filter({ hasText: command })).toBeVisible()
+  expect((await popup.boundingBox())!.height).toBe(emptyHeight)
   expect(JSON.parse(payload.messages[1].content)).toMatchObject({ input: 'python main', history: [] })
   await page.screenshot({ path: join(directory, 'cloud-recommendation.png') })
   await options(page).filter({ hasText: command }).click()
