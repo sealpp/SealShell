@@ -193,6 +193,7 @@ async function main() {
     console.log(`shell starts at the fitted ${initialTerminalSize.columns}x${initialTerminalSize.rows} before its first output`);
 
     // The actual PWA/WASM exec path uses a separate connection and releases it.
+    if (NATIVE_SHELL) await page.waitForFunction(() => !!window.sealE2eStore.tabs[0]?.cwd);
     if (NATIVE_SHELL) fs.mkdirSync(path.join(trustDirectory, 'remote', 'project one'), { recursive: true });
     const beforeRecommendation = readMockSshState();
     const recommendationFacts = await page.evaluate(async native => {
@@ -229,6 +230,7 @@ async function main() {
     if (NATIVE_SHELL) {
       const directory = path.join(trustDirectory, 'remote', 'codes', 'demo_linux');
       fs.mkdirSync(directory, { recursive: true });
+      fs.mkdirSync(path.join(trustDirectory, 'remote', 'codes', 'destination'), { recursive: true });
       fs.writeFileSync(path.join(directory, 'entry.txt'), 'path-fixture-ok\n');
       const target = loginDirectory + '/codes/demo_linux';
       let modelCalls = 0;
@@ -274,12 +276,34 @@ async function main() {
       await candidates.first().click();
       await page.keyboard.press('Enter');
       await page.waitForFunction(() => document.querySelector('.xterm-rows')?.textContent.includes('path-fixture-ok'));
+      await waitForPrompt();
+      // sort has no command profile: command -v and filesystem evidence infer the operand.
+      await page.keyboard.type('sort -r entry.tx');
+      await candidates.filter({ has: page.getByText(`sort -r '${target}/entry.txt'`, { exact: true }) }).waitFor();
+      await candidates.first().click();
+      await page.keyboard.press('Enter');
+      await waitForPrompt();
+      await page.keyboard.type('grep -n path-fixture entry.tx');
+      await candidates.filter({ has: page.getByText(`grep -n path-fixture '${target}/entry.txt'`, { exact: true }) }).waitFor();
+      if (!(await candidates.first().textContent()).includes('grep -n')) throw new Error('an alternative displaced the requested command');
+      await candidates.first().click();
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => document.querySelector('.xterm-rows')?.textContent.includes('1:path-fixture-ok'));
+      await waitForPrompt();
+      await page.keyboard.type('cp entry.txt ../dest');
+      const destination = loginDirectory + '/codes/destination';
+      await candidates.filter({ has: page.getByText(`cp entry.txt '${destination}'`, { exact: true }) }).waitFor();
+      await candidates.first().click();
+      if (fs.existsSync(path.join(trustDirectory, 'remote', 'codes', 'destination', 'entry.txt'))) throw new Error('copy acceptance executed before Enter');
+      await page.keyboard.press('Enter');
+      await waitForPrompt();
+      if (fs.readFileSync(path.join(trustDirectory, 'remote', 'codes', 'destination', 'entry.txt'), 'utf8') !== 'path-fixture-ok\n') throw new Error('copy completion changed the source or destination');
       if (modelCalls) throw new Error('explicit path completion called the model');
       await page.screenshot({ path: path.join(TMP_DIR, 'path-completion.png') });
       await sendSourceCommand(`cd -- '${loginDirectory}'`);
       await waitForSourceDirectory(loginDirectory);
       await page.evaluate(() => { window.sealRecommendationState.recommendations.cloud = false; });
-      console.log('real path completion: recent ls lookup, cd correction, ls options, file completion, acceptance without execution, zero model calls');
+      console.log('real path completion: recent ls lookup, cd/ls/cat, unprofiled sort, grep pattern, cp operands, acceptance without execution, zero model calls');
     }
     async function duplicate(trigger, expectedDirectory) {
       const shellNumber = readMockSshState().shell + 1;
