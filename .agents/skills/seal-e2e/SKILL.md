@@ -162,6 +162,7 @@ loopback 后用 SSH 隧道访问。容器 sshd 设置 `LANG=C.UTF-8`，并为测
 - 主操作按钮：`.workbench-dialog-content .workbench-dialog-button--primary`
 - 取消按钮：`.workbench-dialog-button--default`
 - 新建连接：在「会话」列表 `.conn-list` 空白处右键，再点击 `page.getByRole('menuitem', { name: '新建连接', exact: true })`；标题栏不提供新建按钮。测试列表内容较少时可直接右键列表中心，否则定位到底部空白处。
+- 打开保存会话：双击目标 `.conn-item` 或使用其右键连接菜单；列表只显示类型图标与名称，不再提供行尾连接按钮。`connections-tree.spec.ts` 覆盖根级/嵌套图标、完整连接提示及窄侧栏悬停/选中布局，截图保存在系统临时目录 `seal-e2e/connections/`。
 - 配对完成：等待 `page.getByRole('dialog', { name: '配对 Node', exact: true })` 隐藏。
 - 登录按钮：`page.getByRole('button', { name: '登录' })`
 - 确认按钮（新建/编辑主机弹窗）：`page.getByRole('button', { name: '确认' })`

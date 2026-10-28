@@ -1,39 +1,48 @@
 import { test, expect } from '@playwright/test'
+import { mkdir } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/tests/connections-tree-harness.html')
   await page.locator('.conn-list').waitFor()
 })
 
-test('renders sorted folders and compact one-line host metadata', async ({ page }) => {
+test('renders sorted folders and compact host names with SSH icons and connection details on hover', async ({ page }) => {
   const rows = page.locator('.conn-item')
   await expect(rows.nth(0)).toContainText('Alpha')
   await expect(rows.nth(1)).toContainText('Nested')
   await expect(rows.nth(2)).toContainText('Nested host')
-  await expect(rows.nth(2).locator('.conn-meta')).toHaveText('root · 22')
+  await expect(rows.nth(2).getByRole('img', { name: 'SSH 终端' })).toBeVisible()
+  await expect(rows.nth(2)).toHaveAttribute('title', 'Nested host\nSSH · root@10.0.0.3:22\n双击连接')
   await expect(rows.nth(3)).toContainText('Alpha host')
   await expect(rows.nth(4)).toContainText('Zeta')
   await expect(rows.nth(5)).toContainText('Root host')
   await expect(rows.nth(5)).toHaveCSS('min-height', '22px')
+  await expect(rows.nth(5).getByRole('img', { name: 'SSH 终端' })).toBeVisible()
+  await expect(rows.nth(3)).toHaveAttribute('title', 'Alpha host\nSSH · admin@10.0.0.2:2200\n双击连接')
+  await expect(rows.locator('.conn-meta, .conn-btn')).toHaveCount(0)
+  await rows.nth(5).click()
+  await page.evaluate(() => document.fonts.ready)
+  const screenshotDir = join(tmpdir(), 'seal-e2e', 'connections')
+  await mkdir(screenshotDir, { recursive: true })
+  await page.screenshot({ path: join(screenshotDir, 'session-type-icons.png'), clip: { x: 0, y: 0, width: 360, height: 220 } })
 })
 
-test('shrinks username and port before the host label when selected', async ({ page }) => {
+test('keeps the host label stable and readable in a narrow sidebar when hovered and selected', async ({ page }) => {
   await page.locator('#app').evaluate((element) => {
     element.style.width = '120px'
   })
   const host = page.locator('.conn-item').filter({ hasText: 'Root host' })
+  const label = host.locator('.conn-label')
+  const before = await label.boundingBox()
+  await host.hover()
+  expect(await label.boundingBox()).toEqual(before)
   await host.click()
-  const overflow = await host.evaluate((element) => {
-    const label = element.querySelector<HTMLElement>('.conn-label')!
-    const meta = element.querySelector<HTMLElement>('.conn-meta')!
-    return {
-      labelClippedPixels: label.scrollWidth - label.clientWidth,
-      metaClippedPixels: meta.scrollWidth - meta.clientWidth,
-    }
-  })
+  expect(await label.boundingBox()).toEqual(before)
+  const clippedPixels = await label.evaluate(element => element.scrollWidth - element.clientWidth)
   // Integer DOM widths can differ by one pixel with platform-specific fonts.
-  expect(overflow.labelClippedPixels).toBeLessThanOrEqual(1)
-  expect(overflow.metaClippedPixels).toBeGreaterThan(1)
+  expect(clippedPixels).toBeLessThanOrEqual(1)
 })
 
 test('opens folder context menu and creates a child folder', async ({ page }) => {

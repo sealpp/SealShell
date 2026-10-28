@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
-import { IconChevronDown, IconChevronRight, IconFolder, IconFolderOpen, IconPlug } from '../ui/icons'
+import { IconChevronDown, IconChevronRight, IconFolder, IconFolderOpen, IconTerminal2 } from '../ui/icons'
 import { store } from '../stores/app'
 import CommandContextMenu from '../components/CommandContextMenu.vue'
 import type { CommandContext } from '../services/context'
@@ -191,7 +191,7 @@ onBeforeUnmount(() => {
             :class="{ selected: isSelected(node), dragging: draggingKeys.includes(nodeKey(node.kind, node.id)), cut: cutKeys?.has(nodeKey(node.kind, node.id)), folder: node.kind === 'folder', 'root-host': node.kind === 'host' && node.depth === 0 }"
             :style="{ paddingLeft: `${8 + node.depth * 16}px` }"
             :draggable="true"
-            :title="node.kind === 'host' ? node.host?.address : node.folder?.name"
+            :title="node.kind === 'host' ? `${node.label}\nSSH · ${node.host?.username}@${node.host?.address}:${node.host?.port}\n双击连接` : node.folder?.name"
             @click="onNodeClick(node, $event)"
             @dblclick="node.kind === 'host' && node.host ? openConnect(node.host.id) : toggleFolder(node.id)"
             @dragstart="onDragStart(node, $event)"
@@ -214,21 +214,10 @@ onBeforeUnmount(() => {
               <IconFolderOpen v-if="store.expandedFolderIds.has(node.id)" :size="16" />
               <IconFolder v-else :size="16" />
             </span>
+            <span v-else class="node-icon" role="img" aria-label="SSH 终端">
+              <IconTerminal2 :size="16" />
+            </span>
             <span class="conn-label">{{ node.label }}</span>
-            <span
-              v-if="node.kind === 'host'"
-              class="conn-meta"
-              :title="`${node.host?.username} · ${node.host?.port}`"
-            >{{ node.host?.username }} · {{ node.host?.port }}</span>
-            <button
-              v-if="node.kind === 'host' && node.host"
-              type="button"
-              class="conn-btn"
-              title="连接"
-              @click.stop="openConnect(node.host.id)"
-            >
-              <IconPlug :size="16" />
-            </button>
           </div>
         </CommandContextMenu>
         <p v-if="!visibleNodes.length" class="empty">暂无保存的主机或文件夹</p>
@@ -314,6 +303,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   width: 20px;
   flex: 0 0 20px;
+  margin-right: 4px;
   color: var(--vscode-icon-foreground);
 }
 
@@ -325,39 +315,6 @@ onBeforeUnmount(() => {
   font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.conn-meta {
-  min-width: 0;
-  flex: 0 100 auto;
-  overflow: hidden;
-  margin-left: 8px;
-  color: var(--workbench-text-muted);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.conn-btn {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 24px;
-  margin-left: 4px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--workbench-text-muted);
-  cursor: pointer;
-}
-
-.conn-item:hover .conn-btn,
-.conn-item.selected .conn-btn {
-  display: inline-flex;
-}
-
-.conn-btn:hover {
-  color: var(--workbench-text-strong);
 }
 
 .empty {

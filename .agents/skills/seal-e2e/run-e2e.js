@@ -538,8 +538,7 @@ async function main() {
     await waitForMockSshState(state => state.active_connections === 0, 'refresh releases monitor connections');
     if (await page.locator('.workspace-instance').count()) throw new Error('monitor survived a refresh');
     const expectedReloadTabCount = await page.locator('.terminal-tab').count() + 1;
-    await page.locator('.conn-item').first().hover();
-    await page.locator('.conn-item').first().locator('.conn-btn').click();
+    await page.locator('.conn-item').first().dblclick();
     await page.waitForFunction(
       (expected) => {
         const tabs = document.querySelectorAll('.terminal-tab');
