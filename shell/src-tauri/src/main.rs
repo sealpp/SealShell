@@ -1,15 +1,43 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use seal_runtime::storage::Store;
-use tauri::Manager;
+use seal_runtime::{error::Result, runtime::Runtime};
+use std::sync::Arc;
+use tauri::{Emitter, Manager};
+
+#[tauri::command]
+async fn native_call(
+    runtime: tauri::State<'_, Runtime>,
+    operation: String,
+    args: serde_json::Value,
+) -> Result<serde_json::Value> {
+    runtime.call(&operation, args).await
+}
 
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
-            let directory = app.path().app_data_dir()?;
-            app.manage(Store::open(&directory.join("sealshell.sqlite"))?);
+            let directory = if cfg!(debug_assertions) {
+                std::env::var_os("SEALSHELL_DATA_DIR")
+                    .map(std::path::PathBuf::from)
+                    .unwrap_or(app.path().app_data_dir()?)
+            } else {
+                app.path().app_data_dir()?
+            };
+            let handle = app.handle().clone();
+            app.manage(Runtime::new(
+                &directory,
+                Arc::new(move |event| {
+                    let _ = handle.emit("native-event", event);
+                }),
+            )?);
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("failed to run SealShell");
+        .invoke_handler(tauri::generate_handler![native_call])
+        .build(tauri::generate_context!())
+        .expect("failed to build SealShell")
+        .run(|handle, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                handle.state::<Runtime>().close_all();
+            }
+        });
 }

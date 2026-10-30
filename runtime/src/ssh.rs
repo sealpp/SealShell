@@ -253,6 +253,7 @@ async fn request_ok(channel: &mut Channel<client::Msg>) -> Result<()> {
 struct Entry {
     cancel: CancellationToken,
     session: Option<Arc<Session>>,
+    events: Events,
 }
 
 pub struct SshService {
@@ -293,6 +294,7 @@ impl SshService {
                 Entry {
                     cancel: cancel.clone(),
                     session: None,
+                    events: events.clone(),
                 },
             );
         }
@@ -365,11 +367,13 @@ impl SshService {
     pub fn close(&self, id: &str) {
         if let Some(entry) = self.sessions.lock().unwrap().remove(id) {
             entry.cancel.cancel();
+            (entry.events)(json!({"type":"sessionClosed","id":id}));
         }
     }
     pub fn close_all(&self) {
-        for (_, entry) in self.sessions.lock().unwrap().drain() {
+        for (id, entry) in self.sessions.lock().unwrap().drain() {
             entry.cancel.cancel();
+            (entry.events)(json!({"type":"sessionClosed","id":id}));
         }
     }
 }

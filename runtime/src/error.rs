@@ -6,6 +6,8 @@ use serde::Serialize;
 pub struct Error {
     pub code: String,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub orphan_path: Option<String>,
 }
 
 impl Error {
@@ -13,10 +15,16 @@ impl Error {
         Self {
             code: code.into(),
             message: message.into(),
+            orphan_path: None,
         }
     }
     pub fn cancelled() -> Self {
         Self::new("cancelled", "操作已取消")
+    }
+    pub fn with_orphan(mut self, path: &str) -> Self {
+        self.message = format!("{}；保留项：{}", self.message, path);
+        self.orphan_path = Some(path.into());
+        self
     }
 }
 
