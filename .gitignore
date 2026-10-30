@@ -17,6 +17,7 @@ shell/playwright-report/
 shell/test-results/
 
 # Runtime state and data
+/node/seal-trust.json
 *.db
 *.enc
 *.sqlite
