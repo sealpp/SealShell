@@ -2,6 +2,7 @@ pub mod error;
 pub mod files;
 pub mod forwarding;
 pub mod http;
+pub mod path_memory;
 pub mod proxy;
 pub mod runtime;
 pub mod ssh;

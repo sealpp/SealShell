@@ -78,6 +78,7 @@ impl Runtime {
     }
     pub async fn call(&self, operation: &str, args: Value) -> Result<Value> {
         match operation {
+            "path_memory" => self.store.path_memory(decode(args)?),
             "proxy_test" => {
                 let id = string(&args, "id")?.to_owned();
                 let proxy: crate::proxy::Proxy = decode(args["proxy"].clone())?;

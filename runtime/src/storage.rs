@@ -21,6 +21,9 @@ pub struct Credential {
 }
 
 impl Store {
+    pub fn path_memory(&self, request: crate::path_memory::Request) -> Result<Value> {
+        crate::path_memory::call(&mut self.0.lock().unwrap(), request)
+    }
     pub fn open(path: &Path) -> Result<Self> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -75,6 +78,12 @@ impl Store {
                 transaction.execute("INSERT INTO records VALUES (?1, ?2, ?3) ON CONFLICT(collection,key) DO UPDATE SET value=excluded.value",
                     params![change.collection, change.key, serde_json::to_string(&value)?])?;
             } else {
+                if change.collection == "hosts" {
+                    transaction.execute(
+                        "DELETE FROM records WHERE collection='pathMemory' AND key=?1",
+                        [&change.key],
+                    )?;
+                }
                 transaction.execute(
                     "DELETE FROM records WHERE collection=?1 AND key=?2",
                     params![change.collection, change.key],
