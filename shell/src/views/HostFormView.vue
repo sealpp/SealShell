@@ -185,7 +185,7 @@ function close() {
   <UiDialog
     :open="true"
     :title="title"
-    description="输入 SSH 主机连接信息；凭据会在 PWA 本地加密保存。"
+    description="输入 SSH 主机连接信息；凭据由当前 Windows 账号加密保护。"
     width="520px"
     @close="close"
   >

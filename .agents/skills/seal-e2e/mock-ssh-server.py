@@ -178,13 +178,16 @@ async def handle_native_shell(process: asyncssh.SSHServerProcess, startup_comman
     args = ["-f"] if zsh_path else ["--noprofile", "--norc"]
     args += ["-c", startup_command] if startup_command else ["-i"]
     shell_env = {**os.environ, "HISTFILE": str(mock_sftp_root / "shell-history"), "CHERE_INVOKING": "1"}
+    home = mock_sftp_root / "home"
+    home.mkdir(exist_ok=True)
+    posix = lambda path: re.sub(r"^([A-Za-z]):", lambda match: "/" + match[1].lower(), path.as_posix())
+    shell_env["HOME"] = posix(home)
     if zsh_path:
         # Keep user profiles and all bootstrap files inside the test fixture.
         config = mock_sftp_root / "zsh-config"
         config.mkdir(exist_ok=True)
         temporary = mock_sftp_root / "zsh-tmp"
         temporary.mkdir(exist_ok=True)
-        posix = lambda path: re.sub(r"^([A-Za-z]):", lambda match: "/" + match[1].lower(), path.as_posix())
         shell_env.update(ZDOTDIR=posix(config), TMPDIR=posix(temporary))
         shell_env["PATH"] = str(Path(zsh_path).parent) + os.pathsep + os.environ["PATH"]
     shell = await asyncio.create_subprocess_exec(

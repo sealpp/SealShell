@@ -44,7 +44,7 @@ BEGIN {
   while ((read = (getline line < file)) > 0) { command = command (first ? "" : "\n") line; first = 0 }
   close(file)
   if (read < 0) command = "(无法读取命令行)"
-  # Keep NUL boundaries; the PWA derives display text separately from argv.
+  # Keep NUL boundaries; the frontend derives display text separately from argv.
   if (!command) command = "[" name "]"
   # Read identity again: do not associate a replacement process command
   # with the process identity read before cmdline.

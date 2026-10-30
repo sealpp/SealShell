@@ -1,328 +1,63 @@
 ---
 name: seal-e2e
-description: 运行和维护 SealShell 端到端测试（PWA/WASM 协议客户端 + SealNode transport + mock SSH）。当要写 E2E、调试 PWA telemetry polling、复现标签生命周期或完整验证 PWA ↔ Node ↔ 远端协议链路时使用。
+description: 运行 SealShell 的浏览器界面、Rust 协议和 Windows Tauri/WebView2 端到端测试。涉及 SSH/SFTP、传输取消、转发、会话生命周期或真实桌面验证时使用。
 ---
 
-# SealShell E2E 测试指南
+# SealShell Windows 验证
 
-## 测试栈
+产品是 Vue + Tauri 2 + Rust。本技能覆盖三层验证；浏览器 mock 通过不能代替原生协议和桌面测试。
 
 ```text
-Playwright (Chromium)
-  ↓ HTTP/WebSocket
-PWA (Vite/Vue + libssh2 WASM Workers)
-  ↓ loopback WebSocket transport
-SealNode (Python pairing + TCP/UDP relay)
-  ↓ TCP
-mock SSH server (asyncssh)
+Playwright Chromium → 显式浏览器测试适配器 → Vue 交互
+Rust tests → 原生 runtime → AsyncSSH / TCP / HTTP fixtures
+Playwright CDP → Windows WebView2 → Tauri IPC → 同一原生 runtime
 ```
 
-## 跨平台入口
+## 入口
 
-从仓库根目录执行以下命令，Windows 使用原生 PowerShell，无需 WSL、Bash 或独立 protoc：
+从仓库根目录执行，使用原生 Windows，不依赖 WSL：
 
 ```text
 python scripts/setup.py
-python scripts/test.py node
 python scripts/test.py unit
+python scripts/test.py native
 python scripts/test.py ui
-python scripts/test.py files
-python scripts/test.py ssh
-python scripts/test.py proxy
-python scripts/test.py ports
+python scripts/test.py desktop
+python scripts/test.py build
+python scripts/build.py
 ```
 
-`python scripts/test.py` 按顺序执行上述全部验证及生产构建。Python 环境由 uv 管理并锁定；
-setup 使用清华 PyPI、npmmirror npm 和 Playwright 镜像，并保留其他项目的浏览器缓存。
-`python scripts/dev.py` 同时启动日常开发的 SealNode 和 Vite，Ctrl+C（Windows 也支持 Ctrl+Break）后等待两者退出。
-
-Python 测试入口检查所需端口，发生占用时直接报错，先由使用者关闭已有服务。
-`files` 自行启动所需服务；`ssh` 由 Python 入口启动 Vite、JS runner 启动其余服务。
-`ports` 自行启动隔离的 TCP fixture、SSH、Node 和 Vite。Windows 已有日常开发服务时使用
-`$env:SEAL_E2E_HOST='127.0.0.2'`，不要终止用户在 127.0.0.1 的服务。
-Playwright 的浏览器交互保留在 JS/TS 中，解释器路径自动区分 `.venv/Scripts/python.exe` 与 `.venv/bin/python`；
-两条完整链路均可用 `SEAL_PYTHON` 覆盖解释器，并在成功、失败或启动失败后等待自启进程退出。
-
-SealNode 不实现 SSH，也不保存主机或凭据业务数据。完整链路中的 SSH 协议由 PWA/WASM
-Worker 执行；mock SSH 只属于测试依赖。
-
-端口套件覆盖：注入身份/端点的独立 SDK 客户端（同连接 TCP 与文件查询）、真实 WASM
-direct-tcpip、多连接大块传输、FIN 后回复、占用端口回退、发现默认不转发、菜单/当前终端
-定位去重、隐藏持续发现与转发、Enter/blur/Escape、全局监听范围切换、手工即启用、取消
-结束已有连接、勾选持久化、配置快照、失败红灯及无弹窗、刷新和资源回收。mock 的
-`MOCK_PORTS_CONTROL_PATH` 用 JSON 端口数组控制发现列表，`MOCK_SSH_FORWARDING=1`
-启用真实 direct-tcpip。成功/失败截图保存到系统临时目录 `seal-e2e/ports`。
-修改本地 libssh2 vendor 导出时更新包版本/锁文件，并在套件冷启动时重新生成 Vite 依赖缓存。
-
-## 端口
-
-1. PWA dev server 默认 `8080`，但被占用时 Vite 会 fallback 到更高端口。Node 只绑定
-   loopback 且不做 Origin 校验，PWA 端口变化无需调整 Node 配置。
-2. Node WebSocket 默认监听 `17373`，PWA transport 地址在 `shell/src/services/nodeClient.ts`
-   中固定使用当前页面 hostname 和该端口。
-3. 如果宿主机已有进程占用 `17373`，不要终止无关进程。Windows 先关闭自己启动的开发服务再测试；
-   Linux 可将 PWA、mock SSH、SealNode 和 Playwright 放进同一个 network namespace，
-   `unshare --net` 后先执行 `ip link set lo up`。
-
-示例：
-
-```bash
-unshare --net -- bash -lc '
-  ip link set lo up
-  npm --prefix shell run dev -- --port 8081 --host 127.0.0.1 >/tmp/seal-e2e-vite.log 2>&1 &
-  pwa_pid=$!
-  trap "kill $pwa_pid 2>/dev/null || true" EXIT
-  until curl -fsS http://127.0.0.1:8081 >/dev/null; do sleep 0.2; done
-  PWA_URL=http://127.0.0.1:8081 node .agents/skills/seal-e2e/run-e2e.js
-'
-```
-
-## Node 与配对
-
-Node 启动后输出：
-
-```text
-Listening on ws://127.0.0.1:17373, pairing code: 123456
-```
-
-E2E 必须解析实际六位码，不要写死。测试必须将 `SEAL_TRUST_PATH` 指向临时文件，避免修改
-开发实例的 `seal-trust.json` 和已配对设备。PWA vault 使用浏览器 profile key 自动解锁。
-
-## mock SSH
-
-`.agents/skills/seal-e2e/mock-ssh-server.py` 应覆盖：
-
-- 密码认证；
-- PWA libssh2 的交互式 PTY shell；
-- `uname -s`；
-- telemetry direct `channel_exec` 采样命令；
-- `printf exec-ok` 和简单终端命令。
-- direct exec 的探测/采样及连接计数，验证独立连接连续采样、隐藏仍采样、重复打开不新增连接、关闭释放连接。
-- SFTP v3 subsystem，覆盖目录、读写、rename、递归删除和符号链接；`MOCK_SFTP_ROOT` 是服务端 chroot，文件操作仅发生在测试目录。
-
-交互式 shell 必须保持存活。PWA 监测每实例使用独立 libssh2 Worker 的 direct `channel_exec`；不申请交互 shell，
-不依赖终端、shell marker 或控制连接。
-
-终端连接会先在已认证会话探测 Bash/zsh；mock 默认返回空版本，继续走普通交互 shell。
-`run-e2e.js` 启用 OSC 7 目录报告并固定测试密码，覆盖双击、右键新建、Ctrl+反引号、补输密码、
-认证重试与未知目录回退；目录包含中文、空格、单引号、百分号和命令替换符。必须同时验证 shell
-实际目录和 PWA 报告目录，不能只断言复制了状态字段。
-
-设置 `SEAL_E2E_BASH` 为本机 Bash 可执行文件后，SSH runner 会将真实 Bash 进程接入 mock SSH，
-验证自动集成，而不是由 mock 伪造目录报告。Windows 可以使用 Git for Windows 的 Bash，无需 WSL：
-
-```powershell
-$env:SEAL_E2E_HOST = '127.0.0.2'
-$env:SEAL_E2E_BASH = 'C:\path\to\Git\bin\bash.exe'
-python scripts/test.py ssh
-```
-
-真实 zsh 使用 `SEAL_E2E_ZSH`，Windows 可指向 MSYS2 的 `usr/bin/zsh.exe`；与 Bash 分开运行同一套
-SSH 验证。zsh 的用户配置目录和启动临时目录都放在 fixture 内，不读取开发者的 zsh 配置。
-该环境变量也启用原生 zsh 单元测试，验证配置加载顺序、ZDOTDIR 重定向、既有提示符/目录钩子、
-命令退出状态、历史记录和正常/提前退出后的引导文件清理。POSIX 平台另测整个 shell 进程组收到
-SIGHUP 时的清理；Windows 跳过该信号测试，需用真实 Linux 环境补验。
-
-真实 shell 的历史仅写入测试目录。Windows 收尾终止自启 mock SSH 的进程树，再删除 fixture，
-防止子 shell 仍占用工作目录；不终止其他开发实例。Bash 提示符钩子与退出状态另由单元测试验证。
-AsyncSSH 的 PTY resize 会在 stdin 读取时抛出 `TerminalSizeChanged`，mock 必须消费后继续读取，
-否则终端刚上线即断开，telemetry 也无法开始 exec；不要将其误判为 Node 转发故障。
-
-mock 状态的 `shell_initial_sizes` 保留每个 Shell 启动时的 SSH PTY `[columns, rows]`，`shell_sizes` 记录最新尺寸。SSH 套件在首次主机指纹确认前检查本地有效测量，分别比较启动与上线后的远端尺寸，期间不缩放浏览器；只比较最新尺寸会漏掉先按默认 80 × 24 启动、再补发 resize 的变化。新建副本及三个同组并发连接也检查各自的启动尺寸。该记录验证 SSH 端收到的尺寸，pipe shell 本身不能替代真实 PTY 行编辑验收。`shell/tests/terminal-initial-size.spec.ts` 另覆盖窄窗、重连、同组后台批量连接、测量前关闭、过期连接完成，以及握手期间真实窗口变化；`main-dock-layout.spec.ts` 保留上线校准和侧栏绘制前边界检查。
-
-## 真实 OpenSSH 目录继承
-
-`python scripts/test.py ssh-real` 连接独立的真实 SSH 测试端点，自行启动和清理本机 Vite、SealNode
-及临时配对存储。通过环境变量提供 `SEAL_E2E_SSH_HOST`、`SEAL_E2E_SSH_PORT`（默认 22）、
-`SEAL_E2E_SSH_USER` 和 `SEAL_E2E_SSH_PASSWORD`；本机服务仍用 `SEAL_E2E_HOST` 指定回环地址。
-不要对生产主机执行；测试会在远端 `/tmp/sealshell-directory-随机值` 创建目录，成功后删除。
-失败时由独立 fixture 的所有者清理残留目录。
-
-推荐在授权的 Docker 主机创建带 `--init` 的独立容器，安装 OpenSSH 和 zsh，将端口发布到宿主
-loopback 后用 SSH 隧道访问。容器 sshd 设置 `LANG=C.UTF-8`，并为测试账号启用密码认证及对应
-登录 shell；未配置 UTF-8 时，真实 zsh 行编辑器会将中文输入变成问号，pipe mock 不一定暴露此差异。
-
-此套件实际点击双击、右键菜单和快捷键，覆盖缺少/错误凭据重试、源目录随后改变及未知目录回退。
-每个副本都执行 `pwd -P` 并核对终端输出，不能仅凭应用中的目录字段判定成功。额外核对 fixture
-配置文件校验和、关闭全部 SSH 连接后的临时引导目录；普通退出与 SSH PTY 挂断是不同的清理路径。
-
-## 选择器
-
-`shell/tests/settings-consistency.spec.ts` 比较所有设置页的实际标题、表单尺寸和聚焦样式，覆盖窄窗、开关位置与键盘操作、按需帮助，以及端口设置慢保存时切页、关闭、失败重试；截图存系统临时目录 `seal-e2e/settings`。推荐状态通过 `command-recommendations.spec.ts` 的受控请求检查不同内部阶段共用底部光效、无文字长等待、完成和异常，保留候选焦点并验证减少动态效果下的静态细线与待续标记；同时验证统一的隐藏读屏说明、无候选工作框与首条候选等高，以及密钥未编辑时保留、显式清除后移除。实际云端适配器的等待与完成截图存 `seal-e2e/command-suggestions`。表格密度调整须检查表头单元的真实边界与首行点击，避免内部固定高度溢出行容器；不得用强制点击绕过。
-
-`shell/tests/workbench-theme.spec.ts` 使用实际工作台验证活动栏的内缩圆角伪元素、选中/悬停/键盘焦点及图标位置稳定、列表聚焦/失焦选择、菜单 Portal 与 Dockview 标签的主题，以及终端配色改变后外围保持独立。Codicons 检查包含本地字体与断网后首次打开弹窗；不配对真实 Node，不操作用户主机。配色或密度变更时同步相关 UI 套件的视觉断言，并运行生产构建及 `node shell/tests/editor-offline.mjs`，验证编辑器首次离线加载的主题和字体。
-
-`shell/tests/command-suggestions.spec.ts` 使用真实 xterm、独立 IndexedDB 和可延迟的回显夹具验证本地命令提示；另用实际 `ShellTerminal` 组件接入受控会话输入/输出，确认悬浮列表、首字符触发、鼠标与直接上下键选择、选中后 Enter 只补入、session 与历史落盘。覆盖导航后继续输入/退格/Tab、Esc 关闭后远端上下键恢复、Right 临时收起后输入重触发、远端灰字接受与新输入回显交错、行内光标暂停后缀补入、Right/Tab/未选中 Enter 保留、受控远端灰字共存、断网词库、单字符历史、频率、连接隔离、刷新、密码无回显、IME/选择/焦点、备用屏幕、多行粘贴、并发计数与删除清理、中文跨软换行、窄窗格边缘翻转和 resize。主题提示符回归须覆盖带颜色的多行下边框、无标记下边框、zsh 箭头与 Powerline，分别验证首字符候选、后缀补入及不含主题文字的历史；边框与标记分段到达时应恢复，后续变成文件树、密码或续行提示时不应留下历史。此 UI 套件不启动 Node，不操作用户远端；截图保存在系统临时目录 `seal-e2e/command-suggestions/`，不能把受控 ANSI 回显通过解释为任意插件、自定义提示符或真实 SSH 的完整验收。
-
-`shell/tests/terminal-input.spec.ts` 使用实际 `ShellTerminal` 与 SSH Worker 客户端，检查 UTF-8/GBK 的中文粘贴和 Chromium CDP 组合输入；通过结构化克隆核对 Worker 接收到的完整字节，再逐字节分块回显验证解码。编码库可能返回 Buffer 子视图，仅检查表层 Uint8Array 的内容会漏掉传输整个 backing buffer 时附带的多余字节。它不连接远端 Bash，不替代系统输入法或真实 PTY 的 locale、readline、退格及提示符宽度验收。
-
-`配对`、`登录`、`新建连接` 文字可能出现在菜单和弹窗中，必须限定作用域：
-
-- Dialog 内容：`.workbench-dialog-content`
-- 主操作按钮：`.workbench-dialog-content .workbench-dialog-button--primary`
-- 取消按钮：`.workbench-dialog-button--default`
-- 新建连接：在「会话」列表 `.conn-list` 空白处右键，再点击 `page.getByRole('menuitem', { name: '新建连接', exact: true })`；标题栏不提供新建按钮。测试列表内容较少时可直接右键列表中心，否则定位到底部空白处。
-- 打开保存会话：双击目标 `.conn-item` 或使用其右键连接菜单；列表只显示类型图标与名称，不再提供行尾连接按钮。`connections-tree.spec.ts` 覆盖根级/嵌套图标、完整连接提示及窄侧栏悬停/选中布局，截图保存在系统临时目录 `seal-e2e/connections/`。
-- 配对完成：等待 `page.getByRole('dialog', { name: '配对 Node', exact: true })` 隐藏。
-- 登录按钮：`page.getByRole('button', { name: '登录' })`
-- 确认按钮（新建/编辑主机弹窗）：`page.getByRole('button', { name: '确认' })`
-- 记住密码勾选框：`input[type="checkbox"]`
-- 密码输入：`input[type="password"]`
-- 主机名称/地址：`#host-name`、`#host-address`；名称必填，地址 placeholder 不是 `address`。
-- 主机指纹接受：`#host-key-accept`
-
-## 遥测验收
-
-从会话条目或终端右键「打开性能监测」创建实例；状态栏「性能监测 N」只切换显示。
-每实例拥有独立、持续的 SSH 连接，采集不申请 PTY/shell，不与终端共享连接。
-`run-e2e.js` 验证无终端启动、双入口去重、同地址不同配置独立、隐藏继续采样、
-配置编辑/删除不影响旧实例、关闭重开采用最新配置、关闭/刷新后连接归零。
-
-成功采样有四个 `[data-metric-value]`（不含 `--`）、三个 gauge 及一个进程数量 stat。
-宽面板四卡同行，窄面板按容器宽度换行。关闭实例才停止采样；隐藏、换类别和换终端均不停止。
-`run-proxy-e2e.js` 还验证监测在代理配置修改及终端关闭后继续使用原代理连接。
-
-使用同步 `waitForFunction` 检查页面已有状态；当前 Playwright 会把 async 谓词返回的 Promise
-直接当成成功。需要动态导入时，在测试侧轮询 `page.evaluate` 的已解析结果。
-
-## PWA WASM 资源
-
-命令推荐回归在 `shell/tests/command-recommendations.spec.ts`：真实 xterm 直接输入与完整命令替换、Ctrl+I/原目标框快捷键不打开本地输入、底部统一工作动效与静默完成、无文字长等待/异常提示、减少动态效果下的静态待续标记、迟到结果冻结/刷新、目录变更取消、采纳与提交分别记忆、云端配置加密，以及生产 ShellTerminal 经真实云端适配器请求（响应由路由 fixture 提供）。既有 `command-suggestions.spec.ts` 保留前缀、远端灰字和延迟回显回归。`recommendations.test.ts` 另用实际 Bash 执行固定只读目录探测，验证特殊路径引用和元数据提取；Windows 仅覆盖 Git Bash shell 语义，不代表真实 Linux PTY 行编辑。
-
-SSH runner 验证目录探测使用独立 PWA/WASM SSH exec 连接、零新增交互 shell，以及完成后释放连接。启用 `SEAL_E2E_BASH`/`SEAL_E2E_ZSH` 时，探测脚本实际读取 fixture 文件；Windows 只模拟 uname 的 Linux 平台门槛，输出显式按 UTF-8 解码。AI 分支无需先 ls 子目录：从实际目录快照找到带分隔符名称，确认它进入正式生成请求，受控响应同时返回 cd 和错误 ls，最终浮层来源须为 ai 且保持 cd。此处路由 fixture 只证明编排与交互，真实模型质量须另跑私有评测入口。关闭 AI 的分支继续验证目录来源、带选项 ls、文件 cat、无专用语法的 sort、保留模式的 grep 和保留源参数的 cp，且没有额外云端请求。所有采纳只填入，Enter 后核对实际目录、内容或复制结果。截图保存到系统临时 `seal-e2e/path-completion.png`。online 不表示 OSC 目录已到达，首次探测须等待 cwd；命令记入历史也不表示新提示符已返回。原生子 shell 退出后的 Windows 文件句柄可能略后释放，fixture 删除使用有限重试，失败仍报错。
-
-未启用真实 shell 时，mock 的固定 NUL 字段只验证协议链路，不替代真实目录语义。Git Bash 的管道输入也不能代替真正 Linux PTY。使用真实服务商的 smoke 只发送合成目录/命令，不把 Key 放测试源码、截图、trace 或构建环境；Key 从本地忽略文件读取。云端延迟与整个推荐流程延迟应分别报告。
-
-路径发现还须验证冷启动：未先执行 ls、同主机其他 cwd 的历史包含旧路径、当前层存在误导近似名时，从同级目录的下一层找到精确目标。SSH runner 检查实际候选的 `data-source=directory`、排除旧历史与近似误目标、采纳后未执行、Enter 后实际 cwd 改变。附近探测的字面前缀引用、精确名称先于截断、64 项上限及不递归由原生 Bash 单元测试补充；不同会话的事实和缓存隔离由编排测试补充。
-
-上段 directory 来源仅指关闭 AI 的辅助模式。AI 开启时不能把“零模型调用”作为路径验收标准；需要检查实际请求次数、送入模型的目录事实和最终 ai 来源。原生 Bash 另验证无名称前置过滤的目录快照及采样上限。生产组件浏览器测试覆盖 cwd 未知/目录上下文关闭时仍发出模型请求，诊断模块只保留页面内请求元数据，不保存输入、路径、响应或凭据。
-
-Vite 配置会从已锁定的 npm 依赖复制以下运行时资源到开发/构建 public 目录：
-
-- `libssh2.wasm`
-
-这些生成文件不提交。修改 `ws.ts`、`nodeClient.ts`、`ssh.ts`、Worker 或 Vite 配置后，
-刷新页面或重启 dev server 再跑 E2E，避免 HMR 使用旧的 WASM/模块状态。
-涉及模块路由替换或测试侧动态 import 的浏览器用例应在代码修改后冷启动 Vite：热更新的静态依赖可能带 `?t=`，而测试 import 仍为无时间戳 URL，导致 vault 等状态模块出现两份实例、精确路由漏匹配。不要以重新初始化生产状态掩盖测试加载差异。
-
-动效回归在 `no-preference` 下采样真实时间推进后的位移；在 `reduce` 下检查动画停用、静态待续标记稳定、完成后消失。不能只检查 animation-name 或手动设置 currentTime。Playwright 默认模拟 no-preference；核对 Windows 实际设置时使用 `page.emulateMedia({ reducedMotion: null })` 恢复系统偏好。
-
-## 文件卫生
-
-- 失败截图和临时日志放在系统临时目录下的 `seal-e2e/`（Windows 通常为 `$env:TEMP\seal-e2e`）；
-- `node_modules`、`.venv`、`shell/dist`、`shell/src/proto` 和 WASM 运行时复制文件不提交；
-- 测试脚本、端口策略、选择器或链路行为变化时同步更新本 skill。
-
-## 本机文件工作区
-
-`run-files-e2e.js` 自行启动 Vite、SealNode 和 mock SSH，使用独立的本地/远端/下载目录和
-临时配对文件，并在结束时关闭浏览器、等待子进程退出、清理 fixture。fixture 路径包含中文和空格。
-Linux 端口被占用时可使用隔离网络：
-
-```bash
-unshare --net -- bash -c 'ip link set lo up; node .agents/skills/seal-e2e/run-files-e2e.js'
-```
-
-若 Playwright 自带浏览器未安装但系统有 Chrome，可设置 `PLAYWRIGHT_CHANNEL=chrome`；
-两个 E2E runner 和现有 Playwright 配置均支持此变量。不要为了测试替换用户的运行中服务。
-
-覆盖本地按钮分栏、右键独立标签、多窗格目标选择、整目录替换、空文件、超过一个传输块的
-双向复制、拖拽保留源文件、同会话剪切、永久删除、本地编辑、完整远端文本读取，以及刷新后
-关闭标签但记住本地目录。必须用第二块及之后的内容校验 SFTP seek，不能只测小文件。
-文件标题栏覆盖首次新建、多个同配置标签时定位最早创建的标签、保留原目录及来源终端关闭后禁用；
-终端右键仍须创建独立文件标签。`shell/tests/bottom-panel-actions.spec.ts` 另验证同配置多终端、
-本地/异配置排除、关闭首个后的递补、配置删除边界，以及监测/端口/进程主动定位和去重。
-刷新后发送快捷键前应等待 `nodeConnected`；`paired` 只表示读到了已保存身份，认证与快捷键初始化可能还未结束。
-活动连接、传输、后台监控命令或未保存编辑会触发浏览器退出确认。有意刷新使用同目录的
-`confirmReload(page)`，断言出现 `beforeunload` 并接受，不清空活动状态或禁用监听绕过。
-取消关闭使用 `page.close({ runBeforeUnload: true })` 并 dismiss；必须先有真实用户点击。
-取消刷新的测试通过页面内 `location.reload()` 触发，不等待 `page.reload()` 导航完成，
-因为选择留下后该导航不会提交。独立 UI 回归见 `shell/tests/close-protection.spec.ts`。
-关闭分栏后，应等待剩余窗格重新填满文件区再记录宽度；DOM 中剩余两栏不表示 Dockview 布局已完成。
-
-`shell/tests/file-navigation.spec.ts` 属于 `python scripts/test.py ui`：用延后连接的文件会话验证本地/远端
-初始目录不变时上级操作立即可用、双击 `..`、上级按钮、Alt+Up、前进/后退历史、根目录禁用和会话移除后禁用。
-此回归不需要启动 SealNode，不使用开发实例的配对或文件数据。
-
-`shell/tests/file-icons.spec.ts` 复用同一文件列表夹具，验证本地/远端彩色主题图标、格式说明、独立链接标记、选中保留配色与断网后的图标切换；图标渲染不得调用文件后端。主题资源由固定版本离线生成，生产构建应把包含内嵌图标的 CSS 纳入 PWA 预缓存。
-
-`shell/tests/file-sorting.spec.ts` 验证四列表头整格点击、升序/降序/恢复默认三态、Enter/空格、调宽不排序、窗格独立状态和选中/失焦高亮。排序只重排已有数据；夹具计数验证不额外读目录，并延迟刷新，确认返回结果采用等待期间新选或已取消的排序。`processes.spec.ts` 与 `ports.spec.ts` 对应覆盖同一三态表头与指针/键盘调宽；进程恢复 CPU 默认顺序、保留选择详情、未知 CPU 始终在后，端口保留启用状态及正常行内编辑。
-
-`shell/tests/transfer-status.spec.ts` 使用真实传输队列与可控完成/失败回调，验证状态栏预览、关闭详情后连续进度不重开、排队取消、失败重试、完成后的保留项警示、编码入口共存和减少动态效果。此 UI 回归不启动 Node，也不操作真实文件。
-
-## Monaco 文件编辑器
-
-`shell/tests/editor.spec.ts` 使用实际 Dockview 与内存文件后端，验证中文深色查找替换、行号/高亮/折叠、Alt+Z、Ctrl+S、BOM/换行符、失败保留、保存期间编辑、编码重开清空旧撤销、同路径隔离、移动/隐藏恢复和关闭释放模型。加载未完成就关闭时，不得留下孤儿模型。
-
-查找栏 tooltip 回归覆盖普通窗口和 150% DPI 窄窗口：鼠标静止跨越多个移出延迟周期，检查同一提示节点持续存在、不与按钮重叠、按钮持续命中，并在原位置点击关闭。查找栏通过位移收起，关闭状态检查 `aria-hidden`，不能仅用 Playwright 的可见性判断。
-
-生产离线检查：先在 shell 执行 `npm run build`，再运行 `node tests/editor-offline.mjs`。使用独立 9325 预览端口和新浏览器上下文，安装 PWA 缓存后断网，首次打开真实编辑面板，确认高亮、中文查找栏、CSS/图标字体和基础 Worker 已缓存；产物不应包含语言服务 Worker。测试自动关闭预览服务器。
-
-Monaco 使用 EditContext 时，textarea 可能只是只读的 IME 辅助节点。端到端输入先点击 `.monaco-editor .view-lines`，再发送键盘事件；查找/替换输入使用可访问名称「查找」「替换」，不强制点击隐藏 textarea。
-
-## 远端进程管理
-
-shell/tests/processes.spec.ts 使用真实底部工作区和可控 exec 响应，覆盖 1500 行虚拟化、
-双入口去重、窗格详情、多选/树、确认取消、部分失败和隐藏暂停/恢复。
-
-完整链路按需执行 python scripts/test.py processes。先将 SEAL_PROCESS_DOCKER_HOST
-设为已获授权且可免密 SSH 的 Docker 主机；本机服务可用 SEAL_E2E_HOST=127.0.0.2 隔离。
-此项不加入默认 all，因为依赖外部 Docker 环境。可用 SEAL_PROCESS_DOCKER_IMAGE
-指定带 apt 的 Linux 基础镜像；默认使用 Playwright Noble 镜像。
-
-runner 创建唯一命名的临时容器，在其中安装 OpenSSH 并创建非 root 测试账户；只对该容器内
-自行启动的父子进程、忽略 TERM 的进程和 root 所有的拒绝目标执行控制测试。不操作宿主进程。
-本机 PWA/WASM 经真实 Node 和 SSH 隧道连接容器，验证 TERM/KILL、进程树去重、
-启动身份变化、权限不足不弹密码框、隐藏暂停、恢复采集和关闭后的 SSH 回收。
-真实 /proc 命令行同时校验带空格、换行、字面百分号转义和空参数，确保采集保留 NUL 参数边界，图标识别不依赖重新拆分显示文本。
-确认框须等待 fresh snapshot 请求完成后再核对目标数量，不用 DOM 尚未挂载时的 count 作结果。
-退出时删除容器、隧道、配对 fixture 和所有自启服务；截图保存在系统临时目录 seal-e2e/processes/。
-
-## 大文件、慢传输与取消
-
-按需运行 `python scripts/test.py transfers`（不加入日常 `all`，避免每次执行大文件压力测试）。
-默认验证 128 MiB；Windows 已有开发实例时使用独立回环地址：
-
-```powershell
-$env:SEAL_E2E_HOST = '127.0.0.2'
-$env:SEAL_STRESS_MIB = '256'
-$env:SEAL_STRESS_SLOW = '1'
-python scripts/test.py transfers
-```
-
-`run-transfer-stress.js` 使用分块生成的随机数据，先测真实 libssh2/WASM 堆，再通过真实 Worker、
-任务队列和 Node 执行上传、下载、远端到远端复制；三种方向均校验完整 SHA-256。
-通过 mock 服务端的可控读写延迟让请求处于等待中，取消后应在 5 秒内结束且 Worker 数量回到基线；
-最后所有 Worker 与远端句柄都必须归零。`SEAL_STRESS_SLOW=1` 另加超过一分钟的持续慢写入。
-
-取消时远端可能仍在执行请求，Windows 文件锁会阻止立即删除临时文件；测试应验证取消记录包含准确的
-保留路径，不能要求所有服务器都立即删除。测试待服务器释放句柄后清理自己的临时 fixture。
-成功或失败均退出自启服务，样本保存在系统临时目录的 `seal-e2e/transfer-stress/`。
-这里记录的 WASM 堆大小不是整个浏览器进程的工作集；不得把浏览器缓存或进程保留页当成仍存活的传输 Worker。
-
-## 前置代理与回环隔离
-
-`python scripts/test.py proxy` 启动独立的 mock HTTP CONNECT / SOCKS5、mock SSH、SealNode 和 Vite。
-覆盖无认证/用户名密码、代理侧域名解析、分片响应与 SSH banner 粘连、拒绝认证与目标、禁止回退直连、
-公共引用及直接填写凭据、终端/监控/SFTP/编辑器和跨块双向传输、旧会话快照及刷新持久化。
-代理 fixture 只允许连接本次 mock SSH，状态文件不记录密码；临时配对文件和所有自启进程在结束时清理。
-
-Windows 若已有开发实例占用 `127.0.0.1:17373`，可以使用独立回环地址，不必停止该实例：
-
-```powershell
-$env:SEAL_E2E_HOST = '127.0.0.2'
-python scripts/test.py
-```
-
-仅 `files`、`transfers`、`ssh`、`proxy` 的 PWA/Node 采用该地址；目标 fixture 仍在本机。入口会检查指定地址的端口。
-Vite 对 `127.0.0.2` 可能输出 `Network`，启动检测须同时接受 `Local` 和 `Network`。
-测试后确认自启地址的 8081/17373 均已释放，不终止原有 127.0.0.1 开发服务。
-
-自动保存的 UI 验收应等待状态提交或窗口实际关闭后刷新；验证遮罩关闭使用遮罩 locator 的点击，
-让 Playwright 等待元素稳定，不用绕过 actionability 的坐标点击冒充就绪状态。
-
-单独协议验证可运行 `python scripts/test.py node`，覆盖未认证拒绝、
-句柄隔离、目录分页、块大小与断开回收。Windows/macOS 的路径单元测试不替代相应 OS 实机验证。
-
-不要同时运行共享同一 checkout 的多个 Vite/browser 验证或修改 Worker：配置会复制 WASM 资源，
-HMR 可能干扰另一个测试中的活动会话。运行验证前完成源码修改，再按序执行。
+默认 `python scripts/test.py` 顺序执行全部检查。Python 只服务测试 fixture，由根目录 uv 环境管理；安装后的产品不依赖 Python、Node.js 或 Rust 工具链。setup 不安装 Rust/MSVC，应先准备这些开发依赖。使用已有浏览器缓存时可传 `--skip-browser`。
+
+## 三层边界
+
+- Vue 单测保留编码、目录、监测/进程策略、候选意图、保存快照、队列显示和退出保护。
+- 浏览器 harness 显式导入 `shell/tests/native-mock.ts`。模拟凭据不是加密实现，密码保护由真实 DPAPI 测试验收。禁止为测试在产品中增加 localhost RPC 网关。
+- Rust 测试使用真实本机文件和 AsyncSSH，验证初始 PTY 尺寸、exec、主机密钥、认证、文件往返、队列、取消、回滚、保留项以及转发 half-close。
+- `shell/tests/desktop-e2e.mjs` 编译调试应用，用随机 Vite/CDP 端口和独立 SQLite/WebView2 目录启动，直接驱动真实桌面页面。覆盖连接、文件传输、编辑保存、监测和关闭确认；截图、日志留在系统临时目录。
+- 发布安装包应另行验证内置资源和全新配置启动，开发服务器运行成功不能替代打包测试。未执行的 Win10 实机或另一台设备验收如实记录。
+
+## Mock SSH
+
+`mock-ssh-server.py` 提供密码认证、交互 PTY、采集 exec、SFTP v3、可选 direct-tcpip。
+所有文件操作通过 `MOCK_SFTP_ROOT` 限定在测试目录。
+
+- `MOCK_SSH_PASSWORD`：固定测试密码。
+- `MOCK_SSH_STATE_PATH`：连接、命令、初始/最新 PTY 尺寸等可观测计数。
+- `MOCK_SSH_REPORT_CWD=1`：普通 mock 上报目录。
+- `MOCK_SSH_FORWARDING=1`：允许 direct-tcpip。
+- `MOCK_SFTP_CONTROL_PATH`：测试控制 JSON，支持读写延迟、读取失败、最终 rename 失败、临时项删除失败。
+- `MOCK_SSH_BASH` / `MOCK_SSH_ZSH`：把实际 shell 接入测试；Git Bash/MSYS2 可在 Windows 使用。Bash 通过不能代替 zsh，mock 上报目录不能冒充实际 shell 验证。
+- `SEAL_PYTHON`：覆盖测试解释器路径。
+
+只在 fixture 注入失败，不为生产代码增加专用故障分支。临时项删除失败时必须验证准确保留路径，不能要求所有远端立即释放 Windows 文件锁。
+
+## 纪律
+
+1. 先完成源码修改，再运行共享该 checkout 的 Vite/浏览器测试；不要边验证边触发 HMR。
+2. 不终止占用端口的用户服务。浏览器套件使用 9324，桌面 runner 使用随机端口；日常开发默认 8080。
+3. 只清理本次启动的应用、Vite、SSH 和浏览器进程，等待它们退出。不要遗留占用端口的后台任务。
+4. 应用数据、WebView profile、远端目录与状态文件必须隔离，不能改动用户真实凭据和主机。
+5. Vite 扫描入口限定产品入口和编辑器；延迟依赖重新优化会刷新页面并破坏活动测试。测试模块不得被导入生产入口。
+6. 断言资源结果和实际远端数据：尺寸比较 shell 的初始尺寸；半关闭验证 FIN 后还能收到回复；取消/回滚验证旧目标；AI 保留逐案例的生成意图和输出行为。
+7. 桌面使用应用内关闭确认；浏览器 harness 的 beforeunload 仍应使用 Playwright dialog 处理。不可直接用原生 alert/confirm 代替产品交互。

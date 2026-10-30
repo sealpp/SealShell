@@ -4,7 +4,7 @@
 - Keep its documentation, designs, diagrams, and related project files inside that directory.
 - Use concise English Conventional Commits in the form `type(scope): summary`.
 - Commit and push them separately from their respective repository roots.
-- v0 does not persist tabs or layout; a page refresh closes active protocol streams. PWA product data, encrypted credentials, KnownHosts, and the device private key are kept in IndexedDB; Node keeps only its identity and paired device public keys in the OS trust store for automatic re-authentication.
+- v0 is a Windows 10/11 desktop application using Tauri 2, Vue, and a Rust runtime. Tabs and layout are not persisted. Rust owns SSH/SFTP, native files, transfers, forwarding, SQLite product data, and Windows DPAPI credentials. There is no separate Node gateway, pairing, Protobuf transport, or WASM SSH runtime. Python is only a development test-fixture dependency.
 
 ## Design sync
 
@@ -29,7 +29,7 @@ Do not duplicate the detailed caveats here; update the skill directly. This sect
 
 ### Dev server cleanup
 
-After finishing local testing or browser validation, kill the PWA Vite dev server (`npm run dev`, usually on `127.0.0.1:8080`) and the SealNode Python process (`./.venv/bin/python -m seal.main`, usually on `127.0.0.1:17373`) unless the user explicitly asks to keep them running. This avoids keeping ports 8080/17373 occupied when the user wants to start their own manual tests.
+After testing, stop the Vite, Tauri/WebView2, and mock-server processes started by this task unless the user explicitly asks to keep them running. Do not stop unrelated services on occupied ports. Desktop E2E uses its own ports and temporary data directories.
 
 ## Engineering Docs Index
 

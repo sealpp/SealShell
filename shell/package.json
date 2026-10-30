@@ -7,15 +7,13 @@
     "desktop": "tauri dev",
     "desktop:build": "tauri build",
     "dev": "vite --port 8080 --host 127.0.0.1",
-    "dev:lan": "vite --port 18080 --host 0.0.0.0",
     "build": "vue-tsc --noEmit && vite build",
     "generate:icons": "node scripts/generate-app-icons.mjs",
     "preview": "vite preview --host 0.0.0.0",
-    "preview:lan": "vite preview --port 18080 --host 0.0.0.0",
-    "gen:proto": "uv run --directory ../node --locked --extra dev python scripts/generate_proto.py --typescript-only",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:unit": "vitest run --config vitest.config.ts"
+    "test:unit": "vitest run --config vitest.config.ts",
+    "test:desktop": "node tests/desktop-e2e.mjs"
   },
   "dependencies": {
     "@tabler/icons-vue": "3.45.0",

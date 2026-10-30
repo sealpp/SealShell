@@ -28,13 +28,13 @@ async fn native_ssh_sftp_transfers_and_forwarding() {
         .to_owned();
     let python = std::env::var("SEAL_PYTHON")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| root.join("node/.venv/Scripts/python.exe"));
+        .unwrap_or_else(|_| root.join(".venv/Scripts/python.exe"));
     let directory = tempfile::tempdir().unwrap();
     let remote = directory.path().join("remote");
     std::fs::create_dir(&remote).unwrap();
     let control = directory.path().join("control.json");
     std::fs::write(&control, b"{}").unwrap();
-    let mut child = Command::new(python)
+    let mut child = Command::new(&python)
         .arg(root.join(".agents/skills/seal-e2e/mock-ssh-server.py"))
         .env("MOCK_SFTP_ROOT", &remote)
         .env("MOCK_SFTP_CONTROL_PATH", &control)
@@ -95,6 +95,58 @@ async fn native_ssh_sftp_transfers_and_forwarding() {
     });
     let connection =
         json!({"host":"127.0.0.1","port":port,"username":"fixture","password":"fixture-password"});
+    let mut proxy_child = Command::new(&python)
+        .arg(root.join(".agents/skills/seal-e2e/mock-proxy-server.py"))
+        .env("MOCK_PROXY_TARGET_PORT", port.to_string())
+        .env(
+            "MOCK_PROXY_STATE_PATH",
+            directory.path().join("proxy-state.json"),
+        )
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .unwrap();
+    let mut proxy_line = String::new();
+    BufReader::new(proxy_child.stdout.take().unwrap())
+        .read_line(&mut proxy_line)
+        .unwrap();
+    let _proxy_fixture = Fixture(proxy_child);
+    let ports: Value =
+        serde_json::from_str(proxy_line.trim().strip_prefix("MOCK_PROXY_PORTS=").unwrap()).unwrap();
+    for protocol in ["http", "socks5"] {
+        for authentication in ["none", "password"] {
+            let id = format!("proxy-{protocol}-{authentication}");
+            let mut options = connection.clone();
+            options["host"] = json!("internal.proxy.test");
+            options["proxy"] = json!({"type":protocol,"host":"127.0.0.1","port":ports[protocol],"authentication":authentication,"username":"proxy-user","password":"proxy-pass"});
+            runtime
+                .call("ssh_connect", json!({"id":id,"connection":options}))
+                .await
+                .unwrap();
+            let output = runtime
+                .call("ssh_exec", json!({"id":id,"command":"printf exec-ok"}))
+                .await
+                .unwrap();
+            assert_eq!(output["exitCode"], 0);
+            runtime.call("ssh_close", json!({"id":id})).await.unwrap();
+            runtime
+                .call(
+                    "file_connect",
+                    json!({"id":id,"endpoint":{"kind":"sftp","connection":options}}),
+                )
+                .await
+                .unwrap();
+            let entry = runtime
+                .call(
+                    "file_call",
+                    json!({"id":id,"method":"stat","path":"/README.md"}),
+                )
+                .await
+                .unwrap();
+            assert_eq!(entry["kind"], "file");
+            runtime.call("file_close", json!({"id":id})).await.unwrap();
+        }
+    }
     tokio::time::timeout(
         Duration::from_secs(15),
         runtime.call(
@@ -210,6 +262,22 @@ async fn native_ssh_sftp_transfers_and_forwarding() {
         std::fs::write(&pending, serde_json::to_vec(&value).unwrap()).unwrap();
         std::fs::rename(pending, &control).unwrap();
     };
+    runtime
+        .call(
+            "file_call",
+            json!({"id":"remote","method":"mkdir","path":"/remote-copy"}),
+        )
+        .await
+        .unwrap();
+    runtime.call("transfer_enqueue",json!({"id":"remote-copy","label":"remote-copy","sourceId":"remote","targetId":"remote","paths":["/large.bin"],"directory":"/remote-copy"})).await.unwrap();
+    runtime
+        .call("transfer_wait", json!({"id":"remote-copy"}))
+        .await
+        .unwrap();
+    assert_eq!(
+        std::fs::read(remote.join("remote-copy/large.bin")).unwrap(),
+        data
+    );
     set_control(json!({"failRead":true}));
     std::fs::write(destination.join("large.bin"), b"preserve original").unwrap();
     runtime.call("transfer_enqueue",json!({"id":"failed-read","label":"failed-read","sourceId":"remote","targetId":"local","paths":["/large.bin"],"directory":destination})).await.unwrap();
@@ -379,6 +447,19 @@ async fn native_ssh_sftp_transfers_and_forwarding() {
         .unwrap_err();
     assert_eq!(failure.code, "HOST_KEY_MISMATCH");
     runtime.close_all();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let state = std::fs::read(directory.path().join("state.json"))
+                .ok()
+                .and_then(|b| serde_json::from_slice::<Value>(&b).ok());
+            if state.is_some_and(|s| s["active_connections"] == 0 && s["sftp_active"] == 0) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(30)).await;
+        }
+    })
+    .await
+    .expect("all SSH connections and SFTP handles must be released before fixture shutdown");
     event_task.abort();
     let _ = event_task.await;
 }

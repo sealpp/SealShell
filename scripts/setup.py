@@ -1,37 +1,24 @@
-"""Install locked development dependencies and generate protocol bindings."""
-
+"""Install frontend and Python test-fixture dependencies; Rust/MSVC are prerequisites."""
 import argparse
 import os
-from pathlib import Path
 import shutil
-import subprocess
+from _tools import ROOT, SHELL, cargo, environment, npm, run
 
-ROOT = Path(__file__).resolve().parents[1]
-
-
-def run(command: list[str], cwd: Path, env=None) -> None:
-    print(f"> {' '.join(command)}", flush=True)
-    subprocess.run(command, cwd=cwd, env=env, check=True)
-
-
-def main() -> None:
+def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--skip-browser", action="store_true", help="Use an installed Chrome/Edge for E2E")
+    parser.add_argument("--skip-browser", action="store_true")
     options = parser.parse_args()
-    for tool in ("uv", "node", "npm.cmd" if os.name == "nt" else "npm"):
-        if not shutil.which(tool):
-            parser.error(f"Install {tool} and add it to PATH first (Node.js >=22, Python >=3.11).")
-    run(["uv", "sync", "--locked", "--extra", "dev"], ROOT / "node")
-    run(["npm.cmd" if os.name == "nt" else "npm", "ci", "--no-audit", "--no-fund"], ROOT / "shell")
-    python = ROOT / "node/.venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-    run([str(python), "scripts/generate_proto.py", "--typescript"], ROOT / "node")
+    cargo()
+    if not shutil.which("uv"):
+        parser.error("Install uv and add it to PATH first.")
+    run(["uv", "sync", "--locked"])
+    run(npm("ci", "--no-audit", "--no-fund"), SHELL)
     if not options.skip_browser:
-        env = os.environ.copy()
+        env = environment()
         env.setdefault("PLAYWRIGHT_DOWNLOAD_HOST", "https://registry.npmmirror.com/-/binary/playwright")
         env["PLAYWRIGHT_SKIP_BROWSER_GC"] = "1"
-        run(["node", "node_modules/playwright/cli.js", "install", "chromium"], ROOT / "shell", env)
-    print("Ready. Run: python scripts/dev.py", flush=True)
-
+        run(["node", "node_modules/playwright/cli.js", "install", "chromium"], SHELL, env)
+    print("Ready. Run: python scripts/dev.py")
 
 if __name__ == "__main__":
     main()

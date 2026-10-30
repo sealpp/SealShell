@@ -34,8 +34,9 @@ function start(name, executable, args, env = {}) {
   const child = spawn(executable, args, { cwd: shell, windowsHide: true, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] })
   processes.push(child)
   const log = createWriteStream(join(artifacts, `${name}.log`))
-  child.stdout.pipe(log); child.stderr.pipe(log)
+  child.stdout.pipe(log, { end: false }); child.stderr.pipe(log, { end: false })
   child.on('error', error => errors.push(`${name}: ${error.message}`))
+  child.on('close', (code, signal) => { log.end(`\nProcess exited: ${code}, signal: ${signal}\n`) })
   return child
 }
 try {
@@ -51,8 +52,10 @@ try {
   const payload = '桌面传输 smoke test\n'.repeat(16000)
   await writeFile(join(local, 'sample.txt'), payload)
   let output = ''
-  const ssh = start('ssh', process.env.SEAL_PYTHON ?? join(root, 'node/.venv/Scripts/python.exe'), [join(root, '.agents/skills/seal-e2e/mock-ssh-server.py')], {
+  const ssh = start('ssh', process.env.SEAL_PYTHON ?? join(root, '.venv/Scripts/python.exe'), [join(root, '.agents/skills/seal-e2e/mock-ssh-server.py')], {
     PYTHONIOENCODING: 'utf-8', MOCK_SFTP_ROOT: remote, MOCK_SSH_PASSWORD: 'fixture-password', MOCK_SSH_REPORT_CWD: '1', MOCK_SSH_STATE_PATH: join(artifacts, 'ssh-state.json'),
+    ...(process.env.SEAL_E2E_BASH ? { MOCK_SSH_BASH: process.env.SEAL_E2E_BASH } : {}),
+    ...(process.env.SEAL_E2E_ZSH ? { MOCK_SSH_ZSH: process.env.SEAL_E2E_ZSH } : {}),
   })
   ssh.stdout.on('data', data => { output += data })
   const port = Number(await until(() => /MOCK_SSH_PORT=(\d+)/.exec(output)?.[1]))
@@ -79,6 +82,25 @@ try {
   await page.getByText('Desktop fixture', { exact: true }).dblclick()
   await page.locator('#host-key-accept').click()
   await page.waitForFunction(() => window.desktopFixture.store.tabs.some(tab => tab.kind === 'terminal' && tab.state === 'online'))
+  if (process.env.SEAL_E2E_BASH || process.env.SEAL_E2E_ZSH) {
+    const directory = join(remote, "目录 a'b;$(touch sentinel) %20")
+    await mkdir(directory)
+    const cwd = directory.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, drive) => `/${drive.toLowerCase()}`)
+    await page.evaluate(async cwd => {
+      const { store } = window.desktopFixture
+      const { sendInput } = await import('/src/services/ssh.ts')
+      const quote = value => `'${value.replace(/'/g, "'\\''")}'`
+      await sendInput(store.tabs.find(tab => tab.kind === 'terminal').sessionId, new TextEncoder().encode(`cd -- ${quote(cwd)}\npwd\n`))
+    }, cwd)
+    await page.waitForFunction(cwd => window.desktopFixture.store.tabs.find(tab => tab.kind === 'terminal')?.cwd === cwd, cwd)
+    const copied = await page.evaluate(cwd => {
+      const { store, ws } = window.desktopFixture
+      return ws.addTab(store.hosts[0], 'fixture-password', undefined, { initialCwd: cwd }).id
+    }, cwd)
+    await page.waitForFunction(({ copied, cwd }) => window.desktopFixture.store.tabs.find(tab => tab.id === copied)?.cwd === cwd, { copied, cwd })
+    await page.evaluate(copied => window.desktopFixture.ws.closeTabs([copied]), copied)
+    expect(await readFile(join(artifacts, 'ssh-state.json'), 'utf8')).toContain('shell_cwds')
+  }
   await page.evaluate(async () => {
     const { store, ws } = window.desktopFixture
     const terminal = store.tabs.find(tab => tab.kind === 'terminal')
@@ -118,6 +140,19 @@ try {
   await expect(page.getByRole('dialog', { name: '关闭 SealShell' })).toBeVisible()
   await page.getByRole('button', { name: '取消', exact: true }).click()
   await expect(page.locator('.global-error')).toHaveCount(0)
+  await page.reload()
+  await expect(page.locator('.welcome')).toBeVisible()
+  await expect(page.getByText('Desktop fixture', { exact: true })).toBeVisible()
+  const persisted = await page.evaluate(async () => {
+    const { store } = await import('/src/stores/app.ts')
+    const { readCredential } = await import('/src/services/storage.ts')
+    const { loadCredentialRecord } = await import('/src/services/vault.ts')
+    const { transferRuntime } = await import('/src/services/sftp/transfer-runtime.ts')
+    return { tabs: store.tabs.length, tasks: transferRuntime.tasks.length, record: await readCredential('desktop-fixture'), credential: await loadCredentialRecord('desktop-fixture') }
+  })
+  expect(persisted.tabs).toBe(0); expect(persisted.tasks).toBe(0)
+  expect(JSON.stringify(persisted.record)).not.toContain('fixture-password')
+  expect(persisted.credential.password).toBe('fixture-password')
   expect(errors).toEqual([])
   console.log(`Desktop E2E passed. Artifacts: ${artifacts}`)
 } catch (error) {

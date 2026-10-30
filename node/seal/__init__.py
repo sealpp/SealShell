@@ -1,1 +1,0 @@
-"""SealShell local node."""

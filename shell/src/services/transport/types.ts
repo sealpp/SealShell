@@ -8,14 +8,6 @@ export interface ProxyDefinition extends TcpTarget {
 
 export interface ProxyConnection extends ProxyDefinition { password?: string }
 
-export interface ByteTransport {
-  onData(handler: (payload: Uint8Array) => void): void
-  connect(host: string, port: number): Promise<void>
-  send(payload: Uint8Array): Promise<void>
-  waitForData(timeoutMs?: number): Promise<void>
-  close(reason?: string): Promise<void>
-}
-
 export type ProxyStage = 'connect' | 'authenticate' | 'target'
 
 export class ProxyError extends Error {

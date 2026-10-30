@@ -1,6 +1,0 @@
-{
-  "libssh2": { "version": "1.11.1", "sha256": "d9ec76cbe34db98eec3539fe2c899d26b0c837cb3eb466a56b0f109cabf658f7" },
-  "openssl": { "version": "3.5.2", "sha256": "c53a47e5e441c930c3928cf7bf6fb00e5d129b630e0aa873b08258656e7345ec" },
-  "zlib": { "version": "1.3.1", "sha256": "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23" },
-  "wasmSha256": "84865009d568e3233a4037d2fcdb96c83a3cbda44fe2a124e36214e4a11565e5"
-}

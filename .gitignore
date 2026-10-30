@@ -9,28 +9,19 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 
-# Node / PWA
+# Frontend
 node_modules/
 shell/dist/
 shell/.vite/
 shell/playwright-report/
 shell/test-results/
 
-# Generated protobuf artifacts
-node/seal/seal_pb2.py
-node/seal/seal_pb2_grpc.py
-shell/src/native/proto/
-
 # Runtime state and data
-node/data/
-node/seal-trust.json
 *.db
 *.enc
-
-# PWA runtime WASM assets copied from npm dependencies
-shell/public/libssh2.wasm
-shell/public/sshclient.wasm
-shell/public/wasm_exec.js
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
 
 # IDE
 /target/
