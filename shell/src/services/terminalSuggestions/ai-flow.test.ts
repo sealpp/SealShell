@@ -18,6 +18,16 @@ const create = () => {
 }
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
 
+it.each(['http://127.0.0.1:11434/v1', 'https://model.example/v1'])('requests the configured API endpoint: %s', async baseUrl => {
+  const fetch = vi.fn(async () => response(['mkdir build']))
+  vi.mocked(requestAI).mockImplementation(fetch)
+  const signal = new AbortController().signal
+  const suggestions = await generateRecommendations({ query: 'mkdir build', cwd: '/work', history: [] }, facts,
+    { ...settings, baseUrl }, 'synthetic-key', signal)
+  expect(fetch).toHaveBeenCalledWith(`${baseUrl}/chat/completions`, expect.objectContaining({ model: settings.model }), 'synthetic-key', signal)
+  expect(suggestions).toMatchObject([{ command: "mkdir '/work/build'", source: 'ai' }])
+})
+
 it('sends unfiltered nearby facts to the model without prior ls and validates the generated target', async () => {
   const fetch = vi.fn(async (_url: unknown, _body?: unknown) => response(['ls /work/codes/demo_linux', 'cd codes/demo_linux', 'cd /unverified']))
   vi.mocked(requestAI).mockImplementation(fetch)
