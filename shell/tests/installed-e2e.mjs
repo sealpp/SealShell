@@ -1,7 +1,7 @@
 import { chromium, expect } from '@playwright/test'
 import { spawn, execFileSync } from 'node:child_process'
 import { existsSync, createWriteStream } from 'node:fs'
-import { mkdtemp, mkdir, readFile, rename } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, resolve, dirname } from 'node:path'
@@ -52,6 +52,7 @@ try {
   browser = await chromium.connectOverCDP(`http://127.0.0.1:${debugPort}`)
   page = await until(() => browser.contexts().flatMap(context => context.pages()).find(page => page.url().includes('tauri.localhost')))
   page.on('pageerror', error => errors.push(error.message))
+  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
   await expect(page.locator('.welcome')).toBeVisible()
   await expect(page.locator('.global-error')).toHaveCount(0)
   await page.evaluate(async port => {
@@ -71,6 +72,20 @@ try {
   await page.keyboard.type('echo smoke-ok')
   await page.keyboard.press('Enter')
   await expect(page.locator('.xterm-rows')).toContainText('smoke-ok')
+  const note = join(artifacts, 'installed-note.txt')
+  await writeFile(note, 'installed local file\n')
+  await page.getByRole('button', { name: '文件管理', exact: true }).click()
+  await page.getByRole('button', { name: '新建本地窗口并分栏', exact: true }).click()
+  await page.getByRole('textbox', { name: '本地路径', exact: true }).fill(artifacts)
+  await page.getByRole('textbox', { name: '本地路径', exact: true }).press('Enter')
+  await page.getByRole('gridcell', { name: 'installed-note.txt', exact: true }).dblclick()
+  await expect(page.locator('.monaco-editor .view-lines')).toContainText('installed local file')
+  await page.locator('.monaco-editor .view-lines').click()
+  await page.keyboard.press('Control+A')
+  await page.keyboard.insertText('packaged editor verified')
+  await expect(page.locator('.monaco-editor .view-lines')).toContainText('packaged editor verified')
+  await page.keyboard.press('Control+S')
+  await until(async () => (await readFile(note, 'utf8')) === 'packaged editor verified')
   await page.screenshot({ path: join(artifacts, 'installed.png') })
   expect(errors).toEqual([])
   await page.evaluate(() => window.__TAURI_INTERNALS__.invoke('plugin:window|close', { label: 'main' }))
