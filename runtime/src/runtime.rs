@@ -72,6 +72,10 @@ impl Runtime {
         self.ssh.close_all();
         self.http.close_all();
     }
+    pub fn reset_page(&self) {
+        self.close_all();
+        self.transfers.reset_page();
+    }
     pub async fn call(&self, operation: &str, args: Value) -> Result<Value> {
         match operation {
             "proxy_test" => {

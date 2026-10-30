@@ -2,7 +2,7 @@ use crate::{
     Events,
     error::{Error, Result},
     proxy::{self, Proxy},
-    storage::{Store, Write},
+    storage::Store,
 };
 use base64::Engine;
 use russh::{Channel, ChannelMsg, client};
@@ -73,14 +73,10 @@ impl client::Handler for Verifier {
         let accepted = tokio::select! { _ = self.cancel.cancelled() => false, answer = receive => answer.unwrap_or(false) };
         self.approvals.lock().unwrap().remove(&request_id);
         if accepted {
-            // Concurrent prompts may race with another accepted connection. A
-            // changed key must never overwrite one accepted in the meantime.
-            if let Some(known) = self.store.get("knownHosts", &record_id)?
-                && known["publicKey"] != key
-            {
-                return Err(Error::new("HOST_KEY_MISMATCH", "主机指纹已改变"));
-            }
-            self.store.write(vec![Write { collection:"knownHosts".into(), key:record_id.clone(), value:Some(json!({"id":record_id,"host":self.host,"port":self.port,"publicKey":key,"fingerprint":fingerprint})) }], None)?;
+            // Trust is checked and inserted in one transaction, including when
+            // two first-use prompts were accepted concurrently.
+            self.store
+                .trust_host(&self.host, self.port, &key, &fingerprint)?;
         }
         Ok(accepted)
     }

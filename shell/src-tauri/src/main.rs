@@ -17,8 +17,9 @@ fn main() {
     tauri::Builder::default()
         .on_page_load(|webview, payload| {
             if payload.event() == tauri::webview::PageLoadEvent::Started
-                && let Some(runtime) = webview.app_handle().try_state::<Runtime>() {
-                runtime.close_all();
+                && let Some(runtime) = webview.app_handle().try_state::<Runtime>()
+            {
+                runtime.reset_page();
             }
         })
         .setup(|app| {

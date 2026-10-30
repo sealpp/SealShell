@@ -144,6 +144,16 @@ impl Transfers {
     }
     fn emit(&self, task: &Task) {
         let snapshot = task.snapshot.lock().unwrap().clone();
+        if !self
+            .queue
+            .lock()
+            .unwrap()
+            .tasks
+            .iter()
+            .any(|task| task.snapshot.lock().unwrap().id == snapshot.id)
+        {
+            return;
+        }
         (self.events)(json!({"type":"transfer","task":snapshot}));
     }
     pub async fn wait(&self, id: &str) -> Result<TransferResult> {
@@ -239,6 +249,20 @@ impl Transfers {
             task.cancel.lock().unwrap().cancel();
         }
         self.decisions.lock().unwrap().clear();
+    }
+    pub fn reset_page(&self) {
+        let mut queue = self.queue.lock().unwrap();
+        for task in &queue.tasks {
+            task.cancel.lock().unwrap().cancel();
+            let mut snapshot = task.snapshot.lock().unwrap();
+            if snapshot.state == "queued" {
+                snapshot.state = "cancelled".into();
+                task.done.notify_waiters();
+            }
+        }
+        // Running jobs retain their own Arc until cleanup finishes. The shared
+        // running count still limits new work, but stale UI records cannot return.
+        queue.tasks.clear();
     }
     fn pump(self: &Arc<Self>) {
         let mut queue = self.queue.lock().unwrap();
@@ -755,6 +779,105 @@ pub async fn write_atomic(backend: &Backend, path: &str, data: &[u8]) -> Result<
 mod tests {
     use super::*;
     use crate::{ssh::SshService, storage::Store};
+    #[cfg(windows)]
+    fn private_bytes() -> usize {
+        use windows_sys::Win32::System::{
+            ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS_EX},
+            Threading::GetCurrentProcess,
+        };
+        let mut memory: PROCESS_MEMORY_COUNTERS_EX = unsafe { std::mem::zeroed() };
+        memory.cb = std::mem::size_of_val(&memory) as u32;
+        assert_ne!(
+            unsafe {
+                GetProcessMemoryInfo(GetCurrentProcess(), &mut memory as *mut _ as _, memory.cb)
+            },
+            0
+        );
+        memory.PrivateUsage
+    }
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn a_large_transfer_keeps_memory_bounded_and_rejects_recursive_destinations() {
+        use std::io::{Read, Write};
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("large.bin");
+        let target = dir.path().join("target");
+        std::fs::create_dir(&target).unwrap();
+        let chunk = vec![42; CHUNK];
+        let mut file = std::fs::File::create(&source).unwrap();
+        for _ in 0..512 {
+            file.write_all(&chunk).unwrap();
+        }
+        drop(file);
+        let files = Arc::new(FileService::new(Arc::new(SshService::new(Arc::new(
+            Store::open(&dir.path().join("state.sqlite")).unwrap(),
+        )))));
+        let peak = Arc::new(AtomicUsize::new(private_bytes()));
+        let sample = peak.clone();
+        let before = private_bytes();
+        let transfers = Transfers::new(
+            files,
+            Arc::new(move |_| {
+                sample.fetch_max(private_bytes(), Ordering::Relaxed);
+            }),
+        );
+        transfers
+            .enqueue(
+                "large".into(),
+                "128 MiB".into(),
+                Spec {
+                    source: Endpoint::Local,
+                    target: Endpoint::Local,
+                    paths: vec![source.to_string_lossy().into()],
+                    directory: target.to_string_lossy().into(),
+                    move_files: false,
+                },
+            )
+            .unwrap();
+        let result = transfers.wait("large").await.unwrap();
+        assert_eq!(result.bytes, 128 * 1024 * 1024);
+        let delta = peak.load(Ordering::Relaxed).saturating_sub(before);
+        eprintln!("128 MiB streaming copy: peak private-memory increase {delta} bytes");
+        assert!(
+            delta < 64 * 1024 * 1024,
+            "128 MiB copy grew private memory by {delta} bytes"
+        );
+        let mut file = std::fs::File::open(target.join("large.bin")).unwrap();
+        let mut buffer = vec![0; CHUNK];
+        let mut count = 0;
+        loop {
+            let read = file.read(&mut buffer).unwrap();
+            if read == 0 {
+                break;
+            }
+            assert!(buffer[..read].iter().all(|&value| value == 42));
+            count += read;
+        }
+        assert_eq!(count, 128 * 1024 * 1024);
+        transfers
+            .enqueue(
+                "recursive".into(),
+                "invalid".into(),
+                Spec {
+                    source: Endpoint::Local,
+                    target: Endpoint::Local,
+                    paths: vec![target.to_string_lossy().into()],
+                    directory: target.to_string_lossy().into(),
+                    move_files: false,
+                },
+            )
+            .unwrap();
+        assert!(
+            transfers
+                .wait("recursive")
+                .await
+                .err()
+                .unwrap()
+                .message
+                .contains("不能向自身")
+        );
+    }
     #[tokio::test]
     async fn directory_replacement_is_whole_and_same_path_copy_gets_new_name() {
         let dir = tempfile::tempdir().unwrap();

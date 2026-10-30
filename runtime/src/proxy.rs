@@ -254,6 +254,147 @@ mod tests {
     use tokio::net::TcpListener;
 
     #[tokio::test]
+    async fn socks5_authentication_remote_dns_and_coalesced_banner() {
+        for authenticated in [false, true] {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let server = tokio::spawn(async move {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut greeting = [0; 3];
+                socket.read_exact(&mut greeting).await.unwrap();
+                let method = if authenticated { 2 } else { 0 };
+                assert_eq!(greeting, [5, 1, method]);
+                socket.write_all(&[5]).await.unwrap();
+                socket.write_all(&[method]).await.unwrap();
+                if authenticated {
+                    assert_eq!(socket.read_u8().await.unwrap(), 1);
+                    let count = socket.read_u8().await.unwrap();
+                    let mut user = vec![0; count as usize];
+                    socket.read_exact(&mut user).await.unwrap();
+                    let count = socket.read_u8().await.unwrap();
+                    let mut password = vec![0; count as usize];
+                    socket.read_exact(&mut password).await.unwrap();
+                    assert_eq!(user, b"alice");
+                    assert_eq!(password, "密碼".as_bytes());
+                    socket.write_all(&[1, 0]).await.unwrap();
+                }
+                let mut header = [0; 4];
+                socket.read_exact(&mut header).await.unwrap();
+                assert_eq!(header, [5, 1, 0, 3]);
+                let count = socket.read_u8().await.unwrap();
+                let mut host = vec![0; count as usize];
+                socket.read_exact(&mut host).await.unwrap();
+                assert_eq!(host, b"proxy-only.invalid");
+                assert_eq!(socket.read_u16().await.unwrap(), 2222);
+                socket.write_all(&[5, 0, 0, 4]).await.unwrap();
+                let mut suffix = vec![0; 18];
+                suffix.extend_from_slice(b"SSH-2.0-fixture\r\n");
+                socket.write_all(&suffix).await.unwrap();
+            });
+            let proxy = Proxy {
+                kind: "socks5".into(),
+                host: "127.0.0.1".into(),
+                port,
+                authentication: if authenticated { "password" } else { "none" }.into(),
+                username: "alice".into(),
+                password: Some("密碼".into()),
+            };
+            let mut stream = connect(
+                "proxy-only.invalid",
+                2222,
+                Some(&proxy),
+                &CancellationToken::new(),
+            )
+            .await
+            .unwrap();
+            let mut banner = Vec::new();
+            stream.read_to_end(&mut banner).await.unwrap();
+            assert_eq!(banner, b"SSH-2.0-fixture\r\n");
+            server.await.unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn proxy_rejection_never_falls_back_to_a_reachable_direct_target() {
+        let target = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        for status in [407, 503] {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let server = tokio::spawn(async move {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut header = Vec::new();
+                while !header.ends_with(b"\r\n\r\n") {
+                    header.push(socket.read_u8().await.unwrap());
+                }
+                let request = String::from_utf8(header).unwrap();
+                assert!(request.contains("Proxy-Authorization: Basic YWxpY2U6c2VjcmV0"));
+                socket
+                    .write_all(format!("HTTP/1.1 {status} Denied\r\n\r\n").as_bytes())
+                    .await
+                    .unwrap();
+            });
+            let proxy = Proxy {
+                kind: "http".into(),
+                host: "127.0.0.1".into(),
+                port,
+                authentication: "password".into(),
+                username: "alice".into(),
+                password: Some("secret".into()),
+            };
+            let error = connect(
+                "127.0.0.1",
+                target.local_addr().unwrap().port(),
+                Some(&proxy),
+                &CancellationToken::new(),
+            )
+            .await
+            .err()
+            .unwrap();
+            assert_eq!(error.code, "PROXY_ERROR");
+            assert!(error.message.contains(if status == 407 {
+                "认证"
+            } else {
+                "目标连接"
+            }));
+            server.await.unwrap();
+            assert!(
+                tokio::time::timeout(Duration::from_millis(100), target.accept())
+                    .await
+                    .is_err()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_stalled_proxy_handshake_can_be_cancelled() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let proxy = Proxy {
+            kind: "socks5".into(),
+            host: "127.0.0.1".into(),
+            port,
+            authentication: "none".into(),
+            username: String::new(),
+            password: None,
+        };
+        let cancel = CancellationToken::new();
+        let task_cancel = cancel.clone();
+        let pending =
+            tokio::spawn(async move { connect("internal", 22, Some(&proxy), &task_cancel).await });
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut greeting = [0; 3];
+        socket.read_exact(&mut greeting).await.unwrap();
+        cancel.cancel();
+        let error = tokio::time::timeout(Duration::from_secs(1), pending)
+            .await
+            .unwrap()
+            .unwrap()
+            .err()
+            .unwrap();
+        assert_eq!(error.code, "cancelled");
+    }
+
+    #[tokio::test]
     async fn connect_preserves_banner_coalesced_with_fragmented_http_response() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();

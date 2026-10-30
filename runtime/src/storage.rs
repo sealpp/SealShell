@@ -95,6 +95,39 @@ impl Store {
         })
     }
 
+    pub fn trust_host(
+        &self,
+        host: &str,
+        port: u16,
+        public_key: &str,
+        fingerprint: &str,
+    ) -> Result<()> {
+        let id = format!("{host}\0{port}");
+        let mut connection = self.0.lock().unwrap();
+        let transaction = connection.transaction()?;
+        let previous: Option<String> = transaction
+            .query_row(
+                "SELECT value FROM records WHERE collection='knownHosts' AND key=?1",
+                [&id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if let Some(previous) = previous {
+            let record: Value = serde_json::from_str(&previous)?;
+            if record["publicKey"] != public_key {
+                return Err(Error::new("HOST_KEY_MISMATCH", "主机指纹已改变"));
+            }
+        } else {
+            let record = serde_json::json!({"id":id,"host":host,"port":port,"publicKey":public_key,"fingerprint":fingerprint});
+            transaction.execute(
+                "INSERT INTO records VALUES ('knownHosts',?1,?2)",
+                params![id, record.to_string()],
+            )?;
+        }
+        transaction.commit()?;
+        Ok(())
+    }
+
     pub fn unprotect(record: Credential) -> Result<Value> {
         use base64::Engine;
         let bytes = base64::engine::general_purpose::STANDARD
@@ -168,6 +201,25 @@ fn protect_bytes(_: &[u8], _: &[u8], _: bool) -> Result<Vec<u8>> {
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn a_late_host_key_approval_cannot_replace_an_already_trusted_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(&dir.path().join("test.sqlite")).unwrap();
+        store
+            .trust_host("host", 22, "first", "fingerprint")
+            .unwrap();
+        assert_eq!(
+            store
+                .trust_host("host", 22, "second", "other")
+                .unwrap_err()
+                .code,
+            "HOST_KEY_MISMATCH"
+        );
+        assert_eq!(
+            store.get("knownHosts", "host\x0022").unwrap().unwrap()["publicKey"],
+            "first"
+        );
+    }
     #[test]
     fn host_deletion_prevents_background_settings_resurrection() {
         let dir = tempfile::tempdir().unwrap();
