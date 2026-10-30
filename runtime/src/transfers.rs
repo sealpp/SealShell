@@ -209,7 +209,6 @@ impl Transfers {
         snapshot.progress = 0.;
         snapshot.error = None;
         snapshot.result = None;
-        snapshot.orphan_path = None;
         snapshot.proxy_source = None;
         *task.cancel.lock().unwrap() = CancellationToken::new();
         drop(snapshot);
@@ -267,7 +266,9 @@ impl Transfers {
                         Ok(result) => {
                             snapshot.state = "completed".into();
                             snapshot.progress = 1.;
-                            snapshot.orphan_path = result.orphan_path.clone();
+                            if result.orphan_path.is_some() {
+                                snapshot.orphan_path = result.orphan_path.clone();
+                            }
                             snapshot.result = Some(result);
                         }
                         Err(error) => {
@@ -278,7 +279,9 @@ impl Transfers {
                             }
                             .into();
                             snapshot.error = Some(error.message);
-                            snapshot.orphan_path = error.orphan_path;
+                            if error.orphan_path.is_some() {
+                                snapshot.orphan_path = error.orphan_path;
+                            }
                             if error.code == "PROXY_ERROR" {
                                 snapshot.proxy_source = match &task.spec.target {
                                     Endpoint::Sftp { connection } => {
@@ -462,7 +465,7 @@ impl Transfers {
             result = if task.spec.move_files {
                 move_entry(target, path, &destination).await?
             } else {
-                self.copy_entry(source, target, path, &destination, &item, cancel, &progress)
+                self.copy_entry(source, target, &destination, &item, cancel, &progress)
                     .await?
             };
             progress(1, 1);
@@ -473,12 +476,12 @@ impl Transfers {
         &self,
         source: &Backend,
         target: &Backend,
-        path: &str,
         destination: &str,
         item: &Entry,
         cancel: &CancellationToken,
         progress: &(dyn Fn(u64, u64) + Sync),
     ) -> Result<TransferResult> {
+        let path = item.path.as_str();
         let temporary = target.temporary(destination, "tmp")?;
         let copying = copy_tree(source, target, path, &temporary, item, progress);
         let copied =
@@ -608,10 +611,11 @@ async fn copy_tree(
                 return Err(Error::new("size_mismatch", "传输文件大小校验失败"));
             }
             let mut metadata = true;
-            if let Some(mode) = item.mode {
-                if !target.local() && target.chmod(destination, mode).await.is_err() {
-                    metadata = false;
-                }
+            if let Some(mode) = item.mode
+                && !target.local()
+                && target.chmod(destination, mode).await.is_err()
+            {
+                metadata = false;
             }
             if target.utimes(destination, item.modified_at).await.is_err() {
                 metadata = false;
@@ -719,10 +723,11 @@ pub async fn write_atomic(backend: &Backend, path: &str, data: &[u8]) -> Result<
         file.close().await?;
         drop(file);
         let mut metadata = true;
-        if let Some(mode) = previous.and_then(|entry| entry.mode) {
-            if !backend.local() && backend.chmod(&temporary, mode).await.is_err() {
-                metadata = false;
-            }
+        if let Some(mode) = previous.and_then(|entry| entry.mode)
+            && !backend.local()
+            && backend.chmod(&temporary, mode).await.is_err()
+        {
+            metadata = false;
         }
         let (atomic, orphan_path) = commit(backend, &temporary, path).await?;
         Ok::<_, Error>(TransferResult {

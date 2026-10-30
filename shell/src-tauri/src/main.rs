@@ -15,6 +15,12 @@ async fn native_call(
 
 fn main() {
     tauri::Builder::default()
+        .on_page_load(|webview, payload| {
+            if payload.event() == tauri::webview::PageLoadEvent::Started
+                && let Some(runtime) = webview.app_handle().try_state::<Runtime>() {
+                runtime.close_all();
+            }
+        })
         .setup(|app| {
             let directory = if cfg!(debug_assertions) {
                 std::env::var_os("SEALSHELL_DATA_DIR")

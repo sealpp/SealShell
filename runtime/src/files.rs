@@ -26,7 +26,7 @@ pub const CHUNK: usize = 256 * 1024;
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Endpoint {
     Local,
-    Sftp { connection: Connection },
+    Sftp { connection: Box<Connection> },
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -56,7 +56,7 @@ pub struct Backend {
 
 pub enum File {
     Local(fs::File, bool),
-    Sftp(russh_sftp::client::fs::File),
+    Sftp(Box<russh_sftp::client::fs::File>),
 }
 
 impl File {
@@ -248,7 +248,9 @@ impl Backend {
                 if truncate {
                     flags |= OpenFlags::TRUNCATE;
                 }
-                Ok(File::Sftp(sftp.open_with_flags(path, flags).await?))
+                Ok(File::Sftp(Box::new(
+                    sftp.open_with_flags(path, flags).await?,
+                )))
             }
         }
     }

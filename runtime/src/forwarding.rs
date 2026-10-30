@@ -97,7 +97,7 @@ impl Forwarding {
                                 // a client FIN must still allow the remote response.
                                 let mut remote=channel.into_stream();tokio::io::copy_bidirectional(&mut socket,&mut remote).await?;Ok::<_,Error>(())
                             }.await;
-                            if let Err(error)=bridge{if !session.cancel.is_cancelled(){events(json!({"type":"forward","id":id,"fatal":false,"error":error.message}));}}
+                            if let Err(error)=bridge&& !session.cancel.is_cancelled(){events(json!({"type":"forward","id":id,"fatal":false,"error":error.message}));}
                         });
                     }
                 }

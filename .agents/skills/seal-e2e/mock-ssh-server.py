@@ -106,11 +106,25 @@ class MeasuredSFTPServer(asyncssh.SFTPServer):
 
     async def read(self, file, offset, size):
         control = json.loads(Path(sftp_control_path).read_text(encoding="utf-8"))
+        if control.get("failRead"):
+            raise asyncssh.SFTPFailure("fixture read failure")
         call_count["sftp_reads"] = call_count.get("sftp_reads", 0) + 1
         if control.get("readDelayMs"):
             write_state()
             await asyncio.sleep(control["readDelayMs"] / 1000)
         return super().read(file, offset, size)
+
+    def rename(self, oldpath, newpath):
+        control = json.loads(Path(sftp_control_path).read_text(encoding="utf-8"))
+        if oldpath.endswith(b".tmp") and newpath.decode() == control.get("failCommitTarget"):
+            raise asyncssh.SFTPFailure("fixture final rename failure")
+        return super().rename(oldpath, newpath)
+
+    def remove(self, path):
+        control = json.loads(Path(sftp_control_path).read_text(encoding="utf-8"))
+        if control.get("failCleanup") and b".sealshell-" in path:
+            raise asyncssh.SFTPFailure("fixture cleanup failure")
+        return super().remove(path)
 
 
 def command_output(command: str) -> tuple[str, int]:

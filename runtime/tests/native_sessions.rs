@@ -32,9 +32,13 @@ async fn native_ssh_sftp_transfers_and_forwarding() {
     let directory = tempfile::tempdir().unwrap();
     let remote = directory.path().join("remote");
     std::fs::create_dir(&remote).unwrap();
+    let control = directory.path().join("control.json");
+    std::fs::write(&control, b"{}").unwrap();
     let mut child = Command::new(python)
         .arg(root.join(".agents/skills/seal-e2e/mock-ssh-server.py"))
         .env("MOCK_SFTP_ROOT", &remote)
+        .env("MOCK_SFTP_CONTROL_PATH", &control)
+        .env("PYTHONIOENCODING", "utf-8")
         .env("MOCK_SSH_PASSWORD", "fixture-password")
         .env("MOCK_SSH_FORWARDING", "1")
         .env("MOCK_SSH_STATE_PATH", directory.path().join("state.json"))
@@ -73,6 +77,14 @@ async fn native_ssh_sftp_transfers_and_forwarding() {
                     .call(
                         "host_key_decision",
                         json!({"requestId":event["requestId"],"accepted":true}),
+                    )
+                    .await
+                    .unwrap();
+            } else if event["type"] == "conflict" {
+                approval_runtime
+                    .call(
+                        "transfer_decision",
+                        json!({"requestId":event["requestId"],"decision":{"action":"replace"}}),
                     )
                     .await
                     .unwrap();
@@ -177,6 +189,146 @@ async fn native_ssh_sftp_transfers_and_forwarding() {
     .unwrap()
     .unwrap();
     assert_eq!(std::fs::read(destination.join("large.bin")).unwrap(), data);
+    // Rollback, cancellation, queue ownership and retained paths use the real
+    // SFTP server; fault injection is confined to the fixture.
+    runtime
+        .call(
+            "file_connect",
+            json!({"id":"local","endpoint":{"kind":"local"}}),
+        )
+        .await
+        .unwrap();
+    runtime
+        .call(
+            "file_connect",
+            json!({"id":"remote","endpoint":{"kind":"sftp","connection":connection}}),
+        )
+        .await
+        .unwrap();
+    let set_control = |value: Value| {
+        let pending = control.with_extension("pending");
+        std::fs::write(&pending, serde_json::to_vec(&value).unwrap()).unwrap();
+        std::fs::rename(pending, &control).unwrap();
+    };
+    set_control(json!({"failRead":true}));
+    std::fs::write(destination.join("large.bin"), b"preserve original").unwrap();
+    runtime.call("transfer_enqueue",json!({"id":"failed-read","label":"failed-read","sourceId":"remote","targetId":"local","paths":["/large.bin"],"directory":destination})).await.unwrap();
+    assert!(
+        runtime
+            .call("transfer_wait", json!({"id":"failed-read"}))
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        std::fs::read(destination.join("large.bin")).unwrap(),
+        b"preserve original"
+    );
+    set_control(json!({"failCommitTarget":"/large.bin"}));
+    std::fs::write(&source, b"replacement").unwrap();
+    runtime.call("transfer_enqueue",json!({"id":"rollback","label":"rollback","sourceId":"local","targetId":"remote","paths":[source],"directory":"/"})).await.unwrap();
+    assert!(
+        runtime
+            .call("transfer_wait", json!({"id":"rollback"}))
+            .await
+            .is_err()
+    );
+    assert_eq!(std::fs::read(remote.join("large.bin")).unwrap(), data);
+    set_control(json!({"writeDelayMs":1000,"failCleanup":true}));
+    let before: Value =
+        serde_json::from_slice(&std::fs::read(directory.path().join("state.json")).unwrap())
+            .unwrap();
+    runtime
+        .call("transfer_concurrency", json!({"value":1}))
+        .await
+        .unwrap();
+    runtime.call("transfer_enqueue",json!({"id":"cancel","label":"cancel","sourceId":"local","targetId":"remote","paths":[source],"directory":"/"})).await.unwrap();
+    runtime.call("transfer_enqueue",json!({"id":"queued","label":"queued","sourceId":"local","targetId":"remote","paths":[source],"directory":"/"})).await.unwrap();
+    assert_eq!(
+        runtime
+            .call("transfer_cancel", json!({"id":"queued"}))
+            .await
+            .unwrap(),
+        true
+    );
+    assert_eq!(
+        runtime
+            .call("transfer_dismiss", json!({"id":"queued"}))
+            .await
+            .unwrap(),
+        true
+    );
+    assert_eq!(
+        runtime
+            .call("transfer_retry", json!({"id":"queued"}))
+            .await
+            .unwrap(),
+        false
+    );
+    assert_eq!(
+        runtime
+            .call("transfer_dismiss", json!({"id":"upload"}))
+            .await
+            .unwrap(),
+        true
+    );
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let state = std::fs::read(directory.path().join("state.json"))
+                .ok()
+                .and_then(|b| serde_json::from_slice::<Value>(&b).ok());
+            if state.is_some_and(|v| {
+                v["sftp_writes"].as_u64().unwrap_or(0) > before["sftp_writes"].as_u64().unwrap_or(0)
+            }) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .unwrap();
+    runtime
+        .call("transfer_cancel", json!({"id":"cancel"}))
+        .await
+        .unwrap();
+    let error = tokio::time::timeout(
+        Duration::from_secs(5),
+        runtime.call("transfer_wait", json!({"id":"cancel"})),
+    )
+    .await
+    .unwrap()
+    .unwrap_err();
+    assert_eq!(error.code, "cancelled");
+    let orphan = error
+        .orphan_path
+        .expect("cleanup failure must report staging");
+    assert!(remote.join(orphan.trim_start_matches('/')).exists());
+    assert_eq!(std::fs::read(remote.join("large.bin")).unwrap(), data);
+    set_control(json!({}));
+    assert_eq!(
+        runtime
+            .call("transfer_retry", json!({"id":"cancel"}))
+            .await
+            .unwrap(),
+        true
+    );
+    runtime
+        .call("transfer_wait", json!({"id":"cancel"}))
+        .await
+        .unwrap();
+    assert_eq!(
+        std::fs::read(remote.join("large.bin")).unwrap(),
+        b"replacement"
+    );
+    let tasks = runtime.call("transfer_list", json!({})).await.unwrap();
+    assert_eq!(
+        tasks
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["id"] == "cancel")
+            .unwrap()["orphanPath"],
+        orphan
+    );
     let echo = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let echo_port = echo.local_addr().unwrap().port();
     let echo_task = tokio::spawn(async move {

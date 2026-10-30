@@ -10,7 +10,11 @@ use crate::{
 };
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
-use std::{path::Path, sync::Arc};
+use std::{
+    collections::HashMap,
+    path::Path,
+    sync::{Arc, Mutex},
+};
 use tokio_util::sync::CancellationToken;
 
 pub struct Runtime {
@@ -21,6 +25,7 @@ pub struct Runtime {
     pub forwarding: Forwarding,
     pub http: Http,
     events: Events,
+    probes: Mutex<HashMap<String, CancellationToken>>,
 }
 
 fn decode<T: DeserializeOwned>(value: Value) -> Result<T> {
@@ -54,9 +59,13 @@ impl Runtime {
             ssh,
             files,
             events,
+            probes: Mutex::new(HashMap::new()),
         })
     }
     pub fn close_all(&self) {
+        for (_, token) in self.probes.lock().unwrap().drain() {
+            token.cancel();
+        }
         self.transfers.close_all();
         self.forwarding.close_all();
         self.files.close_all();
@@ -65,6 +74,32 @@ impl Runtime {
     }
     pub async fn call(&self, operation: &str, args: Value) -> Result<Value> {
         match operation {
+            "proxy_test" => {
+                let id = string(&args, "id")?.to_owned();
+                let proxy: crate::proxy::Proxy = decode(args["proxy"].clone())?;
+                let cancel = CancellationToken::new();
+                self.probes
+                    .lock()
+                    .unwrap()
+                    .insert(id.clone(), cancel.clone());
+                (self.events)(json!({"type":"proxyStage","id":id,"stage":"connect"}));
+                let result = crate::proxy::connect(
+                    string(&args, "host")?,
+                    number(&args, "port", 22) as u16,
+                    Some(&proxy),
+                    &cancel,
+                )
+                .await;
+                self.probes.lock().unwrap().remove(&id);
+                result?;
+                Ok(Value::Null)
+            }
+            "proxy_cancel" => {
+                if let Some(token) = self.probes.lock().unwrap().remove(string(&args, "id")?) {
+                    token.cancel();
+                }
+                Ok(Value::Null)
+            }
             "store_get" => encode(
                 self.store
                     .get(string(&args, "collection")?, string(&args, "key")?)?,

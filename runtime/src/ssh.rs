@@ -75,10 +75,10 @@ impl client::Handler for Verifier {
         if accepted {
             // Concurrent prompts may race with another accepted connection. A
             // changed key must never overwrite one accepted in the meantime.
-            if let Some(known) = self.store.get("knownHosts", &record_id)? {
-                if known["publicKey"] != key {
-                    return Err(Error::new("HOST_KEY_MISMATCH", "主机指纹已改变"));
-                }
+            if let Some(known) = self.store.get("knownHosts", &record_id)?
+                && known["publicKey"] != key
+            {
+                return Err(Error::new("HOST_KEY_MISMATCH", "主机指纹已改变"));
             }
             self.store.write(vec![Write { collection:"knownHosts".into(), key:record_id.clone(), value:Some(json!({"id":record_id,"host":self.host,"port":self.port,"publicKey":key,"fingerprint":fingerprint})) }], None)?;
         }
