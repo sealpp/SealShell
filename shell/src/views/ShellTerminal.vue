@@ -19,7 +19,6 @@ import { registerTerminalDirectoryHandlers } from '../services/terminalDirectory
 import { publishTerminalSize } from '../services/terminalSize'
 import TerminalCommandSuggestions from '../components/TerminalCommandSuggestions.vue'
 import { attachCommandSuggestions, type TerminalSuggestionView } from '../services/terminalSuggestions/controller'
-import { commonCommandProvider } from '../services/terminalSuggestions/catalog'
 import { historyProvider } from '../services/terminalSuggestions/model'
 import { commandSuggestions, loadSuggestionHistory, loadRecommendationKey, rememberSuggestionCommand } from '../services/terminalSuggestions/runtime'
 import { createRecommender } from '../services/terminalSuggestions/recommender'
@@ -212,17 +211,13 @@ function initTerminal() {
     enabled: () => commandSuggestions.enabled && tab.value?.state === 'online',
     active: () => isActive.value,
     providers: () => [{ suggestions: query => {
-      // Verified path results own this list when directory completion is enabled.
-      // Showing old history first would pin a potentially wrong directory above them.
-      if (commandSuggestions.recommendations.automatic && parsePathCommand(query)
-        && (commandSuggestions.recommendations.cloud || commandSuggestions.recommendations.remoteContext && tab.value?.cwd)) return []
-      return [...commonCommandProvider.suggestions(query),
-        ...historyProvider(commandSuggestions.rememberHistory ? commandSuggestions.history[tab.value?.hostId ?? ''] ?? [] : [], tab.value?.cwd).suggestions(query)]
+      // Keep AI path results from being pinned below old history; local mode only reads history.
+      if (commandSuggestions.recommendations.cloud && commandSuggestions.recommendations.automatic && parsePathCommand(query)) return []
+      return historyProvider(commandSuggestions.rememberHistory ? commandSuggestions.history[tab.value?.hostId ?? ''] ?? [] : []).suggestions(query)
     } }],
     context: () => ({ key: `${tab.value?.sessionId}:${tab.value?.cwd}:${commandSuggestions.revision}:${commandSuggestions.rememberHistory}`, cwd: tab.value?.cwd }),
     automatic: () => commandSuggestions.recommendations.automatic,
-    enhancementEnabled: query => commandSuggestions.recommendations.cloud
-      || (commandSuggestions.recommendations.remoteContext && !!tab.value?.cwd && !!parsePathCommand(query)),
+    enhancementEnabled: () => commandSuggestions.recommendations.cloud,
     enhance: (query, signal, publish, progress) => recommend({ query, sessionId: tab.value?.sessionId ?? '', cwd: tab.value?.cwd,
       history: commandSuggestions.rememberHistory ? commandSuggestions.history[tab.value?.hostId ?? ''] ?? [] : [],
     }, { ...commandSuggestions.recommendations }, signal, publish, progress),
@@ -231,7 +226,7 @@ function initTerminal() {
       if (hostId) void rememberSuggestionCommand(hostId, command, use).catch(historyError)
     },
     onCommand: (command, use) => {
-      if (commandSuggestions.recommendations.remoteContext) recommend.observeCommand(command, tab.value?.sessionId ?? '', use?.cwd)
+      if (commandSuggestions.recommendations.cloud && commandSuggestions.recommendations.remoteContext) recommend.observeCommand(command, tab.value?.sessionId ?? '', use?.cwd)
       const hostId = tab.value?.hostId
       if (hostId) void rememberSuggestionCommand(hostId, command, use).catch(historyError)
     },

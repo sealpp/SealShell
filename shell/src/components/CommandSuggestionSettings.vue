@@ -12,7 +12,7 @@ const draft = ref({ enabled: commandSuggestions.enabled, rememberHistory: comman
   recommendations: { ...commandSuggestions.recommendations }, apiKey: undefined as string | undefined })
 const clearing = ref(false)
 const hasKey = ref(false)
-const autosave = useAutosave(() => ({ ...draft.value, recommendations: { ...draft.value.recommendations } }), value => validateRecommendationSettings(value.recommendations),
+const autosave = useAutosave(() => ({ ...draft.value, recommendations: { ...draft.value.recommendations } }), value => { if (value.recommendations.cloud) validateRecommendationSettings(value.recommendations) },
   async value => {
     await saveSuggestionPreferences(value.enabled, value.rememberHistory, value.recommendations, value.apiKey)
     if (value.apiKey !== undefined) hasKey.value = !!value.apiKey.trim()
@@ -24,7 +24,7 @@ onMounted(async () => {
 })
 
 async function clear(): Promise<void> {
-  if (!await confirmDialog('清除命令历史', '清除所有连接在此浏览器保存的命令历史？')) return
+  if (!await confirmDialog('清除命令历史', '清除所有连接在本机保存的命令历史？')) return
   clearing.value = true
   try {
     await clearSuggestionHistory()
@@ -63,9 +63,9 @@ defineExpose({ flush: autosave.flush })
       <SettingsSwitch v-model="draft.rememberHistory" label="命令历史" description="每个连接保留最近 200 条。">
         <button type="button" class="settings-icon-button" :disabled="clearing" aria-label="清除命令历史" title="清除命令历史" @click="clear"><span class="codicon codicon-trash" aria-hidden="true" /></button>
       </SettingsSwitch>
-      <SettingsSwitch v-model="draft.recommendations.remoteContext" label="目录建议" />
-      <SettingsSwitch v-model="draft.recommendations.automatic" label="自动补充建议" />
-      <SettingsSwitch v-model="draft.recommendations.shareHistory" label="向 AI 提供历史" description="最多 12 条相关命令，包含参数。" />
+      <SettingsSwitch v-model="draft.recommendations.remoteContext" label="向 AI 提供目录上下文" :disabled="!draft.recommendations.cloud" />
+      <SettingsSwitch v-model="draft.recommendations.automatic" label="自动请求 AI 建议" :disabled="!draft.recommendations.cloud" />
+      <SettingsSwitch v-model="draft.recommendations.shareHistory" label="向 AI 提供历史" :disabled="!draft.recommendations.cloud" description="最多 12 条相关命令，包含参数。" />
     </fieldset>
     <details class="settings-help">
       <summary>使用与隐私说明</summary>
@@ -76,10 +76,11 @@ defineExpose({ flush: autosave.flush })
       </dl>
       <ul class="settings-notes">
         <li>Tab、左右键保留远端行为。完整替换适用于 Bash/zsh 默认键位。</li>
-        <li>历史仅存此浏览器，包含命令参数；命令前加空格可跳过记录与推荐。</li>
-        <li>目录建议读取 Linux 目录名、可用工具与脚本名，不读取源码或环境变量。</li>
+        <li>本地提示只匹配并原样显示当前连接的历史命令；没有历史时不生成建议。</li>
+        <li>历史仅存本机，包含命令参数；命令前加空格可跳过记录与推荐。</li>
+        <li>仅请求 AI 时按设置读取 Linux 目录名、可用工具与脚本名；本地历史提示不读取目录上下文。</li>
         <li>AI 接收输入及已开启的上下文；历史上传单独控制。API Key 加密保存在本机。</li>
-        <li>模型接口需兼容 Chat Completions，并允许浏览器跨域访问。</li>
+        <li>模型接口需兼容 Chat Completions，由桌面运行时发起请求。</li>
       </ul>
     </details>
   </SettingsPage>

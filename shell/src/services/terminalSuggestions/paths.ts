@@ -85,10 +85,8 @@ export interface PathCommand {
   prefix: string
   fixed: string[]
   operands: string[]
-  marker: boolean
   evidence: 'declared' | 'syntax' | 'context'
   slot: string
-  separator: boolean
 }
 
 export function parsePathCommand(input: string): PathCommand | undefined {
@@ -98,15 +96,15 @@ export function parsePathCommand(input: string): PathCommand | undefined {
   if (!commandName(input) || !tokens[0]!.closed) return undefined
   let marker = false, pending: ReturnType<typeof optionRole>, markerIndex = -1, patternProvided = false
   const operands: string[] = []
-  function result(token: Word, index: number, kind: PathCommand['kind'], evidence: PathCommand['evidence'], slot = '', optionValue = false): PathCommand {
+  function result(token: Word, index: number, kind: PathCommand['kind'], evidence: PathCommand['evidence'], slot = ''): PathCommand {
     return { verb, fragment: token.value, home: token.home, closed: token.closed, kind, evidence, slot,
       prefix: input.slice(0, token.start) + slot, fixed: tokens!.slice(0, index).filter((_, i) => i !== markerIndex).map(item => item.value),
-      operands, marker, separator: !!spec && !marker && !optionValue }
+      operands }
   }
   for (let i = 1; i < tokens.length; i++) {
     const token = tokens[i]!, last = i === tokens.length - 1
     if (pending) {
-      if (last) return pending === 'value' ? undefined : result(token, i, pending, 'declared', '', true)
+      if (last) return pending === 'value' ? undefined : result(token, i, pending, 'declared')
       if (!token.closed || !token.value) return undefined
       pending = undefined; continue
     }
@@ -122,13 +120,13 @@ export function parsePathCommand(input: string): PathCommand | undefined {
           if (['grep', 'rg'].includes(program) && ['regexp', 'file'].includes(name!)) patternProvided = true
           if (assigned && role && role !== 'value' && last) {
             const slot = `--${name}=`
-            return result({ ...token, value: token.value.slice(slot.length), home: input.slice(token.start + slot.length).startsWith('~') }, i, role, 'declared', slot, true)
+            return result({ ...token, value: token.value.slice(slot.length), home: input.slice(token.start + slot.length).startsWith('~') }, i, role, 'declared', slot)
           }
           if (role) pending = assigned ? undefined : role
           else if (spec) return undefined
           else if (assigned && last) {
             const slot = `--${name}=`, fragment = token.value.slice(slot.length)
-            if (/^(?:\/|\.\.?\/|~\/)/.test(fragment)) return result({ ...token, value: fragment }, i, 'any', 'syntax', slot, true)
+            if (/^(?:\/|\.\.?\/|~\/)/.test(fragment)) return result({ ...token, value: fragment }, i, 'any', 'syntax', slot)
           }
         }
       } else {
@@ -140,7 +138,7 @@ export function parsePathCommand(input: string): PathCommand | undefined {
           if (role) {
             if (['grep', 'rg', 'sed', 'awk'].includes(program) && ['e', 'f'].includes(flag)) patternProvided = true
             if (c < token.value.length - 1) {
-              if (last && role !== 'value') return result({ ...token, value: token.value.slice(c + 1), home: false }, i, role, 'declared', token.value.slice(0, c + 1), true)
+              if (last && role !== 'value') return result({ ...token, value: token.value.slice(c + 1), home: false }, i, role, 'declared', token.value.slice(0, c + 1))
             } else pending = role
             break
           }
@@ -290,43 +288,4 @@ function closeSpelling(a: string, b: string): boolean {
   return previous[b.length]! <= limit
 }
 
-export interface PathFacts { cwd: string; home?: string; directories: string[]; files: string[]; tools?: string[] }
-
-export function completePaths(query: string, facts: PathFacts): string[] {
-  const input = parsePathCommand(query)
-  if (!input) return []
-  if (input.evidence === 'context' && (!input.fragment || !facts.tools?.includes(input.verb))) return []
-  const resolved = resolvePath(input.fragment, facts.cwd, facts.home, input.home)
-  if (!resolved) return []
-  const paths = [...new Set(input.kind === 'directory' ? facts.directories : input.kind === 'file' ? facts.files : [...facts.directories, ...facts.files])]
-  const parent = searchDirectory(input, facts.cwd, facts.home)
-  const fragment = input.fragment.endsWith('/') ? '' : input.fragment.split('/').slice(-1)[0]!
-  const fold = (value: string) => value.replace(/[-_]/g, '')
-  const rank = (path: string): number => {
-    if (input.fragment && !input.fragment.endsWith('/') && path === resolved) return 100
-    if (parent && parentPath(path) !== parent) return 0
-    if (!fragment) return parentPath(path) === (parent ?? facts.cwd) ? 80 : 0
-    const name = path.slice(path.lastIndexOf('/') + 1)
-    if (name === fragment) return 90
-    if (name.startsWith(fragment)) return 80
-    if (fold(name) === fold(fragment)) return 70
-    if (fold(name).startsWith(fold(fragment))) return 60
-    if (closeSpelling(fragment, name)) return 40
-    return 0
-  }
-  const matches = paths.filter(path => !/[\x00-\x1f\x7f]/.test(path)).map(path => ({ path, rank: rank(path) })).filter(item => item.rank > 0)
-  const best = Math.max(0, ...matches.map(item => item.rank))
-  return matches.filter(item => item.rank === best).sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0).slice(0, 8)
-    .map(({ path }) => input.prefix + (input.separator ? '-- ' : '') + shellQuote(path))
-}
-
-export function alternativePaths(query: string, commands: readonly string[], tools: readonly string[]): string[] {
-  const input = parsePathCommand(query)
-  const group = input && (listingCommands.has(input.verb) ? listingCommands : searchCommands.has(input.verb) ? searchCommands : undefined)
-  if (!input || !group) return []
-  return tools.filter(tool => tool !== input.verb && group.has(tool)).flatMap(tool => commands.map(command => {
-    const substituted = command.replace(/^\S+/, tool)
-    const candidate = input.separator ? substituted.replace(' -- ', ' ') : substituted
-    return preservesPathIntent(query, candidate) ? candidate : ''
-  })).filter(Boolean)
-}
+export interface PathFacts { cwd: string; home?: string; directories: string[]; files: string[] }

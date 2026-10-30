@@ -12,6 +12,7 @@ const respond = (page: Page, index: number, commands: string[]) => page.evaluate
 test.beforeEach(async ({ page }) => {
   await page.goto('/tests/command-suggestions-harness.html')
   await expect(page.locator('#ready')).toHaveText('true')
+  await page.evaluate(() => (window as any).harness.seedHistory(['git status', 'git diff', 'git log --oneline', 'git branch', 'git pull', 'git fetch', 'ls -la', 'ls -lh', 'ls -lah']))
   await input(page).focus()
 })
 
@@ -284,7 +285,7 @@ test('saves cloud configuration through the native credential interface and pres
   await expect(page.getByRole('textbox', { name: '模型', exact: true })).toHaveValue('example-model')
   await expect(page.getByLabel('API Key', { exact: true })).toHaveValue('')
   await expect(page.getByLabel('API Key', { exact: true })).toHaveAttribute('placeholder', '已保存，输入可更换')
-  await page.getByRole('switch', { name: '自动补充建议', exact: true }).uncheck()
+  await page.getByRole('switch', { name: '自动请求 AI 建议', exact: true }).uncheck()
   await expect(page.getByRole('status')).toContainText('已自动保存')
   expect(await page.evaluate(async () => (await import('/src/services/terminalSuggestions/runtime.ts')).loadRecommendationKey())).toBe('synthetic-private-test-key')
   await page.getByRole('button', { name: '清除 API Key', exact: true }).click()

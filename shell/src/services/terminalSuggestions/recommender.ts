@@ -1,8 +1,8 @@
-import { pathSuggestions, probeDirectory, probeNearbyPaths, type DirectoryFacts } from './context'
+import { probeDirectory, probeNearbyPaths, type DirectoryFacts } from './context'
 import { generateRecommendations, type RecommendationQuery } from './cloud'
 import type { CommandSuggestion, RecommendationActivity } from './model'
 import type { RecommendationSettings } from './settings'
-import { hasPathCommand, parsePathCommand, resolvePath, searchDirectory, parentPath } from './paths'
+import { parsePathCommand, resolvePath, searchDirectory, parentPath } from './paths'
 import { beginRecommendationTrace } from './diagnostics'
 
 export interface RecommendationRequest extends RecommendationQuery { sessionId: string }
@@ -45,11 +45,11 @@ export function createRecommender(key: () => Promise<string>, ports: Recommendat
   }
   const run = async (request: RecommendationRequest, settings: RecommendationSettings, signal: AbortSignal,
     publish: (items: CommandSuggestion[]) => void, progress?: (activity: RecommendationActivity) => void): Promise<string> => {
+    if (!settings.cloud) return ''
     setSession(request.sessionId)
     const input = parsePathCommand(request.query)
-    const trace = beginRecommendationTrace(request.sessionId, settings.cloud,
-      !settings.remoteContext ? 'disabled' : !request.cwd ? 'missing-cwd'
-        : !settings.cloud && hasPathCommand(request.query) && !input ? 'skipped' : 'loading')
+    const trace = beginRecommendationTrace(request.sessionId,
+      !settings.remoteContext ? 'disabled' : !request.cwd ? 'missing-cwd' : 'loading')
     let facts: DirectoryFacts | undefined, contextError = false
     const publishResult = (items: CommandSuggestion[]) => {
       signal.throwIfAborted()
@@ -72,7 +72,7 @@ export function createRecommender(key: () => Promise<string>, ports: Recommendat
       return result
     }
     try {
-      if (settings.remoteContext && request.cwd && (settings.cloud || !hasPathCommand(request.query) || input)) {
+      if (settings.remoteContext && request.cwd) {
         try {
           await timed(signal, 6000, async contextSignal => {
             const cwd = request.cwd!
@@ -86,19 +86,13 @@ export function createRecommender(key: () => Promise<string>, ports: Recommendat
               try { const extra = await read(directory); merge({ ...extra, directories: [extra.cwd, ...extra.directories] }) }
               catch { if (explicit) contextError = true; contextSignal.throwIfAborted() }
             }
-            const known = input?.kind === 'directory' ? facts!.directories : input?.kind === 'file' ? facts!.files : [...facts!.directories, ...facts!.files]
-            const localLookup = input && !input.home && input.fragment.length >= 3
-              && (input.evidence !== 'context' || facts!.tools.includes(input.verb)) && !known.includes(resolvePath(input.fragment, cwd)!)
-            if (!explicit && (settings.cloud || localLookup)) {
+            if (!explicit) {
               const children = facts!.directories.filter(path => parentPath(path) === cwd)
               const peers = facts!.directories.filter(path => path !== cwd && parentPath(path) === parentPath(cwd))
-              // Give both nearby scopes a context budget; no input-name filtering before the model.
-              const roots = settings.cloud ? [...new Set([...children.slice(0, 6), ...peers.slice(0, 6)])]
-                : [...new Set([cwd, ...children, ...peers])].slice(0, 121)
-              const limited = settings.cloud ? children.length > 6 || peers.length > 6 : children.length + peers.length + 1 > 121
-              const fragment = settings.cloud ? undefined : input!.fragment
-              if (roots.length) merge(await cached(`${request.sessionId}\0${settings.cloud ? 'tree' : 'nearby'}\0${cwd}\0${fragment ?? ''}\0${roots.join('\0')}`,
-                () => ports.discover(request.sessionId, cwd, roots, fragment, contextSignal), contextSignal))
+              const roots = [...new Set([...children.slice(0, 6), ...peers.slice(0, 6)])]
+              const limited = children.length > 6 || peers.length > 6
+              if (roots.length) merge(await cached(`${request.sessionId}\0tree\0${cwd}\0${roots.join('\0')}`,
+                () => ports.discover(request.sessionId, cwd, roots, contextSignal), contextSignal))
               if (limited) facts = { ...facts!, limited: true }
             }
           })
@@ -106,30 +100,21 @@ export function createRecommender(key: () => Promise<string>, ports: Recommendat
         } catch { signal.throwIfAborted(); contextError = true; trace.context = facts ? 'partial' : 'failed' }
       }
       trace.directories = facts?.directories.length ?? 0; trace.files = facts?.files.length ?? 0
-      if (settings.cloud) {
-        try {
-          const candidates = await timed(signal, 8000, async modelSignal => {
-            const apiKey = await ports.key()
-            modelSignal.throwIfAborted()
-            progress?.('ai')
-            return ports.generate(request, facts, settings, apiKey, modelSignal, () => { trace.modelCalled = true })
-          })
-          publishResult(candidates)
-          trace.outcome = candidates.length ? 'complete' : 'empty'
-          return candidates.length ? '' : 'AI 暂未找到匹配建议'
-        } catch (error) {
-          signal.throwIfAborted()
-          const fallback = facts ? pathSuggestions(request.query, facts) : []
-          trace.fallback = fallback.length > 0; trace.outcome = 'failed'
-          if (fallback.length) publishResult(fallback)
-          const message = error instanceof Error && !/fetch|network|load failed/i.test(error.message) ? error.message : '云端暂不可用，请检查网络及 API 配置'
-          return message + (fallback.length ? '；已提供本地目录建议' : '')
-        }
+      try {
+        const candidates = await timed(signal, 8000, async modelSignal => {
+          const apiKey = await ports.key()
+          modelSignal.throwIfAborted()
+          progress?.('ai')
+          return ports.generate(request, facts, settings, apiKey, modelSignal, () => { trace.modelCalled = true })
+        })
+        publishResult(candidates)
+        trace.outcome = candidates.length ? 'complete' : 'empty'
+        return candidates.length ? '' : 'AI 暂未找到匹配建议'
+      } catch (error) {
+        signal.throwIfAborted()
+        trace.outcome = 'failed'
+        return error instanceof Error && !/fetch|network|load failed/i.test(error.message) ? error.message : '云端暂不可用，请检查网络及 API 配置'
       }
-      const candidates = facts ? pathSuggestions(request.query, facts) : []
-      publishResult(candidates)
-      trace.outcome = candidates.length ? 'complete' : 'empty'
-      return contextError ? '目录读取暂不可用' : facts?.limited ? '路径结果已达上限，仅显示已核实匹配' : ''
     } catch (error) { trace.outcome = 'cancelled'; throw error }
   }
   return Object.assign(run, { observeCommand })

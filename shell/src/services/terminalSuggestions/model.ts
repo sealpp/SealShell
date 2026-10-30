@@ -1,4 +1,4 @@
-import { commandPreference, preservesPathIntent, preservesGeneratedIntent } from './paths'
+import { commandPreference, preservesGeneratedIntent } from './paths'
 
 export interface CommandHistoryEntry {
   command: string
@@ -58,21 +58,21 @@ export function matchesQuery(text: string, query: string): boolean {
   return query.toLocaleLowerCase().trim().split(/\s+/).every(token => text.toLocaleLowerCase().includes(token))
 }
 
-export function historyProvider(entries: readonly CommandHistoryEntry[], cwd?: string): CommandSuggestionProvider {
+export function historyProvider(entries: readonly CommandHistoryEntry[]): CommandSuggestionProvider {
   return {
     suggestions: query => entries.filter(entry => matchesQuery(entry.command, query))
-      .map(entry => ({ ...entry, source: 'history', priority: entry.contexts?.some(item => item.cwd === cwd) ? 3 : 1 })),
+      .map(entry => ({ ...entry, source: 'history', priority: 1 })),
   }
 }
 
 export function compareSuggestions(query: string, a: CommandSuggestion, b: CommandSuggestion): number {
-  return commandPreference(query, b.command) - commandPreference(query, a.command)
+  return (a.source === 'history' && b.source === 'history' ? 0 : commandPreference(query, b.command) - commandPreference(query, a.command))
     || b.priority - a.priority || b.uses - a.uses || b.lastUsed - a.lastUsed
     || a.command.length - b.command.length || a.command.localeCompare(b.command)
 }
 
 export const preservesSuggestionIntent = (query: string, item: CommandSuggestion) =>
-  (item.source === 'ai' ? preservesGeneratedIntent : preservesPathIntent)(query, item.command)
+  item.source === 'history' || preservesGeneratedIntent(query, item.command)
 
 export function findCommandSuggestions(prefix: string, providers: readonly CommandSuggestionProvider[]): CommandSuggestion[] {
   if (!canRememberCommand(prefix)) return []

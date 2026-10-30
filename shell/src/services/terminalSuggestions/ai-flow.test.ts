@@ -13,7 +13,7 @@ const request = { query: 'cd demolinux', cwd: '/work', sessionId: 'ai-flow', his
 const response = (commands: string[]) => JSON.stringify({ choices: [{ message: { content: JSON.stringify({ suggestions: commands.map(command => ({ command })) }) } }] })
 const create = () => {
   const context = vi.fn(async () => facts)
-  const discover = vi.fn(async (_session: string, _cwd: string, _roots: string[], _fragment: string | undefined) => ({ ...facts, directories: ['/work/codes/demo_linux', '/work/codes/frontend'] }))
+  const discover = vi.fn(async (_session: string, _cwd: string, _roots: string[]) => ({ ...facts, directories: ['/work/codes/demo_linux', '/work/codes/frontend'] }))
   return { context, discover, run: createRecommender(async () => 'synthetic-key', { context, discover, generate: generateRecommendations, key: async () => 'synthetic-key' }) }
 }
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
@@ -31,15 +31,14 @@ it.each(['http://127.0.0.1:11434/v1', 'https://model.example/v1'])('requests the
 it('sends unfiltered nearby facts to the model without prior ls and validates the generated target', async () => {
   const fetch = vi.fn(async (_url: unknown, _body?: unknown) => response(['ls /work/codes/demo_linux', 'cd codes/demo_linux', 'cd /unverified']))
   vi.mocked(requestAI).mockImplementation(fetch)
-  const { run, discover } = create(), publish = vi.fn()
+  const { run } = create(), publish = vi.fn()
   expect(await run(request, settings, new AbortController().signal, publish)).toBe('')
-  expect(discover.mock.calls[0]?.[3]).toBeUndefined()
   expect(fetch).toHaveBeenCalledTimes(1)
   const payload = fetch.mock.calls[0]?.[1] as { messages: Array<{ content: string }> }
   expect(JSON.parse(payload.messages[1].content).facts.directories).toContain('/work/codes/demo_linux')
   expect(publish.mock.calls[0][0]).toMatchObject([{ command: "cd '/work/codes/demo_linux'", source: 'ai' }])
   const trace = recentRecommendationTraces().at(-1)!
-  expect(trace).toMatchObject({ route: 'ai', modelCalled: true, sources: ['ai'], fallback: false, outcome: 'complete' })
+  expect(trace).toMatchObject({ route: 'ai', modelCalled: true, sources: ['ai'], outcome: 'complete' })
   expect(JSON.stringify(trace)).not.toMatch(/demolinux|\/work|synthetic-key/)
 })
 
@@ -68,19 +67,26 @@ it('still requests AI with context disabled, missing cwd, or a failed probe', as
   expect(recentRecommendationTraces().slice(-3).map(item => item.context)).toEqual(['disabled', 'missing-cwd', 'failed'])
 })
 
-it('uses local paths only with AI disabled or a failed request, not after deliberate model abstention', async () => {
+it('does no context, key or model work when AI is disabled', async () => {
+  const context = vi.fn(), discover = vi.fn(), generate = vi.fn(), key = vi.fn(), publish = vi.fn(), progress = vi.fn()
+  const run = createRecommender(key, { context, discover, generate, key })
+  const traces = recentRecommendationTraces().length
+  for (const query of ['cd demo', 'ls --unknown abc', 'python main.py', '查看目录']) {
+    expect(await run({ ...request, query }, { ...settings, cloud: false }, new AbortController().signal, publish, progress)).toBe('')
+  }
+  for (const operation of [context, discover, generate, key, publish, progress]) expect(operation).not.toHaveBeenCalled()
+  expect(recentRecommendationTraces()).toHaveLength(traces)
+})
+
+it('does not generate local candidates after AI abstention or failure even with matching directory facts', async () => {
   const fetch = vi.fn(async () => response([])); vi.mocked(requestAI).mockImplementation(fetch)
   const { run } = create(), publish = vi.fn()
-  await run({ ...request, query: 'cat app' }, { ...settings, cloud: false }, new AbortController().signal, publish)
-  expect(fetch).not.toHaveBeenCalled()
-  expect(publish.mock.calls[0][0][0].source).toBe('directory')
-  publish.mockClear()
   expect(await run({ ...request, query: 'cat app' }, settings, new AbortController().signal, publish)).toContain('AI 暂未')
   expect(publish.mock.calls[0][0]).toEqual([])
   publish.mockClear(); fetch.mockRejectedValueOnce(new Error('云端推荐失败（HTTP 503）'))
-  expect(await run({ ...request, query: 'cat app' }, settings, new AbortController().signal, publish)).toContain('已提供本地目录建议')
-  expect(publish.mock.calls[0][0][0].source).toBe('directory')
-  expect(recentRecommendationTraces().at(-1)).toMatchObject({ modelCalled: true, fallback: true, outcome: 'failed' })
+  expect(await run({ ...request, query: 'cat app' }, settings, new AbortController().signal, publish)).toContain('503')
+  expect(publish).not.toHaveBeenCalled()
+  expect(recentRecommendationTraces().at(-1)).toMatchObject({ modelCalled: true, sources: [], outcome: 'failed' })
 })
 
 it('does not let an exhausted context budget consume the separate model deadline', async () => {

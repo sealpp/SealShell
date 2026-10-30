@@ -14,7 +14,6 @@ import "/tests/native-mock.ts"
     import InteractionDialog from '/src/components/InteractionDialog.vue'
     import '/src/services/actions'
     import { attachCommandSuggestions } from '/src/services/terminalSuggestions/controller'
-    import { commonCommandProvider } from '/src/services/terminalSuggestions/catalog'
     import { historyProvider } from '/src/services/terminalSuggestions/model'
     import { commandSuggestions, loadSuggestionPreferences, loadSuggestionHistory, rememberSuggestionCommand } from '/src/services/terminalSuggestions/runtime'
     import { saveHost, readCommandHistory, recordCommandHistory, deleteHosts, deleteFolderTree, saveFolder } from '/src/services/storage'
@@ -22,6 +21,7 @@ import "/tests/native-mock.ts"
     import { watch } from 'vue'
 
     const sent = []
+    let seededHistory = []
     let echo = true
     let enhanced = false, feedback = false, cwd
     const requests = []
@@ -29,6 +29,7 @@ import "/tests/native-mock.ts"
     const write = text => new Promise(resolve => { adapter.beforeOutput(); terminal.write(text, resolve) })
     window.harness = {
       sent, write,
+      seedHistory: commands => { seededHistory = commands.map((command, i) => ({ command, uses: 0, lastUsed: commands.length - i })); adapter.refresh() },
       requests,
       enhance: value => { enhanced = value; adapter.refresh() },
       feedback: value => { feedback = value },
@@ -72,7 +73,7 @@ import "/tests/native-mock.ts"
             enhance: (query, signal, publish, progress) => new Promise(resolve => { progress('context'); requests.push({ query, signal, publish, progress, resolve }) }),
             focusList: edge => list.value?.focus(edge),
             listContains: target => list.value?.contains(target) ?? false,
-            providers: () => [commonCommandProvider, historyProvider(commandSuggestions.rememberHistory ? commandSuggestions.history['suggestions-a'] ?? [] : [])],
+            providers: () => [historyProvider(commandSuggestions.rememberHistory ? [...commandSuggestions.history['suggestions-a'] ?? [], ...seededHistory] : [])],
             onCommand: (command, use) => { void rememberSuggestionCommand('suggestions-a', command, use) },
             onAccept: (command, use) => { if (feedback) void rememberSuggestionCommand('suggestions-a', command, use) },
             onChange: value => {

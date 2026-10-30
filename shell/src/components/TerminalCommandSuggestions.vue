@@ -10,7 +10,7 @@ const emit = defineEmits<{ accept: [command: string]; dismiss: []; terminalKey: 
 const panel = ref<HTMLDivElement | null>(null)
 const listbox = ref<{ highlightFirstItem(): void; highlightItem(command: string): void } | null>(null)
 const portalTarget = usePortalTarget(computed(() => props.boundary))
-const sourceIcons: Record<string, string> = { history: 'history', ai: 'sparkle', directory: 'folder' }
+const sourceIcons: Record<string, string> = { history: 'history', ai: 'sparkle' }
 const hasContent = computed(() => props.suggestion.candidates.length > 0 || props.suggestion.loading || props.suggestion.status || props.suggestion.pending || props.suggestion.loading === false)
 const working = computed(() => !!props.suggestion.loading && !props.suggestion.status)
 const showFeedback = computed(() => !!props.suggestion.status || (props.suggestion.loading === false && !props.suggestion.candidates.length && !props.suggestion.pending))
@@ -64,7 +64,7 @@ function onFocusOutside(event: FocusOutsideEvent): void {
                 v-for="candidate in suggestion.candidates" :key="candidate.command"
                 :value="candidate.command" :data-source="candidate.source"
                 class="terminal-command-suggestion workbench-list-item"
-                :title="`${candidate.command}\n${candidate.source === 'history' ? `本地历史 · ${candidate.uses} 次提交` : candidate.source === 'ai' ? 'AI 推荐 · 执行前请核对完整命令' : candidate.source === 'directory' ? '目录探测' : '常用命令'}`"
+                :title="`${candidate.command}\n${candidate.source === 'history' ? `本地历史 · ${candidate.uses} 次提交` : 'AI 推荐 · 执行前请核对完整命令'}`"
                 :aria-description="candidate.source === 'history' ? `本地历史，使用过 ${candidate.uses} 次` : undefined"
                 @mousedown.left.prevent="listbox?.highlightItem(candidate.command)"
                 @select.prevent="emit('accept', candidate.command)"

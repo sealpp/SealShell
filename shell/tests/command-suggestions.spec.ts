@@ -14,10 +14,11 @@ const reset = (page: Page, prompt = 'dev@host:~$ ') => page.evaluate(prompt => (
 test.beforeEach(async ({ page }) => {
   await page.goto('/tests/command-suggestions-harness.html')
   await expect(page.locator('#ready')).toHaveText('true')
+  await page.evaluate(() => (window as any).harness.seedHistory(['git status', 'git diff', 'git log --oneline', 'git branch', 'git pull', 'git fetch', 'ls -la', 'ls -lh', 'ls -lah']))
   await focus(page)
 })
 
-test('shows multiple offline candidates and sources without changing the terminal buffer or focus', async ({ page, context }) => {
+test('shows seeded history offline without changing the terminal buffer or focus', async ({ page, context }) => {
   await context.setOffline(true)
   await expect(list(page)).toHaveCount(0)
   await page.keyboard.type('g')
@@ -25,9 +26,26 @@ test('shows multiple offline candidates and sources without changing the termina
   await page.keyboard.type('it ')
   await expect(first(page)).toHaveText('git status')
   await expect(list(page).getByRole('option')).toHaveCount(6)
-  await expect(candidate(page, 'git diff')).toHaveAttribute('data-source', 'common')
+  await expect(candidate(page, 'git diff')).toHaveAttribute('data-source', 'history')
   await expect(page.locator('.xterm-helper-textarea')).toBeFocused()
   expect(await page.evaluate(() => (window as any).harness.text())).not.toContain('git status')
+})
+
+test('local mode stays empty without history and returns relative compound history verbatim', async ({ page }) => {
+  await page.evaluate(() => (window as any).harness.seedHistory([]))
+  await page.keyboard.type('git ')
+  await expect(list(page)).toHaveCount(0)
+  await reset(page)
+  await page.keyboard.type('cd project')
+  await page.waitForTimeout(800)
+  await expect(list(page)).toHaveCount(0)
+  expect(await page.evaluate(() => (window as any).harness.requests.length)).toBe(0)
+  const command = 'cd projects/demo && ls'
+  await page.evaluate(command => (window as any).harness.seedHistory([command]), command)
+  await expect(candidate(page, command)).toHaveAttribute('data-source', 'history')
+  await candidate(page, command).click()
+  expect(await page.evaluate(() => (window as any).harness.sent.at(-1))).toBe('s/demo && ls')
+  expect(await readHistory(page)).toEqual([])
 })
 
 test('suggests and records commands at decorated multiline and Powerline prompts', async ({ page }) => {
@@ -388,7 +406,7 @@ test('pauses on IME, terminal selection, cursor editing and outside focus', asyn
   await expect(list(page)).toHaveCount(0)
 })
 
-test('settings persist, keep common candidates when history is off and clear local history', async ({ page }) => {
+test('settings persist, hide all local candidates when history is off and clear stored history', async ({ page }) => {
   await page.keyboard.type('echo saved')
   await page.keyboard.press('Enter')
   await expect.poll(() => readHistory(page)).toHaveLength(1)
@@ -401,7 +419,7 @@ test('settings persist, keep common candidates when history is off and clear loc
   await expect(list(page)).toHaveCount(0)
   await reset(page)
   await page.keyboard.type('git ')
-  await expect(first(page)).toHaveText('git status')
+  await expect(list(page)).toHaveCount(0)
   await page.getByRole('button', { name: '命令提示设置', exact: true }).click()
   await page.getByRole('switch', { name: '命令提示', exact: true }).uncheck()
   await expect(page.getByRole('status')).toContainText('已自动保存')
@@ -502,6 +520,12 @@ test('the production terminal shows the popup and sends clicked text through its
   ` }))
   await page.goto('/tests/terminal-suggestions-harness.html')
   await page.waitForFunction(() => (window as any).productionReady)
+  await page.evaluate(async () => {
+    const { rememberSuggestionCommand } = await import('/src/services/terminalSuggestions/runtime.ts')
+    await rememberSuggestionCommand('production-host', 'git status')
+    await rememberSuggestionCommand('production-host', 'git status')
+    await rememberSuggestionCommand('production-host', 'git diff')
+  })
   await focus(page)
   await page.keyboard.type('git ')
   await expect(first(page)).toHaveText('git status')
@@ -515,5 +539,5 @@ test('the production terminal shows the popup and sends clicked text through its
   await expect.poll(() => page.evaluate(async () => {
     const { readCommandHistory } = await import(/* @vite-ignore */ '/src/services/storage.ts')
     return readCommandHistory('production-host')
-  })).toEqual([expect.objectContaining({ command: 'git diff' })])
+  })).toEqual([expect.objectContaining({ command: 'git diff', uses: 2 }), expect.objectContaining({ command: 'git status', uses: 2 })])
 })

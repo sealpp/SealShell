@@ -7,7 +7,7 @@ import { cloudPayload, generateRecommendations } from './cloud'
 import { requestAI } from '../ai-http'
 vi.mock('../ai-http', () => ({ requestAI: vi.fn() }))
 import { createRecommender } from './recommender'
-import { directoryProbe, parseDirectoryFacts, pathSuggestions } from './context'
+import { directoryProbe, parseDirectoryFacts } from './context'
 import { defaultRecommendationSettings as defaults } from './settings'
 
 const request = { sessionId: 'session-a', query: 'python main.py', cwd: '/work', history: [] }
@@ -44,11 +44,6 @@ describe('cloud boundary', () => {
 })
 
 describe('recommendation composition', () => {
-  it('quotes verified paths, including Unicode and whitespace, for non-prefix completion', () => {
-    expect(pathSuggestions('cd 项目', facts)[0].command).toBe("cd -- '/work/项目 a'")
-    expect(pathSuggestions('cat main', facts)[0].command).toBe("cat -- '/work/main.py'")
-    expect(pathSuggestions('rm main', facts)[0].command).toBe("rm '/work/main.py'")
-  })
   it('caches context by session and cwd and keeps local mode and AI mode independently selectable', async () => {
     const context = vi.fn().mockResolvedValue(facts)
     const generate = vi.fn().mockRejectedValue(new Error('云端推荐失败（HTTP 503）'))
@@ -57,16 +52,17 @@ describe('recommendation composition', () => {
     const progress = vi.fn()
     const settings = { ...defaults, cloud: true }
     expect(await run({ ...request, query: 'cd 项目' }, { ...settings, cloud: false }, new AbortController().signal, publish, progress)).toBe('')
-    expect(progress.mock.calls).toEqual([['context']])
+    expect(progress).not.toHaveBeenCalled()
+    expect(context).not.toHaveBeenCalled()
     expect(generate).not.toHaveBeenCalled()
-    expect(publish.mock.calls[0][0][0].command).toContain('项目 a')
+    expect(publish).not.toHaveBeenCalled()
     progress.mockClear()
     expect(await run(request, settings, new AbortController().signal, publish, progress)).toContain('503')
     expect(progress.mock.calls).toEqual([['context'], ['context'], ['ai']])
-    expect(context).toHaveBeenCalledTimes(2)
+    expect(context).toHaveBeenCalledTimes(1)
     await run({ ...request, sessionId: 'b' }, settings, new AbortController().signal, publish)
     await run({ ...request, cwd: '/elsewhere' }, settings, new AbortController().signal, publish)
-    expect(context).toHaveBeenCalledTimes(4)
+    expect(context).toHaveBeenCalledTimes(3)
   })
   it('cancels timed out work and ignores a late provider that disregards cancellation', async () => {
     vi.useFakeTimers()

@@ -40,7 +40,7 @@ export async function loadSuggestionPreferences(): Promise<void> {
 }
 
 export async function saveSuggestionPreferences(enabled: boolean, rememberHistory: boolean, recommendations = commandSuggestions.recommendations, apiKey?: string): Promise<void> {
-  validateRecommendationSettings(recommendations)
+  if (recommendations.cloud) validateRecommendationSettings(recommendations)
   if (apiKey !== undefined) await saveCredentialRecord('command-recommendations', { apiKey: apiKey.trim() })
   await saveMeta<SuggestionPreferences>({ key: 'commandSuggestions', enabled, rememberHistory, recommendations: { ...recommendations } })
   commandSuggestions.enabled = enabled

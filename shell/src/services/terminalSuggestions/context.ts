@@ -1,7 +1,6 @@
 import { getSshSession } from '../ssh'
 import { connectSsh } from '../ssh/connection'
-import type { CommandSuggestion } from './model'
-import { alternativePaths, completePaths, shellQuote, commandName, parentPath } from './paths'
+import { shellQuote, commandName, parentPath } from './paths'
 export { shellQuote } from './paths'
 
 export interface DirectoryFacts {
@@ -72,12 +71,12 @@ export function parseDirectoryFacts(output: string): DirectoryFacts {
   return facts
 }
 
-/** Read one bounded level; omit the fragment for model context, or filter by a literal prefix for local lookup. */
-export function nearbyPathProbe(cwd: string, roots: readonly string[], fragment: string | undefined): string {
-  if (!cwd.startsWith('/') || /[\x00-\x1f\x7f]/.test(cwd) || fragment !== undefined && (fragment.length < 3 || /[/\x00-\x1f\x7f]/.test(fragment))
-    || roots.length > 121 || roots.some(root => !root.startsWith('/') || /[\x00-\x1f\x7f]/.test(root)
+/** Collect a bounded directory snapshot for AI without filtering by the input name. */
+export function nearbyPathProbe(cwd: string, roots: readonly string[]): string {
+  if (!cwd.startsWith('/') || /[\x00-\x1f\x7f]/.test(cwd)
+    || roots.length > 12 || roots.some(root => !root.startsWith('/') || /[\x00-\x1f\x7f]/.test(root)
       || root !== cwd && parentPath(root) !== cwd && parentPath(root) !== parentPath(cwd))) throw new Error('路径查找范围不可用')
-  if (fragment === undefined) return `# sealshell-recommendation-context tree
+  return `# sealshell-recommendation-context tree
 test "$(uname -s)" = Linux || exit 2
 printf 'cwd\\0%s\\0' ${shellQuote(cwd)}
 total=0
@@ -94,25 +93,6 @@ for root in ${roots.map(shellQuote).join(' ')}; do
       printf '%s\\0%s\\0' "$kind" "$p"
     done
   done
-done
-printf 'done\\0yes\\0'`
-  return `# sealshell-recommendation-context nearby
-test "$(uname -s)" = Linux || exit 2
-printf 'cwd\\0%s\\0' ${shellQuote(cwd)}
-n=0
-for phase in exact prefix; do
-for root in ${roots.map(shellQuote).join(' ')}; do
-  case "$root" in /proc|/sys|/dev|/run) continue;; esac
-  [ ! -L "$root" ] || continue
-  [ -d "$root" ] && [ -r "$root" ] && [ -x "$root" ] || continue
-  if [ "$phase" = exact ]; then set -- "\${root%/}"/${shellQuote(fragment)}; else set -- "\${root%/}"/${shellQuote(fragment)}*; fi
-  for p; do
-    [ -e "$p" ] || continue
-    [ "$phase" = prefix ] && [ "\${p##*/}" = ${shellQuote(fragment)} ] && continue
-    n=$((n+1)); if [ "$n" -gt 64 ]; then printf 'limited\\0yes\\0'; break 3; fi
-    if [ -d "$p" ]; then printf 'dir\\0%s\\0' "$p"; else printf 'file\\0%s\\0' "$p"; fi
-  done
-done
 done
 printf 'done\\0yes\\0'`
 }
@@ -133,12 +113,6 @@ export function probeDirectory(sessionId: string, cwd: string, signal: AbortSign
   return probeFacts(sessionId, directoryProbe(cwd, executable), signal)
 }
 
-export function probeNearbyPaths(sessionId: string, cwd: string, roots: string[], fragment: string | undefined, signal: AbortSignal): Promise<DirectoryFacts> {
-  return probeFacts(sessionId, nearbyPathProbe(cwd, roots, fragment), signal)
-}
-
-export function pathSuggestions(query: string, facts: DirectoryFacts): CommandSuggestion[] {
-  const commands = completePaths(query, facts)
-  return [...commands, ...alternativePaths(query, commands, facts.tools)].slice(0, 8)
-    .map(command => ({ command, source: 'directory', priority: 2, uses: 0, lastUsed: 0 }))
+export function probeNearbyPaths(sessionId: string, cwd: string, roots: string[], signal: AbortSignal): Promise<DirectoryFacts> {
+  return probeFacts(sessionId, nearbyPathProbe(cwd, roots), signal)
 }
