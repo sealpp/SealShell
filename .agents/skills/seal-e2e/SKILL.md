@@ -52,6 +52,10 @@ python scripts/build.py
 
 只在 fixture 注入失败，不为生产代码增加专用故障分支。临时项删除失败时必须验证准确保留路径，不能要求所有远端立即释放 Windows 文件锁。
 
+桌面 runner 使用 `SEAL_E2E_BASH` 或 `SEAL_E2E_ZSH` 启用真实 shell 时，还验证本地历史提示：无历史不出现词库建议，已有相对路径原样显示为 history 来源，等待防抖周期后 SSH exec 计数不增加且没有 AI trace，采纳不执行。手工 Ctrl+U 清空行后，用空 Enter 并等待新的提示符再开始下一例；只发现屏幕上的旧提示符不足以证明输入观察器已恢复。
+
+浏览器测试若缺少对应 Playwright Chromium，可使用已安装 Chrome：设置 `PLAYWRIGHT_CHANNEL=chrome` 后运行 UI 套件；不要删除其他版本的浏览器缓存。界面 harness 的历史由用例显式注入，产品没有默认命令词库。
+
 ## 纪律
 
 1. 先完成源码修改，再运行共享该 checkout 的 Vite/浏览器测试；不要边验证边触发 HMR。

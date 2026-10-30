@@ -100,6 +100,40 @@ try {
     await page.waitForFunction(({ copied, cwd }) => window.desktopFixture.store.tabs.find(tab => tab.id === copied)?.cwd === cwd, { copied, cwd })
     await page.evaluate(copied => window.desktopFixture.ws.closeTabs([copied]), copied)
     expect(await readFile(join(artifacts, 'ssh-state.json'), 'utf8')).toContain('shell_cwds')
+    await page.evaluate(async () => {
+      const history = await import('/src/services/terminalSuggestions/runtime.ts')
+      await history.clearSuggestionHistory()
+      await history.saveSuggestionPreferences(true, true, { ...history.commandSuggestions.recommendations, cloud: false, automatic: true, remoteContext: true })
+      window.historyFixture = history
+      window.historyPrompt = (await import('/src/services/terminalSuggestions/commandLine.ts')).isShellPrompt
+    })
+    await page.waitForFunction(() => [...document.querySelectorAll('.xterm-rows > div')].some(row => window.historyPrompt(row.textContent)))
+    const execBeforeHistory = JSON.parse(await readFile(join(artifacts, 'ssh-state.json'), 'utf8')).exec
+    await page.locator('.xterm-helper-textarea').focus()
+    await page.keyboard.type('git ')
+    await page.waitForTimeout(900)
+    await expect(page.getByRole('listbox', { name: '命令候选' })).toHaveCount(0)
+    await page.keyboard.press('Control+u')
+    // Manual line editing pauses suggestions until the shell confirms a fresh prompt.
+    await page.waitForFunction(() => {
+      const rows = [...document.querySelectorAll('.xterm-rows > div')].map(row => row.textContent).filter(text => text.trim())
+      return window.historyPrompt(rows.at(-1))
+    })
+    const promptCount = await page.evaluate(() => [...document.querySelectorAll('.xterm-rows > div')].filter(row => window.historyPrompt(row.textContent)).length)
+    await page.keyboard.press('Enter')
+    await page.waitForFunction(count => [...document.querySelectorAll('.xterm-rows > div')].filter(row => window.historyPrompt(row.textContent)).length > count, promptCount)
+    await page.evaluate(() => window.historyFixture.rememberSuggestionCommand('desktop-fixture', 'cd ../local-project'))
+    await page.keyboard.type('cd ../loc')
+    const historyCandidate = page.getByRole('option').filter({ has: page.getByText('cd ../local-project', { exact: true }) })
+    await expect(historyCandidate).toHaveAttribute('data-source', 'history')
+    await page.waitForTimeout(900)
+    expect(JSON.parse(await readFile(join(artifacts, 'ssh-state.json'), 'utf8')).exec).toBe(execBeforeHistory)
+    expect(await page.evaluate(async () => (await import('/src/services/terminalSuggestions/diagnostics.ts')).recentRecommendationTraces())).toEqual([])
+    await historyCandidate.click()
+    expect(await page.evaluate(() => window.desktopFixture.store.tabs.find(tab => tab.kind === 'terminal').cwd)).toBe(cwd)
+    await page.keyboard.press('Control+u')
+    await page.keyboard.press('Enter')
+    console.log('Desktop history-only suggestions: literal history, no catalog, no context exec or AI request, acceptance without execution')
   }
   await page.evaluate(async () => {
     const { store, ws } = window.desktopFixture
