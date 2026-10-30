@@ -33,6 +33,8 @@ shell/public/sshclient.wasm
 shell/public/wasm_exec.js
 
 # IDE
+/target/
+/shell/src-tauri/gen/
 .idea/
 .devin/
 .vscode/

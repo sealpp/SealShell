@@ -1,0 +1,26 @@
+[package]
+name = "seal-runtime"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+base64 = "0.22"
+bytes = "1"
+futures = "0.3"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+rusqlite = { version = "0.38", features = ["bundled"] }
+russh = { version = "0.65", default-features = false, features = ["ring", "rsa"] }
+russh-sftp = "3.0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+uuid = { version = "1", features = ["v4"] }
+zeroize = { version = "1", features = ["derive"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Security_Cryptography", "Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_Memory"] }
+
+[dev-dependencies]
+tempfile = "3"

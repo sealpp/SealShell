@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "desktop": "tauri dev",
+    "desktop:build": "tauri build",
     "dev": "vite --port 8080 --host 127.0.0.1",
     "dev:lan": "vite --port 18080 --host 0.0.0.0",
     "build": "vue-tsc --noEmit && vite build",
@@ -20,6 +22,7 @@
     "@tabler/icons-vue": "3.45.0",
     "@tanstack/vue-table": "9.3.1",
     "@tanstack/vue-virtual": "3.13.48",
+    "@tauri-apps/api": "^2.12.4",
     "@verdigris/libssh2.js": "file:../vendor/libssh2.js",
     "@vscode/codicons": "^0.0.45",
     "@vscode/iconv-lite-umd": "0.7.1",
@@ -33,6 +36,7 @@
   "devDependencies": {
     "@bufbuild/protoc-gen-es": "^2.2.0",
     "@playwright/test": "^1.62.0",
+    "@tauri-apps/cli": "^2.12.4",
     "@types/node": "^22.20.5",
     "@vitejs/plugin-vue": "^5.0.0",
     "typescript": "^5.5.0",

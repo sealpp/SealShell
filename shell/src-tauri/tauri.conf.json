@@ -1,0 +1,23 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "SealShell",
+  "version": "0.1.0",
+  "identifier": "app.sealshell.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://127.0.0.1:8080",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [{ "label": "main", "title": "SealShell", "width": 1280, "height": 800, "minWidth": 800, "minHeight": 500, "backgroundColor": "#181818" }],
+    "security": { "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data: blob:; font-src 'self' data:; connect-src ipc: http://ipc.localhost; worker-src 'self' blob:" }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["icons/icon.ico", "icons/icon.png"],
+    "shortDescription": "SealShell SSH terminal",
+    "windows": { "webviewInstallMode": { "type": "offlineInstaller" }, "nsis": { "installMode": "currentUser", "languages": ["SimpChinese", "English"] } }
+  }
+}

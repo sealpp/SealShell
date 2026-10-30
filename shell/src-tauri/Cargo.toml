@@ -1,0 +1,12 @@
+[package]
+name = "sealshell"
+version = "0.1.0"
+edition = "2024"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+seal-runtime = { path = "../../runtime" }
+serde_json = "1"
