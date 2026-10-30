@@ -76,6 +76,18 @@ for (const width of [1280, 800]) {
   })
 }
 
+test('input during the handshake does not fail or partially feed a pending terminal', async ({ page }) => {
+  await openWorkbench(page)
+  await addTabs(page)
+  await expect.poll(() => page.evaluate(() => (window as any).initialSizeFixture.connections.length)).toBe(1)
+  await page.locator('.xterm-helper-textarea').focus()
+  await page.keyboard.type('early input')
+  await expect(page.locator('.terminal-tab .dot.connecting')).toHaveCount(1)
+  await expect(page.locator('.xterm-rows')).not.toContainText('session error')
+  await finishConnection(page, 0)
+  await expect(page.locator('.terminal-tab .dot.online')).toHaveCount(1)
+})
+
 test('batch connections measure detached tabs from their visible group peer', async ({ page }) => {
   await openWorkbench(page)
   await addTabs(page, 3)

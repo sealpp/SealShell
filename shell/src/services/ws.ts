@@ -352,7 +352,7 @@ export function closeTabs(tabIds: string[], skipDirtyPrompt = false): void {
 
 export function sendTerminalInput(sessionId: string, payload: Uint8Array): void {
   const tab = store.tabs.find((item) => item.sessionId === sessionId)
-  if (tab) void sendInput(tab.sessionId, payload).catch((error) => {
+  if (tab?.state === 'online') void sendInput(tab.sessionId, payload).catch((error) => {
     updateTabState(tab.sessionId, 'error', error instanceof Error ? error.message : String(error))
   })
 }
