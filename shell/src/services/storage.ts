@@ -1,331 +1,80 @@
+import { nativeCall } from '../native/bridge'
 import type { FolderProfile, HostProfile, TerminalPreferences } from '../stores/app'
 import type { ProxyProfile } from './proxy/types'
 import type { PortRule, PortBindHost } from './ports/types'
 import { rememberCommand, type CommandHistoryEntry, type CommandUse } from './terminalSuggestions/model'
 
-const DB_NAME = 'seal-shell'
-const DB_VERSION = 3
-
-export type { HostProfile } from '../stores/app'
-export type { FolderProfile } from '../stores/app'
-
-export interface StoredIdentity {
-  key: 'identity'
-  deviceId: string
-  deviceName: string
-  devicePrivateKey: CryptoKey
-  devicePublicKey: ArrayBuffer
-  nodeId?: string
-  nodePublicKey?: ArrayBuffer
-}
-
-export interface EncryptedCredential {
-  id: string
-  version: 1
-  nonce: string
-  ciphertext: string
-}
-
-export interface KnownHostRecord {
-  id: string
-  host: string
-  port: number
-  publicKey: string
-  fingerprint: string
-}
-
+export type { HostProfile, FolderProfile } from '../stores/app'
 export type StoredTerminalPreferences = TerminalPreferences
+export interface EncryptedCredential { id: string; ciphertext: string }
+export interface KnownHostRecord { id: string; host: string; port: number; publicKey: string; fingerprint: string }
+interface Change { collection: string; key: string; value?: unknown }
 
-let database: Promise<IDBDatabase> | undefined
+async function get<T>(collection: string, key: string): Promise<T | undefined> { return (await nativeCall<T | null>('store_get', { collection, key })) ?? undefined }
+function list<T>(collection: string): Promise<T[]> { return nativeCall('store_list', { collection }) }
+function write(changes: Change[], requireHost?: string): Promise<boolean> { return nativeCall('store_write', { changes, requireHost }) }
+async function put(collection: string, key: string, value: unknown): Promise<void> { await write([{ collection, key, value }]) }
+const remove = (collection: string, key: string): Change => ({ collection, key })
+const hostRemoval = (id: string): Change[] => [remove('hosts', id), remove('credentials', id), remove('meta', `ports:${id}`), remove('meta', `commandHistory:${id}`)]
 
-function openDatabase(): Promise<IDBDatabase> {
-  if (database) return database
-  database = new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION)
-    request.onerror = () => reject(request.error ?? new Error('failed to open PWA database'))
-    request.onsuccess = () => resolve(request.result)
-    request.onupgradeneeded = () => {
-      const db = request.result
-      if (!db.objectStoreNames.contains('meta')) {
-        db.createObjectStore('meta', { keyPath: 'key' })
-      }
-      if (!db.objectStoreNames.contains('hosts')) {
-        db.createObjectStore('hosts', { keyPath: 'id' })
-      }
-      if (!db.objectStoreNames.contains('folders')) {
-        db.createObjectStore('folders', { keyPath: 'id' })
-      }
-      if (!db.objectStoreNames.contains('credentials')) {
-        db.createObjectStore('credentials', { keyPath: 'id' })
-      }
-      if (!db.objectStoreNames.contains('knownHosts')) {
-        db.createObjectStore('knownHosts', { keyPath: 'id' })
-      }
-    }
-  })
-  return database
-}
-
-function requestResult<T>(request: IDBRequest<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    request.onerror = () => reject(request.error ?? new Error('PWA database request failed'))
-    request.onsuccess = () => resolve(request.result)
-  })
-}
-
-async function getFromStore<T>(storeName: string, key: IDBValidKey): Promise<T | undefined> {
-  const db = await openDatabase()
-  return requestResult(db.transaction(storeName, 'readonly').objectStore(storeName).get(key)) as Promise<T | undefined>
-}
-
-async function putInStore<T>(storeName: string, value: T): Promise<void> {
-  const db = await openDatabase()
-  const transaction = db.transaction(storeName, 'readwrite')
-  transaction.objectStore(storeName).put(value)
-  await new Promise<void>((resolve, reject) => {
-    transaction.oncomplete = () => resolve()
-    transaction.onabort = () => reject(transaction.error ?? new Error('PWA database write aborted'))
-    transaction.onerror = () => reject(transaction.error ?? new Error('PWA database write failed'))
-  })
-}
-
-async function deleteFromStore(storeName: string, key: IDBValidKey): Promise<void> {
-  const db = await openDatabase()
-  await requestResult(db.transaction(storeName, 'readwrite').objectStore(storeName).delete(key))
-}
-
-export async function readIdentity(): Promise<StoredIdentity | undefined> {
-  return getFromStore<StoredIdentity>('meta', 'identity')
-}
-
-export async function saveIdentity(identity: StoredIdentity): Promise<void> {
-  await putInStore('meta', identity)
-}
-
-export async function clearIdentity(): Promise<void> {
-  await deleteFromStore('meta', 'identity')
-}
-
-export async function readMeta<T extends { key: string }>(key: string): Promise<T | undefined> {
-  return getFromStore<T>('meta', key)
-}
-
-export async function saveMeta<T extends { key: string }>(value: T): Promise<void> {
-  await putInStore('meta', value)
-}
-
-export async function listHosts(): Promise<HostProfile[]> {
-  const db = await openDatabase()
-  const hosts = await requestResult<HostProfile[]>(db.transaction('hosts', 'readonly').objectStore('hosts').getAll())
-  return hosts.map((host) => ({ ...host, folderId: host.folderId ?? null }))
-}
-
-export async function listFolders(): Promise<FolderProfile[]> {
-  const db = await openDatabase()
-  return requestResult<FolderProfile[]>(db.transaction('folders', 'readonly').objectStore('folders').getAll())
-}
-
-export async function saveHost(host: HostProfile): Promise<void> {
-  await putInStore('hosts', host)
-}
-
-export async function saveFolder(folder: FolderProfile): Promise<void> {
-  await putInStore('folders', folder)
-}
+export function readMeta<T extends { key: string }>(key: string): Promise<T | undefined> { return get('meta', key) }
+export function saveMeta<T extends { key: string }>(value: T): Promise<void> { return put('meta', value.key, value) }
+export function listHosts(): Promise<HostProfile[]> { return list('hosts') }
+export function listFolders(): Promise<FolderProfile[]> { return list('folders') }
+export function saveHost(host: HostProfile): Promise<void> { return put('hosts', host.id, host) }
+export function saveFolder(folder: FolderProfile): Promise<void> { return put('folders', folder.id, folder) }
 
 export async function deleteFolderTree(rootFolderIds: string[]): Promise<{ folderIds: string[]; hostIds: string[] }> {
-  if (!rootFolderIds.length) return { folderIds: [], hostIds: [] }
-  const db = await openDatabase()
-  const readTransaction = db.transaction(['folders', 'hosts'], 'readonly')
-  const foldersRequest = readTransaction.objectStore('folders').getAll()
-  const hostsRequest = readTransaction.objectStore('hosts').getAll()
-  const [allFolders, allHosts] = await Promise.all([
-    requestResult<FolderProfile[]>(foldersRequest),
-    requestResult<HostProfile[]>(hostsRequest),
-  ])
-  const roots = new Set(rootFolderIds)
-  const folderIds = new Set<string>()
+  const [folders, hosts] = await Promise.all([listFolders(), listHosts()])
+  const roots = new Set(rootFolderIds), selected = new Set<string>()
   let changed = true
   while (changed) {
     changed = false
-    for (const folder of allFolders) {
-      if (roots.has(folder.id) || (folder.parentId !== null && folderIds.has(folder.parentId))) {
-        if (!folderIds.has(folder.id)) {
-          folderIds.add(folder.id)
-          changed = true
-        }
-      }
+    for (const folder of folders) if (!selected.has(folder.id) && (roots.has(folder.id) || (folder.parentId !== null && selected.has(folder.parentId)))) {
+      selected.add(folder.id); changed = true
     }
   }
-  const hostIds = allHosts
-    .filter((host) => host.folderId !== null && folderIds.has(host.folderId))
-    .map((host) => host.id)
-  const transaction = db.transaction(['folders', 'hosts', 'credentials', 'meta'], 'readwrite')
-  const folders = transaction.objectStore('folders')
-  const hosts = transaction.objectStore('hosts')
-  const credentials = transaction.objectStore('credentials')
-  folderIds.forEach((id) => folders.delete(id))
-  hostIds.forEach((id) => {
-    hosts.delete(id)
-    credentials.delete(id)
-    transaction.objectStore('meta').delete(`ports:${id}`)
-    transaction.objectStore('meta').delete(`commandHistory:${id}`)
-  })
-  await new Promise<void>((resolve, reject) => {
-    transaction.onerror = () => reject(transaction.error ?? new Error('failed to delete folder tree'))
-    transaction.oncomplete = () => resolve()
-  })
-  return { folderIds: Array.from(folderIds), hostIds }
+  const hostIds = hosts.filter(host => host.folderId !== null && selected.has(host.folderId)).map(host => host.id)
+  await write([...selected].map(id => remove('folders', id)).concat(hostIds.flatMap(hostRemoval)))
+  return { folderIds: [...selected], hostIds }
 }
-
-export async function moveTreeNodes(
-  folderIds: string[],
-  hostIds: string[],
-  parentId: string | null,
-): Promise<void> {
-  const db = await openDatabase()
-  const transaction = db.transaction(['folders', 'hosts'], 'readwrite')
-  const folders = transaction.objectStore('folders')
-  const hosts = transaction.objectStore('hosts')
-  folderIds.forEach((id) => {
-    const request = folders.get(id)
-    request.onsuccess = () => {
-      if (request.result) folders.put({ ...request.result, parentId })
-    }
-  })
-  hostIds.forEach((id) => {
-    const request = hosts.get(id)
-    request.onsuccess = () => {
-      if (request.result) hosts.put({ ...request.result, folderId: parentId })
-    }
-  })
-  await new Promise<void>((resolve, reject) => {
-    transaction.onerror = () => reject(transaction.error ?? new Error('failed to move tree nodes'))
-    transaction.oncomplete = () => resolve()
-  })
+export async function moveTreeNodes(folderIds: string[], hostIds: string[], parentId: string | null): Promise<void> {
+  const [folders, hosts] = await Promise.all([listFolders(), listHosts()])
+  await write([
+    ...folders.filter(folder => folderIds.includes(folder.id)).map(folder => ({ collection: 'folders', key: folder.id, value: { ...folder, parentId } })),
+    ...hosts.filter(host => hostIds.includes(host.id)).map(host => ({ collection: 'hosts', key: host.id, value: { ...host, folderId: parentId } })),
+  ])
 }
-
-export async function deleteHost(id: string): Promise<void> {
-  await deleteHosts([id])
-}
-
-export async function deleteHosts(ids: string[]): Promise<void> {
-  const db = await openDatabase()
-  const transaction = db.transaction(['hosts', 'credentials', 'meta'], 'readwrite')
-  const hosts = transaction.objectStore('hosts')
-  const credentials = transaction.objectStore('credentials')
-  for (const id of ids) {
-    hosts.delete(id)
-    credentials.delete(id)
-    transaction.objectStore('meta').delete(`ports:${id}`)
-    transaction.objectStore('meta').delete(`commandHistory:${id}`)
-  }
-  await new Promise<void>((resolve, reject) => {
-    transaction.onerror = () => reject(transaction.error ?? new Error('failed to delete hosts'))
-    transaction.oncomplete = () => resolve()
-  })
-}
-
-export async function readCredential(id: string): Promise<EncryptedCredential | undefined> {
-  return getFromStore<EncryptedCredential>('credentials', id)
-}
-
-export async function saveCredential(credential: EncryptedCredential): Promise<void> {
-  await putInStore('credentials', credential)
-}
-
-export async function clearCredential(id: string): Promise<void> {
-  await deleteFromStore('credentials', id)
-}
-
+export async function deleteHost(id: string): Promise<void> { await deleteHosts([id]) }
+export async function deleteHosts(ids: string[]): Promise<void> { await write(ids.flatMap(hostRemoval)) }
+export function readCredential(id: string): Promise<EncryptedCredential | undefined> { return get('credentials', id) }
+export function saveCredential(record: EncryptedCredential): Promise<void> { return put('credentials', record.id, record) }
+export async function clearCredential(id: string): Promise<void> { await write([remove('credentials', id)]) }
 export async function saveProxyCatalog(items: ProxyProfile[], credentialId: string, credential?: EncryptedCredential | null): Promise<void> {
-  const db = await openDatabase()
-  const transaction = db.transaction(['meta', 'credentials'], 'readwrite')
-  transaction.objectStore('meta').put({ key: 'proxyServers', items })
-  if (credential === null) transaction.objectStore('credentials').delete(credentialId)
-  else if (credential) transaction.objectStore('credentials').put(credential)
-  await new Promise<void>((resolve, reject) => {
-    transaction.oncomplete = () => resolve()
-    transaction.onabort = () => reject(transaction.error ?? new Error('代理配置保存失败'))
-    transaction.onerror = () => reject(transaction.error ?? new Error('代理配置保存失败'))
+  const changes: Change[] = [{ collection: 'meta', key: 'proxyServers', value: { key: 'proxyServers', items } }]
+  if (credential !== undefined) changes.push({ collection: 'credentials', key: credentialId, value: credential ?? undefined })
+  await write(changes)
+}
+export function readKnownHost(host: string, port: number): Promise<KnownHostRecord | undefined> { return get('knownHosts', `${host}\0${port}`) }
+export function saveKnownHost(record: Omit<KnownHostRecord, 'id'>): Promise<void> { const id = `${record.host}\0${record.port}`; return put('knownHosts', id, { ...record, id }) }
+export async function readPortRules(hostId: string): Promise<PortRule[]> { return (await get<{ items: PortRule[] }>('meta', `ports:${hostId}`))?.items ?? [] }
+export async function savePortRules(hostId: string, items: PortRule[]): Promise<void> { await write([{ collection: 'meta', key: `ports:${hostId}`, value: { key: `ports:${hostId}`, items } }], hostId) }
+export async function readPortBindHost(): Promise<PortBindHost> { return (await get<{ host: PortBindHost }>('meta', 'portBindHost'))?.host ?? '127.0.0.1' }
+export function savePortBindHost(host: PortBindHost): Promise<void> { return saveMeta({ key: 'portBindHost', host }) }
+export async function readCommandHistory(hostId: string): Promise<CommandHistoryEntry[]> { return (await readMeta<{ key: string; items: CommandHistoryEntry[] }>(`commandHistory:${hostId}`))?.items ?? [] }
+
+let historyWrites: Promise<unknown> = Promise.resolve()
+export function recordCommandHistory(hostId: string, command: string, use: CommandUse = {}): Promise<CommandHistoryEntry[]> {
+  const pending = historyWrites.catch(() => {}).then(async () => {
+    const key = `commandHistory:${hostId}`
+    const items = rememberCommand(await readCommandHistory(hostId), command, Date.now(), use)
+    return await write([{ collection: 'meta', key, value: { key, items } }], hostId) ? items : []
   })
+  historyWrites = pending
+  return pending
 }
-
-function knownHostId(host: string, port: number): string {
-  return `${host}\u0000${port}`
-}
-
-export async function readKnownHost(host: string, port: number): Promise<KnownHostRecord | undefined> {
-  return getFromStore<KnownHostRecord>('knownHosts', knownHostId(host, port))
-}
-
-export async function saveKnownHost(record: Omit<KnownHostRecord, 'id'>): Promise<void> {
-  await putInStore('knownHosts', { ...record, id: knownHostId(record.host, record.port) })
-}
-
-export async function readPortRules(hostId: string): Promise<PortRule[]> {
-  return (await getFromStore<{ items: PortRule[] }>('meta', `ports:${hostId}`))?.items ?? []
-}
-
-export async function savePortRules(hostId: string, items: PortRule[]): Promise<void> {
-  const db = await openDatabase()
-  // Host existence and write share a transaction: a deleted profile cannot be
-  // resurrected by an independent panel which retains its connection snapshot.
-  const transaction = db.transaction(['hosts', 'meta'], 'readwrite')
-  const host = transaction.objectStore('hosts').get(hostId)
-  host.onsuccess = () => { if (host.result) transaction.objectStore('meta').put({ key: `ports:${hostId}`, items }) }
-  await new Promise<void>((resolve, reject) => {
-    transaction.oncomplete = () => resolve()
-    transaction.onabort = () => reject(transaction.error ?? new Error('端口规则保存失败'))
-    transaction.onerror = () => reject(transaction.error ?? new Error('端口规则保存失败'))
-  })
-}
-
-export async function readPortBindHost(): Promise<PortBindHost> {
-  return (await getFromStore<{ host: PortBindHost }>('meta', 'portBindHost'))?.host ?? '127.0.0.1'
-}
-export async function savePortBindHost(host: PortBindHost): Promise<void> {
-  await putInStore('meta', { key: 'portBindHost', host })
-}
-
-export async function readCommandHistory(hostId: string): Promise<CommandHistoryEntry[]> {
-  return (await readMeta<{ key: string; items: CommandHistoryEntry[] }>(`commandHistory:${hostId}`))?.items ?? []
-}
-
-export async function recordCommandHistory(hostId: string, command: string, use: CommandUse = {}): Promise<CommandHistoryEntry[]> {
-  const db = await openDatabase()
-  const transaction = db.transaction(['hosts', 'meta'], 'readwrite')
-  const meta = transaction.objectStore('meta')
-  const key = `commandHistory:${hostId}`
-  const host = transaction.objectStore('hosts').get(hostId)
-  let items: CommandHistoryEntry[] = []
-  host.onsuccess = () => {
-    if (!host.result) return
-    const history = meta.get(key)
-    history.onsuccess = () => {
-      items = rememberCommand(history.result?.items ?? [], command, Date.now(), use)
-      meta.put({ key, items })
-    }
-  }
-  await new Promise<void>((resolve, reject) => {
-    transaction.oncomplete = () => resolve()
-    transaction.onabort = () => reject(transaction.error ?? new Error('命令历史保存失败'))
-    transaction.onerror = () => reject(transaction.error ?? new Error('命令历史保存失败'))
-  })
-  return items
-}
-
 export async function clearCommandHistory(): Promise<void> {
-  const db = await openDatabase()
-  const transaction = db.transaction('meta', 'readwrite')
-  const meta = transaction.objectStore('meta')
-  const keys = meta.getAllKeys()
-  keys.onsuccess = () => {
-    for (const key of keys.result) if (typeof key === 'string' && key.startsWith('commandHistory:')) meta.delete(key)
-  }
-  await new Promise<void>((resolve, reject) => {
-    transaction.oncomplete = () => resolve()
-    transaction.onabort = () => reject(transaction.error ?? new Error('命令历史清除失败'))
-    transaction.onerror = () => reject(transaction.error ?? new Error('命令历史清除失败'))
-  })
+  await historyWrites.catch(() => {})
+  const records = await list<{ key: string }>('meta')
+  await write(records.filter(item => item.key.startsWith('commandHistory:')).map(item => remove('meta', item.key)))
 }

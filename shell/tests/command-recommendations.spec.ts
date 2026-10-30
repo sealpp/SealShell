@@ -257,7 +257,7 @@ test('keeps Ctrl+I and the former intent shortcut in the terminal without openin
   expect(await requests(page)).toBe(0)
 })
 
-test('saves cloud configuration with encrypted credentials and preserves it across reload', async ({ page }) => {
+test('saves cloud configuration through the native credential interface and preserves it across reload', async ({ page }) => {
   await page.getByRole('button', { name: '命令提示设置', exact: true }).click()
   // Locators can auto-scroll before editing; assert discoverability first.
   await expect(page.getByRole('textbox', { name: 'API 地址', exact: true })).toBeInViewport({ ratio: 1 })
@@ -274,7 +274,8 @@ test('saves cloud configuration with encrypted credentials and preserves it acro
     return { meta: await storage.readMeta('commandSuggestions'), encrypted: await storage.readCredential('command-recommendations'), key: await vault.loadCredentialRecord('command-recommendations') }
   })
   expect(JSON.stringify(stored.meta)).not.toContain('synthetic-private-test-key')
-  expect(JSON.stringify(stored.encrypted)).not.toContain('synthetic-private-test-key')
+  // DPAPI encryption is verified by the native tests; this browser uses an explicit fixture.
+  expect(stored.encrypted.id).toBe('command-recommendations')
   expect(stored.key.apiKey).toBe('synthetic-private-test-key')
   await page.reload()
   await expect(page.locator('#ready')).toHaveText('true')
@@ -311,9 +312,7 @@ test('the production terminal requests AI for a path even without directory cont
   await page.goto('/tests/terminal-suggestions-harness.html')
   await page.waitForFunction(() => (window as any).productionReady)
   await page.evaluate(async () => {
-    const { initializeVault } = await import('/src/services/vault.ts')
     const { saveSuggestionPreferences } = await import('/src/services/terminalSuggestions/runtime.ts')
-    await initializeVault()
     await saveSuggestionPreferences(true, true, { cloud: true, automatic: true, remoteContext: false, shareHistory: false, baseUrl: 'https://model.example/v1', model: 'test-model' }, 'synthetic-key')
   })
   await input(page).focus()
@@ -352,9 +351,7 @@ test('the production terminal composes a real cloud adapter request and inserts 
   await page.goto('/tests/terminal-suggestions-harness.html')
   await page.waitForFunction(() => (window as any).productionReady)
   await page.evaluate(async () => {
-    const { initializeVault } = await import(/* @vite-ignore */ '/src/services/vault.ts')
     const { saveSuggestionPreferences } = await import(/* @vite-ignore */ '/src/services/terminalSuggestions/runtime.ts')
-    await initializeVault()
     await saveSuggestionPreferences(true, true, { cloud: true, automatic: true, remoteContext: false, shareHistory: false, baseUrl: 'https://model.example/v1', model: 'test-model' }, 'synthetic-key')
   })
   await input(page).focus()

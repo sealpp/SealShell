@@ -9,7 +9,7 @@ const fixture = vi.hoisted(() => {
   }
 })
 vi.mock('./storage', () => ({ readKnownHost: async () => undefined }))
-vi.mock('./ssh/ssh-worker-client', () => ({ SshWorkerClient: class {
+vi.mock('./ssh/client', () => ({ SshClient: class {
   connect = fixture.connect
   resize = fixture.resize
   send(data: Uint8Array) { fixture.events.push(new TextDecoder().decode(data)) }

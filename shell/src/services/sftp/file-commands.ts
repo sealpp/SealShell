@@ -169,13 +169,11 @@ registerFileAction({
 
 registerFileAction({
   id: 'file.newLocal', title: '新建本地窗口', description: '新建独立的本地文件标签', category: 'workbench',
-  enablement: () => store.paired,
   run: () => { createLocalFileTab(false) },
   menus: [{ menuId: MenuId.FileInstances, order: 10 }],
 })
 registerFileAction({
   id: 'file.newLocalSplit', title: '新建本地窗口并分栏', description: '在当前文件窗口左侧打开本地目录', category: 'workbench',
-  enablement: () => store.paired,
   run: () => { createLocalFileTab(true) },
   keybindings: [{ key: 'Alt+L' }],
 })

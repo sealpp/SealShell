@@ -10,7 +10,6 @@ export const MenuId = {
   TerminalEncoding: 'terminal.encoding',
   FileContext: 'file.context',
   FileInstances: 'file.instances',
-  NodeStatus: 'node.status',
 } as const
 
 export const HOST_MENU_ID = MenuId.HostContext
@@ -19,4 +18,3 @@ export const ROOT_MENU_ID = MenuId.RootContext
 export const TAB_MENU_ID = MenuId.TabContext
 export const TERMINAL_MENU_ID = MenuId.TerminalContext
 export const FILE_MENU_ID = MenuId.FileContext
-export const NODE_MENU_ID = MenuId.NodeStatus

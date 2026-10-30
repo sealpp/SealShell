@@ -9,7 +9,6 @@ import { LinuxProcessProvider, processTargets } from './provider'
 import type { ProcessPlan, ProcessScope, ProcessSignal, ProcessSnapshot } from './types'
 
 const runtimes = new Map<string, ProcessRuntime>()
-let stopNodeWatch: (() => void) | undefined
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error)
 
 class ProcessRuntime {
@@ -74,7 +73,6 @@ class ProcessRuntime {
       if (this.password === undefined) this.password = await this.credential
       if (!this.current(generation)) return
       if (this.password === undefined) { state.needsPassword = true; this.tab.state = 'idle'; return }
-      if (!store.nodeConnected) throw new Error('Node 未连接')
       const connection = await connectMonitor({ ...config, password: this.password }, controller.signal)
       if (!this.current(generation)) { await connection.close(); return }
       this.connection = connection
@@ -180,8 +178,4 @@ export function prepareProcessAction(id: string, keys: string[], signal: Process
 export function cancelProcessAction(id: string): void { runtimes.get(id)?.finishPlan() }
 export function executeProcessAction(id: string, plan: ProcessPlan): Promise<void> { return runtimes.get(id)?.execute(plan) ?? Promise.resolve() }
 export function disposeProcesses(id: string): void { runtimes.get(id)?.dispose(); runtimes.delete(id) }
-export function startProcessesService(): void {
-  stopNodeWatch?.()
-  stopNodeWatch = watch(() => store.nodeConnected, connected => { if (!connected) for (const runtime of runtimes.values()) runtime.fail(new Error('Node 已断开，请重新连接')) })
-}
-export function stopProcessesService(): void { stopNodeWatch?.(); stopNodeWatch = undefined; for (const id of runtimes.keys()) disposeProcesses(id) }
+export function stopProcessesService(): void { for (const id of runtimes.keys()) disposeProcesses(id) }

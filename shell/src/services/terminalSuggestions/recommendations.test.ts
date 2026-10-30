@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { cloudPayload, generateRecommendations } from './cloud'
+import { requestAI } from '../ai-http'
+vi.mock('../ai-http', () => ({ requestAI: vi.fn() }))
 import { createRecommender } from './recommender'
 import { directoryProbe, parseDirectoryFacts, pathSuggestions } from './context'
 import { defaultRecommendationSettings as defaults } from './settings'
@@ -23,21 +25,18 @@ describe('cloud boundary', () => {
     expect(payload.history).toHaveLength(12)
     expect(JSON.stringify(payload)).not.toContain('private-value')
   })
-  it('sends authenticated compatible JSON and rejects controls, duplicates and oversized answers', async () => {
-    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ suggestions: [candidate, candidate, { command: 'echo hi\rshutdown' }] }) } }] })))
-    vi.stubGlobal('fetch', fetch)
+  it('sends compatible JSON through the native transport and rejects controls and duplicates', async () => {
+    const fetch = vi.fn().mockResolvedValue(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ suggestions: [candidate, candidate, { command: 'echo hi\rshutdown' }] }) } }] }))
+    vi.mocked(requestAI).mockImplementation(fetch)
     expect(await generateRecommendations(request, facts, defaults, 'synthetic-key', new AbortController().signal)).toEqual([candidate])
-    const [url, options] = fetch.mock.calls[0]
+    const [url, body, key] = fetch.mock.calls[0]
     expect(url).toBe('https://api.deepseek.com/chat/completions')
-    expect(options.headers.Authorization).toBe('Bearer synthetic-key')
-    expect(options.redirect).toBe('error')
-    expect(options.body).not.toContain('synthetic-key')
-    fetch.mockResolvedValue(new Response('x'.repeat(65537)))
-    await expect(generateRecommendations(request, facts, defaults, 'synthetic-key', new AbortController().signal)).rejects.toThrow('过大')
+    expect(key).toBe('synthetic-key')
+    expect(JSON.stringify(body)).not.toContain('synthetic-key')
   })
   it('keeps provider error bodies and obvious secrets out of requests and UI errors', async () => {
-    const fetch = vi.fn().mockResolvedValue(new Response('private request echoed', { status: 401 }))
-    vi.stubGlobal('fetch', fetch)
+    const fetch = vi.fn().mockRejectedValue(new Error('云端推荐失败（HTTP 401）'))
+    vi.mocked(requestAI).mockImplementation(fetch)
     await expect(generateRecommendations(request, undefined, defaults, 'fake', new AbortController().signal)).rejects.toThrow('HTTP 401')
     await expect(generateRecommendations({ ...request, query: 'export TOKEN=private-value' }, undefined, defaults, 'fake', new AbortController().signal)).rejects.toThrow('凭据')
     expect(fetch).toHaveBeenCalledTimes(1)

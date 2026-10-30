@@ -322,7 +322,7 @@ watch(
           <button v-if="store.bottomPanelCategory === 'monitors'" type="button" class="workspace-action" :disabled="!canOpenTerminalMonitor"
             aria-label="打开或定位当前终端的性能监测" :title="canOpenTerminalMonitor ? '打开或定位当前终端的性能监测' : '当前没有可用的终端会话'"
             @click="commandService.execute('monitor.open', terminalContext)"><IconFocus2 :size="16" aria-hidden="true" /></button>
-          <button v-if="store.bottomPanelCategory === 'files'" type="button" class="workspace-action" :disabled="!store.paired"
+          <button v-if="store.bottomPanelCategory === 'files'" type="button" class="workspace-action"
             aria-label="新建本地窗口并分栏" title="新建本地窗口并分栏 (Alt+L)"
             @click="commandService.execute('file.newLocalSplit', { area: 'global' })"><IconDeviceDesktopPlus :size="16" /></button>
           <button

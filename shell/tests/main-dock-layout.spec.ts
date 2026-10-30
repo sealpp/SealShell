@@ -24,10 +24,7 @@ async function openTerminals(page: Page, ids = ['layout-a'], state: 'connecting'
       }
     `,
   }))
-  await page.goto('/')
-  const pairing = page.getByRole('dialog', { name: '配对 Node', exact: true })
-  await expect(pairing).toBeVisible()
-  await pairing.getByRole('button', { name: '关闭', exact: true }).click()
+  await page.goto('/tests/app-harness.html')
   await page.evaluate(async ({ ids, state }) => {
     const { store } = await import('/src/stores/app.ts')
     const { commandSuggestions } = await import('/src/services/terminalSuggestions/runtime.ts')

@@ -87,10 +87,10 @@ test('Delete key removes the selected connection node', async ({ page }) => {
   await expect(page.locator('.conn-item').filter({ hasText: 'Root host' })).toHaveCount(0)
 })
 
-test('normalizes legacy hosts without a folder into the virtual root', async ({ page }) => {
+test('loads explicitly ungrouped hosts into the virtual root', async ({ page }) => {
   const folderId = await page.evaluate(async () => {
     const storage = await import('/src/services/storage.ts')
-    await storage.saveHost({ id: 'legacy-host', name: 'Legacy', address: '10.0.0.9', port: 22, username: 'root' } as never)
+    await storage.saveHost({ id: 'legacy-host', name: 'Legacy', address: '10.0.0.9', port: 22, username: 'root', folderId: null })
     return (await storage.listHosts()).find((host) => host.id === 'legacy-host')?.folderId
   })
   expect(folderId).toBeNull()

@@ -2,12 +2,14 @@ import type { FileEntry } from '../../stores/app'
 import type { FilePaths } from './path'
 import type { ProxySource } from '../proxy/types'
 
-export type FileEndpoint = { kind: 'local'; nodeId: string } | { kind: 'sftp'; hostId: string }
+export type FileEndpoint = { kind: 'local' } | { kind: 'sftp'; hostId: string }
 export interface FileDirectoryPage { path: string; entries: FileEntry[]; nextCursor?: string }
 export interface FileReader { read(offset: number, length: number): Promise<ArrayBuffer>; close(): Promise<void> }
 export interface FileWriter { write(offset: number, data: ArrayBuffer): Promise<void>; close(): Promise<void> }
 
 export interface FileBackend {
+  readonly nativeId?: string
+  writeAtomic?(path: string, data: ArrayBuffer): Promise<void>
   readonly paths: FilePaths
   namespace?: string
   atomicReplace?: boolean

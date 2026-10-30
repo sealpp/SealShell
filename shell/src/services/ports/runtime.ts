@@ -1,4 +1,4 @@
-import { reactive, watch } from 'vue'
+import { reactive } from 'vue'
 import { setBottomPanelActiveTab, store, type PortsTab } from '../../stores/app'
 import { loadCredentialRecord } from '../vault'
 import { hostProxySource, resolveHostConnection } from '../proxy/profiles'
@@ -11,7 +11,6 @@ import { PortForwarder } from './forwarder'
 import type { PortBindHost, PortRow } from './types'
 
 const runtimes = new Map<string, PortsRuntime>()
-let stopWatch: (() => void) | undefined
 export const portPreferences = reactive<{ host: PortBindHost; error: string }>({ host: '127.0.0.1', error: '' })
 const preferencesReady = readPortBindHost().then(host => { portPreferences.host = host }).catch(error => { portPreferences.error = String(error) })
 
@@ -59,7 +58,6 @@ class PortsRuntime {
         this.tab.state = 'idle'
         return
       }
-      if (!store.nodeConnected) throw new Error('Node 未连接，请连接后重试。')
       this.connection = { ...snapshot, password: this.password }
       this.discovery = await connectSsh(this.connection, controller.signal)
       if (!current()) return
@@ -250,14 +248,6 @@ export async function setPortBindHost(host: PortBindHost): Promise<void> {
   portPreferences.host = host
   for (const runtime of runtimes.values()) for (const row of runtime.tab.ports.rows) if (row.enabled) void runtime.restart(row)
 }
-export function startPortsService(): void {
-  stopWatch?.()
-  stopWatch = watch(() => store.nodeConnected, connected => {
-    if (!connected) for (const runtime of runtimes.values()) runtime.fail(new Error('Node 已断开，请连接后重试。'))
-  })
-}
 export function stopPortsService(): void {
-  stopWatch?.()
-  stopWatch = undefined
   for (const id of runtimes.keys()) void disposePorts(id)
 }

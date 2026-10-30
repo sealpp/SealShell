@@ -21,10 +21,7 @@ async function openWorkbench(page: Page) {
       export async function resize(id, columns, rows) { window.initialSizeFixture.resizes.push({ id, columns, rows }); }
     `,
   }))
-  await page.goto('/')
-  const pairing = page.getByRole('dialog', { name: '配对 Node', exact: true })
-  await expect(pairing).toBeVisible()
-  await pairing.getByRole('button', { name: '关闭', exact: true }).click()
+  await page.goto('/tests/app-harness.html')
   await page.evaluate(async () => {
     const { store } = await import('/src/stores/app.ts')
     const { commandSuggestions } = await import('/src/services/terminalSuggestions/runtime.ts')

@@ -16,8 +16,6 @@ export const ContextKeys = {
   canPaste: 'canPaste',
   tabEncoding: 'tabEncoding',
   selectedCount: 'selectedCount',
-  isPaired: 'isPaired',
-  nodeConnected: 'nodeConnected',
   sidebarOpen: 'sidebarOpen',
   bottomPanelOpen: 'bottomPanelOpen',
   bottomPanelCategory: 'bottomPanelCategory',
@@ -212,7 +210,6 @@ function contextValues(ctx: CommandContext): Record<string, ContextValue> {
   if (ctx.canPaste !== undefined) values[ContextKeys.canPaste] = ctx.canPaste
   if (ctx.tabEncoding !== undefined) values[ContextKeys.tabEncoding] = ctx.tabEncoding
   if (ctx.selectedCount !== undefined) values[ContextKeys.selectedCount] = ctx.selectedCount
-  if (ctx.isPaired !== undefined) values[ContextKeys.isPaired] = ctx.isPaired
   return values
 }
 

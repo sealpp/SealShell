@@ -13,14 +13,14 @@ vi.mock('./forwarder', () => ({ PortForwarder: class {
 } }))
 
 import { store } from '../../stores/app'
-import { addPort, configurePort, disposePorts, openPorts, retryPorts, startPortsService, stopPortsService } from './runtime'
+import { addPort, configurePort, disposePorts, openPorts, retryPorts, stopPortsService } from './runtime'
 
 const result = (value: string) => ({ stdout: new TextEncoder().encode(value), stderr: new Uint8Array(), exitCode: 0 })
 async function settle() { for (let i = 0; i < 60; i++) await Promise.resolve() }
 beforeEach(() => {
   vi.useFakeTimers()
   fake.forwards.length = 0; fake.discoveries.length = 0
-  store.tabs = []; store.hosts = [{ id: 'a', name: 'A', address: 'old-host', port: 22, username: 'old-user', folderId: null }]; store.nodeConnected = true
+  store.tabs = []; store.hosts = [{ id: 'a', name: 'A', address: 'old-host', port: 22, username: 'old-user', folderId: null }]
   fake.credential.mockReset().mockResolvedValue({ password: 'secret' })
   fake.route.mockReset().mockImplementation(async host => ({ host: host.address, port: host.port, username: host.username, password: '' }))
   fake.read.mockReset().mockResolvedValue([])
@@ -31,7 +31,6 @@ beforeEach(() => {
     fake.discoveries.push(ssh)
     return ssh
   })
-  startPortsService()
 })
 afterEach(async () => { stopPortsService(); await settle(); store.tabs = []; vi.useRealTimers() })
 
@@ -87,7 +86,7 @@ it('waits for old forwarding to close before rebinding and ignores late failure 
   expect(tab.ports.rows.find(row => row.port === 5432)).toMatchObject({ status: 'active', error: '' })
 })
 
-it('does not revive a closed pending instance and stops forwarding when Node disconnects', async () => {
+it('does not revive a closed pending instance and stops forwarding when its native session fails', async () => {
   let resolve!: (value: { password: string }) => void
   fake.credential.mockReturnValueOnce(new Promise(done => { resolve = done }))
   const first = openPorts('a')!
@@ -98,7 +97,7 @@ it('does not revive a closed pending instance and stops forwarding when Node dis
   const tab = openPorts('a')!
   await settle()
   await addPort(tab.id, '3000')
-  store.nodeConnected = false; await nextTick(); await settle()
+  fake.forwards[0].onState(new Error('SSH disconnected'), true); await nextTick(); await settle()
   expect(fake.forwards[0].close).toHaveBeenCalled()
   expect(tab.ports.rows[0]).toMatchObject({ enabled: true, status: 'failed' })
 })

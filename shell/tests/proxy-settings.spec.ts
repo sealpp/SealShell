@@ -15,7 +15,7 @@ async function closeSettings(page: Page) {
   await expect(settings(page)).toBeHidden()
 }
 
-test('autosaves catalog and encrypted credentials while retaining the last valid configuration', async ({ page }) => {
+test('autosaves catalog and native credentials while retaining the last valid configuration', async ({ page }) => {
   await addProxy(page)
   await expect(settings(page).getByRole('button', { name: /^(保存|确认|取消)$/ })).toHaveCount(0)
   await page.getByLabel('需要认证').check()
@@ -37,7 +37,8 @@ test('autosaves catalog and encrypted credentials while retaining the last valid
   })
   expect(stored.retained).toBe('fixture-password')
   expect(JSON.stringify(stored.catalog)).not.toContain('fixture-password')
-  expect(JSON.stringify(stored.record)).not.toContain('fixture-password')
+  // Encryption is covered by the native DPAPI tests, outside this UI fixture.
+  expect(stored.record.id).toMatch(/^proxy:/)
   await page.getByLabel('代理端口', { exact: true }).fill('0')
   await expect(page.locator('.proxy-editor [role="alert"]')).toContainText('1–65535')
   await closeSettings(page)

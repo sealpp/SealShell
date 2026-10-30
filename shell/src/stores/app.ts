@@ -223,10 +223,6 @@ export interface InteractionDialogState {
 
 export interface AppState {
   view: View
-  identityLoaded: boolean
-  paired: boolean
-  deviceId: string
-  deviceName: string
   error: string
   hosts: HostProfile[]
   proxies: ProxyProfile[]
@@ -255,7 +251,6 @@ export interface AppState {
   sidebarOpen: boolean
   sidebarView: 'connections'
   sidebarWidth: number
-  pairingModalOpen: boolean
   connectionModalOpen: boolean
   loginDialogOpen: boolean
   settingsModalOpen: boolean
@@ -295,7 +290,6 @@ export interface AppState {
     tabId: string
     context?: CommandContext
   } | null
-  nodeConnected: boolean
   sftpClipboard: SftpClipboardState | null
   connectionClipboard: ConnectionClipboardState | null
   terminalPreferences: TerminalPreferences
@@ -306,10 +300,6 @@ export interface AppState {
 
 export const store = reactive<AppState>({
   view: 'welcome',
-  identityLoaded: false,
-  paired: false,
-  deviceId: '',
-  deviceName: 'SealShell PWA',
   error: '',
   hosts: [],
   proxies: [],
@@ -338,7 +328,6 @@ export const store = reactive<AppState>({
   sidebarOpen: true,
   sidebarView: 'connections',
   sidebarWidth: 220,
-  pairingModalOpen: false,
   connectionModalOpen: false,
   loginDialogOpen: false,
   settingsModalOpen: false,
@@ -363,7 +352,6 @@ export const store = reactive<AppState>({
   deleteNodeConfirmOpen: false,
   terminalSessionInfo: null,
   manualPaste: null,
-  nodeConnected: false,
   sftpClipboard: null,
   connectionClipboard: null,
   encodingPicker: null,

@@ -65,7 +65,6 @@ describe('workbench exit policy', () => {
   })
 
   it('keeps transfers protected after the last tab closes and ignores idle Node state', () => {
-    store.nodeConnected = true
     expect(blocked()).toBe(false)
     store.tabs = [tab('terminal', 'online')]
     transferRuntime.tasks = [{ id: 'transfer', label: 'test', state: 'running', progress: 0 }]

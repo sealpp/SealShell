@@ -12,6 +12,7 @@
   <body>
     <div id="app"></div>
     <script type="module">
+import "/tests/native-mock.ts"
       import { createApp, h } from 'vue'
       import '/src/styles/workbench.css'
       import '/src/services/actions'
@@ -20,7 +21,7 @@
       import ConnectionsDeleteConfirm from '/src/components/ConnectionsDeleteConfirm.vue'
       import InteractionDialog from '/src/components/InteractionDialog.vue'
       import { saveFolder, saveHost } from '/src/services/storage'
-      import { initializeVault, saveCredentialRecord } from '/src/services/vault'
+      import { saveCredentialRecord } from '/src/services/vault'
       import { store } from '/src/stores/app'
       import { keybindingService } from '/src/services/commands/keybindingService.ts'
 
@@ -32,7 +33,6 @@
         saveHost({ id: 'host-alpha', name: 'Alpha host', address: '10.0.0.2', port: 2200, username: 'admin', folderId: 'folder-a' }),
         saveHost({ id: 'host-nested', name: 'Nested host', address: '10.0.0.3', port: 22, username: 'root', folderId: 'folder-child' }),
       ])
-      await initializeVault()
       await saveCredentialRecord('host-root', { password: 'seal-secret' })
 
       store.folders = [

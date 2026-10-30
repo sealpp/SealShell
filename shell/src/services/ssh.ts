@@ -1,5 +1,4 @@
-import { readKnownHost } from './storage'
-import { SshWorkerClient } from './ssh/ssh-worker-client'
+import { SshClient } from './ssh/client'
 import { copyConnection, type RemoteConnection } from './proxy/types'
 import { initialDirectoryCommand } from './terminalDirectory'
 import type { TerminalSize } from '../stores/app'
@@ -13,25 +12,24 @@ type StateHandler = (state: 'connecting' | 'online' | 'error' | 'idle', error?: 
 
 interface ActiveSession {
   info: SshConnectionInfo
-  worker: SshWorkerClient
+  worker: SshClient
   size: TerminalSize
 }
 
 const sessions = new Map<string, ActiveSession>()
 
 async function connectWorker(info: SshConnectionInfo, onState: StateHandler, onOutput: OutputHandler, size: TerminalSize): Promise<ActiveSession> {
-  const known = await readKnownHost(info.host, info.port)
-  const knownHostKey = known ? base64ToBytes(known.publicKey) : undefined
-  const worker = new SshWorkerClient()
+  const worker = new SshClient()
   // Publish online only after connectSsh has registered the usable session.
   worker.onState = (state, error) => { if (state !== 'online') onState(state, error) }
   worker.onOutput = onOutput
   try {
-    await worker.connect({ ...info, ...size, knownHostKey, integrateShell: true })
     const active = { info: { ...copyConnection(info), sessionId: info.sessionId }, worker, size: { ...size } }
     sessions.set(info.sessionId, active)
+    await worker.connect({ ...info, ...size, integrateShell: true })
     return active
   } catch (error) {
+    sessions.delete(info.sessionId)
     await worker.close()
     throw error
   }
@@ -77,11 +75,4 @@ export async function closeSsh(sessionId: string): Promise<void> {
 
 export function getSshSession(sessionId: string): SshConnectionInfo | undefined {
   return sessions.get(sessionId)?.info
-}
-
-function base64ToBytes(value: string): Uint8Array {
-  const binary = atob(value)
-  const result = new Uint8Array(binary.length)
-  for (let index = 0; index < binary.length; index += 1) result[index] = binary.charCodeAt(index)
-  return result
 }

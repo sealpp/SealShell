@@ -15,18 +15,16 @@ async function paste(page: Page, text: string) {
 test.beforeEach(async ({ page }) => {
   await page.route('**/src/services/ws.ts', route => route.fulfill({ contentType: 'application/javascript', body: `
     export * from '/src/services/ws.ts?actual';
-    import { SshWorkerClient } from '/src/services/ssh/ssh-worker-client.ts';
+    import { SshClient } from '/src/services/ssh/client.ts';
+    import { nativeFixture } from '/tests/native-mock.ts';
     let output;
     window.terminalInputBytes = [];
-    const client = new SshWorkerClient({
-      postMessage(message, transfer) {
-        const received = structuredClone(message, { transfer });
-        const payload = new Uint8Array(received.payload);
-        window.terminalInputBytes.push([...payload]);
-        // Split every multibyte character at the receive boundary.
-        for (const byte of payload) output?.(new Uint8Array([byte]));
-      }
-    });
+    nativeFixture.handlers.ssh_send = ({ data }) => {
+      const payload = new Uint8Array(data);
+      window.terminalInputBytes.push([...payload]);
+      for (const byte of payload) output?.(new Uint8Array([byte]));
+    };
+    const client = new SshClient();
     export function resizeTerminal() {}
     export function setTerminalOutputHandler(id, handler) {
       output = handler;

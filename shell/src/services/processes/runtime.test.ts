@@ -5,7 +5,7 @@ vi.mock('../monitoring/connection', () => ({ connectMonitor: fake.connect }))
 vi.mock('../vault', () => ({ loadCredentialRecord: fake.credential }))
 vi.mock('../proxy/profiles', () => ({ resolveHostConnection: fake.route, hostProxySource: () => undefined }))
 import { store } from '../../stores/app'
-import { cancelProcessAction, disposeProcesses, executeProcessAction, openProcesses, prepareProcessAction, setProcessVisible, startProcessesService, stopProcessesService } from './runtime'
+import { cancelProcessAction, disposeProcesses, executeProcessAction, openProcesses, prepareProcessAction, setProcessVisible, stopProcessesService } from './runtime'
 const encoder = new TextEncoder()
 const snapshot = 'SEAL_PROCESS_V2\tboot\t100\t10\t1700000000\n10\t1\t1000\tuser\tS\t1024\t2\t100\t1\tparent\tparent\n11\t10\t1000\tuser\tS\t1024\t3\t100\t1\tchild\tchild\nSEAL_PROCESS_END\t2\n'
 const result = (stdout: string, exitCode = 0) => ({ stdout: encoder.encode(stdout), stderr: new Uint8Array(), exitCode })
@@ -14,7 +14,6 @@ beforeEach(() => {
   vi.useFakeTimers()
   store.tabs = []
   store.hosts = [{ id: 'a', name: 'A', address: 'host', port: 22, username: 'user', folderId: null }]
-  store.nodeConnected = true
   fake.connections.length = 0
   fake.credential.mockReset().mockResolvedValue({ password: 'secret' })
   fake.route.mockReset().mockImplementation(async h => ({ host: h.address, port: 22, username: h.username, password: '' }))
@@ -23,7 +22,6 @@ beforeEach(() => {
     fake.connections.push(connection)
     return connection
   })
-  startProcessesService()
 })
 afterEach(() => { stopProcessesService(); store.tabs = []; vi.useRealTimers() })
 

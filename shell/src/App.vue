@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getFocusedTabId, store } from './stores/app'
-import { connect, initializePwa, setNodeDisconnectedHandler } from './services/ws'
+import { initializeDesktop } from './services/ws'
 import { commandService, keybindingService, syncAppContext, ContextKeys } from './services/commands'
-import { startMonitoringService, stopMonitoringService } from './services/monitoring/runtime'
-import { startProcessesService, stopProcessesService } from './services/processes/runtime'
-import { startPortsService, stopPortsService } from './services/ports/runtime'
+import { stopMonitoringService } from './services/monitoring/runtime'
+import { stopProcessesService } from './services/processes/runtime'
+import { stopPortsService } from './services/ports/runtime'
 import { startWorkbenchCloseProtection } from './services/workbench-close-protection'
-import PairingView from './views/PairingView.vue'
 import HostFormView from './views/HostFormView.vue'
 import LoginDialog from './components/LoginDialog.vue'
 import MainDock from './views/MainDock.vue'
@@ -18,7 +17,6 @@ import TerminalSessionInfo from './components/TerminalSessionInfo.vue'
 import ManualPasteDialog from './components/ManualPasteDialog.vue'
 import HostKeyPrompt from './components/HostKeyPrompt.vue'
 import { IconList } from './ui/icons'
-import NodeStatusMenu from './components/NodeStatusMenu.vue'
 import WorkbenchMenu from './components/WorkbenchMenu.vue'
 import SettingsDialog from './components/SettingsDialog.vue'
 import AboutDialog from './components/AboutDialog.vue'
@@ -142,7 +140,6 @@ function endResize(event?: PointerEvent) {
   }
 }
 
-let reconnectTimer: number | null = null
 
 const stopContextSync = watch(
   () => [
@@ -158,9 +155,6 @@ const stopContextSync = watch(
     store.bottomPanelOpen,
     store.tabs.map((tab) => `${tab.id}:${tab.state}`).join(','),
     store.sidebarOpen,
-    store.paired,
-    store.nodeConnected,
-    store.pairingModalOpen,
     store.connectionModalOpen,
     store.loginDialogOpen,
     store.settingsModalOpen,
@@ -178,54 +172,26 @@ const stopContextSync = watch(
       [ContextKeys.bottomPanelCategory]: store.bottomPanelCategory,
       [ContextKeys.bottomPanelOpen]: store.bottomPanelOpen,
       [ContextKeys.sidebarOpen]: store.sidebarOpen,
-      [ContextKeys.isPaired]: store.paired,
-      [ContextKeys.nodeConnected]: store.nodeConnected,
-      [ContextKeys.modalOpen]: store.pairingModalOpen || store.connectionModalOpen || store.loginDialogOpen || store.settingsModalOpen || store.aboutModalOpen || !!store.dirtyCloseConfirm || !!store.interactionDialog || !!store.encodingPicker,
+      [ContextKeys.modalOpen]: store.connectionModalOpen || store.loginDialogOpen || store.settingsModalOpen || store.aboutModalOpen || !!store.dirtyCloseConfirm || !!store.interactionDialog || !!store.encodingPicker,
     })
   },
   { immediate: true },
 )
 
-function scheduleReconnect() {
-  if (!store.paired || reconnectTimer !== null) return
-  reconnectTimer = window.setTimeout(() => {
-    reconnectTimer = null
-    void connectNode()
-  }, 2000)
-}
-
-async function connectNode() {
-  if (!store.paired) return
-  try {
-    await connect()
-  } catch (error) {
-    store.error = error instanceof Error ? error.message : String(error)
-    scheduleReconnect()
-  }
-}
-
 const stopCloseProtection = startWorkbenchCloseProtection(window)
 let disposed = false
 
 onMounted(async () => {
-  setNodeDisconnectedHandler(scheduleReconnect)
   try {
-    await initializePwa()
+    await initializeDesktop()
     await loadTransferConcurrency()
     await loadTerminalPreferences()
     await loadSuggestionPreferences()
-    if (!store.paired) {
-      store.pairingModalOpen = true
-    } else {
-      await connectNode()
-    }
+
   } catch (error) {
     store.error = error instanceof Error ? error.message : String(error)
   }
   if (disposed) return
-  startMonitoringService()
-  startProcessesService()
-  startPortsService()
   keybindingService.attach(window, () => {
     const tabId = getFocusedTabId()
     const tab = store.tabs.find((item) => item.id === tabId)
@@ -249,13 +215,9 @@ onBeforeUnmount(() => {
   stopProcessesService()
   stopPortsService()
   endResize()
-  setNodeDisconnectedHandler(undefined)
   keybindingService.dispose()
   stopContextSync()
-  if (reconnectTimer !== null) {
-    window.clearTimeout(reconnectTimer)
-    reconnectTimer = null
-  }
+
 })
 </script>
 
@@ -313,21 +275,18 @@ onBeforeUnmount(() => {
             <img src="/icon.svg" class="logo-img" alt="SealShell" />
           </div>
           <h2>SealShell</h2>
-          <p v-if="!store.paired">请点击左下角 Node 状态按钮，选择「配对」。</p>
-          <p v-else-if="!store.hosts.length">暂无保存的主机，在「会话」列表空白处右键选择「新建连接」添加。</p>
+          <p v-if="!store.hosts.length">暂无保存的主机，在「会话」列表空白处右键选择「新建连接」添加。</p>
           <p v-else>选择左侧主机（支持 Ctrl/Shift 多选），或右键批量操作。</p>
         </div>
       </div>
     </div>
     <div class="statusbar">
-      <NodeStatusMenu />
       <BottomPanelStatusButton />
       <div class="statusbar-end">
         <EncodingStatusItem />
         <TransferStatusItem />
       </div>
     </div>
-    <PairingView v-if="store.pairingModalOpen" />
     <HostFormView v-if="store.connectionModalOpen" />
     <LoginDialog v-if="store.loginDialogOpen" />
     <TerminalSessionInfo v-if="store.terminalSessionInfo?.open" />

@@ -2,16 +2,15 @@
 <html lang="zh-CN">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Proxy settings</title><style>html,body,#app{height:100%;margin:0;background:#111;color:#ccc}</style></head>
 <body><div id="app"></div><script type="module">
+import "/tests/native-mock.ts"
 import { createApp, h } from 'vue'
 import '/src/styles/workbench.css'
 import { store } from '/src/stores/app'
-import { initializeVault } from '/src/services/vault'
 import { listHosts, saveHost } from '/src/services/storage'
 import { loadProxyProfiles } from '/src/services/proxy/profiles'
 import SettingsDialog from '/src/components/SettingsDialog.vue'
 import HostFormView from '/src/views/HostFormView.vue'
 import InteractionDialog from '/src/components/InteractionDialog.vue'
-await initializeVault()
 await loadProxyProfiles()
 store.hosts = await listHosts()
 if (!store.hosts.length) {

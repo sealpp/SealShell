@@ -2,7 +2,7 @@
 import { onBeforeUnmount, ref } from 'vue'
 import UiDialog from './UiDialog.vue'
 import UiStatus from './UiStatus.vue'
-import { RoutedTransport } from '../services/transport/routed-transport'
+import { nativeCall } from '../native/bridge'
 import { normalizeTarget, type ProxyConnection, type TcpTarget } from '../services/transport/types'
 
 const props = defineProps<{ proxy: ProxyConnection; target?: TcpTarget }>()
@@ -12,7 +12,7 @@ const port = ref(props.target?.port ?? 22)
 const running = ref(false)
 const message = ref('')
 const error = ref('')
-let transport: RoutedTransport | undefined
+let requestId: string | undefined
 
 async function test() {
   error.value = ''
@@ -21,21 +21,19 @@ async function test() {
   const started = performance.now()
   try {
     const target = normalizeTarget({ host: host.value, port: port.value })
-    transport = new RoutedTransport()
-    await transport.connect(target.host, target.port, props.proxy, stage => {
-      message.value = { connect: '正在连接代理…', authenticate: '正在协商代理认证…', target: '正在通过代理连接目标…' }[stage]
-    })
+    requestId = crypto.randomUUID()
+    message.value = '正在通过代理连接目标…'
+    await nativeCall('proxy_test', { id: requestId, host: target.host, port: target.port, proxy: props.proxy })
     message.value = `连接成功，耗时 ${Math.round(performance.now() - started)} ms。`
   } catch (reason) {
     message.value = ''
     error.value = reason instanceof Error ? reason.message : String(reason)
   } finally {
-    await transport?.close('proxy_test_finished')
-    transport = undefined
+    requestId = undefined
     running.value = false
   }
 }
-onBeforeUnmount(() => { void transport?.close('proxy_test_closed') })
+onBeforeUnmount(() => { if (requestId) void nativeCall('proxy_cancel', { id: requestId }) })
 </script>
 
 <template>

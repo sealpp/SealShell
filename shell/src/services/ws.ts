@@ -10,7 +10,6 @@ import {
 } from './storage'
 import { findSiblingNameConflict, moveNodes } from './connectionTree'
 import {
-  initializeVault,
   loadCredentialRecord,
 } from './vault'
 import {
@@ -22,7 +21,7 @@ import {
 import { disposeMonitor } from './monitoring/runtime'
 import { disposeProcesses } from './processes/runtime'
 import { disposePorts } from './ports/runtime'
-import { nodeClient, type NodeCallbacks } from './nodeClient'
+import { initializeNativeEvents } from './native-events'
 import { closeFileTabSession } from './sftp/file-tabs'
 import { hostProxySource, loadProxyProfiles, resolveHostConnection } from './proxy/profiles'
 import { waitForTerminalSize } from './terminalSize'
@@ -30,57 +29,11 @@ import { waitForTerminalSize } from './terminalSize'
 const outputHandlers = new Map<string, (data: Uint8Array) => void>()
 const pendingOutput = new Map<string, Uint8Array[]>()
 
-export async function initializePwa(): Promise<void> {
-  await nodeClient.initializeIdentity()
-  await initializeVault()
+export async function initializeDesktop(): Promise<void> {
+  await initializeNativeEvents()
   store.hosts = await listStoredHosts()
   store.folders = await listStoredFolders()
   await loadProxyProfiles()
-}
-
-export function wsUrl(): string {
-  return nodeClient.wsUrl()
-}
-
-export function setNodeDisconnectedHandler(handler: (() => void) | undefined): void {
-  nodeClient.setDisconnectedHandler(handler)
-}
-
-export function clearAuth(): void {
-  nodeClient.clearPairing()
-  store.paired = false
-  store.nodeConnected = false
-}
-
-export function disconnectNode(): void {
-  nodeClient.disconnect()
-}
-
-export async function pair(pairingCode: string, callbacks: NodeCallbacks = {}): Promise<void> {
-  try {
-    await nodeClient.pair(pairingCode, callbacks)
-    store.error = ''
-    store.pairingModalOpen = false
-    await listHosts()
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    store.error = message
-    callbacks.onError?.(message)
-    throw error
-  }
-}
-
-export async function connect(callbacks: NodeCallbacks = {}): Promise<void> {
-  try {
-    await nodeClient.connect(callbacks)
-    store.error = ''
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    store.nodeConnected = false
-    store.error = message
-    callbacks.onError?.(message)
-    throw error
-  }
 }
 
 export async function listHosts(): Promise<void> {

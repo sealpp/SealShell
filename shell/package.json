@@ -18,12 +18,10 @@
     "test:unit": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
-    "@bufbuild/protobuf": "^2.2.0",
     "@tabler/icons-vue": "3.45.0",
     "@tanstack/vue-table": "9.3.1",
     "@tanstack/vue-virtual": "3.13.48",
     "@tauri-apps/api": "^2.12.4",
-    "@verdigris/libssh2.js": "file:../vendor/libssh2.js",
     "@vscode/codicons": "^0.0.45",
     "@vscode/iconv-lite-umd": "0.7.1",
     "@xterm/addon-fit": "^0.11.0",
@@ -34,14 +32,12 @@
     "vue": "^3.5.0"
   },
   "devDependencies": {
-    "@bufbuild/protoc-gen-es": "^2.2.0",
     "@playwright/test": "^1.62.0",
     "@tauri-apps/cli": "^2.12.4",
     "@types/node": "^22.20.5",
     "@vitejs/plugin-vue": "^5.0.0",
     "typescript": "^5.5.0",
     "vite": "^5.4.0",
-    "vite-plugin-pwa": "^0.20.0",
     "vitest": "^1.6.0",
     "vue-tsc": "^2.0.0"
   }

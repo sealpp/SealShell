@@ -1,8 +1,6 @@
 import { randomId } from '../../utils/id'
 import { setBottomPanelActiveTab, store, type EditorTab, type FileEntry, type FileTab } from '../../stores/app'
 import { getFileBackend, registerFileSession } from './file-tabs'
-import type { FileBackend } from '../files/types'
-import { transferFile } from './transfer'
 import { confirmDialog } from '../dialogs'
 import { encodingDecoder } from '../encodings'
 import { readFileContents } from '../files/read'
@@ -151,18 +149,8 @@ async function writeEditorTab(tabId: string): Promise<void> {
   if (!tab || !backend) throw new Error('Editor session is unavailable')
   const snapshot = { ...tab.editor }
   const payload = encodeFile(snapshot)
-  const memorySource: FileBackend = {
-    paths: backend.paths,
-    disconnect: async () => undefined,
-    list: async () => ({ path: '/', entries: [] }),
-    stat: async () => ({ name: tab.editor.path, path: tab.editor.path, kind: 'file', size: payload.byteLength, modifiedAt: Date.now() }),
-    read: async (_path, offset = 0, length = payload.byteLength) => payload.slice(offset, offset + length),
-    write: async () => undefined,
-    mkdir: async () => undefined,
-    remove: async () => undefined,
-    rename: async () => ({ atomic: true }),
-  }
-  await transferFile(memorySource, backend, tab.editor.path, tab.editor.path, { })
+  if (!backend.writeAtomic) throw new Error('文件服务不支持安全保存')
+  await backend.writeAtomic(tab.editor.path, payload)
   const current = tab.editor
   current.dirty = current.content !== snapshot.content || current.encoding !== snapshot.encoding
     || current.bom !== snapshot.bom || current.lineEnding !== snapshot.lineEnding || current.contentVersion !== snapshot.contentVersion

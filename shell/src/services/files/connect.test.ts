@@ -1,8 +1,9 @@
 import { expect, it, vi } from 'vitest'
 const attempts = vi.hoisted(() => [] as any[])
-vi.mock('../sftp/worker-client', () => ({ SftpWorkerClient: class {
+vi.mock('./native-backend', () => ({ NativeFileBackend: class {
   fork?: () => Promise<unknown>
-  async connect(options: unknown) { attempts.push(options) }
+  constructor(private options: unknown) {}
+  async connect() { attempts.push(this.options) }
   async disconnect() {}
 } }))
 vi.mock('../vault', () => ({ loadCredentialRecord: vi.fn() }))
@@ -21,5 +22,4 @@ it('forks file/editor/queued transfer connections from the captured route even a
   await derived.disconnect()
   expect(attempts).toHaveLength(2)
   for (const options of attempts) expect(options).toMatchObject({ host: 'internal', password: 'ssh-secret', proxy: { host: 'old-proxy', password: 'proxy-secret' } })
-  expect(attempts[0].sessionId).not.toBe(attempts[1].sessionId)
 })

@@ -2,6 +2,7 @@ import { canRememberCommand, compareSuggestions, type CommandHistoryEntry, type 
 import { preservesGeneratedIntent, groundGeneratedPath } from './paths'
 import type { DirectoryFacts } from './context'
 import { validateRecommendationSettings, type RecommendationSettings } from './settings'
+import { requestAI } from '../ai-http'
 
 export interface RecommendationQuery {
   query: string
@@ -46,28 +47,10 @@ export async function generateRecommendations(request: RecommendationQuery, fact
   if (!maySendToCloud(request.query)) throw new Error('输入可能包含凭据，已跳过云端推荐')
   signal.throwIfAborted()
   onRequest?.()
-  const response = await fetch(`${settings.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify(cloudPayload(request, facts, settings)), signal, redirect: 'error', credentials: 'omit',
-  })
-  // Never expose provider bodies: they may echo request context or credentials.
-  if (!response.ok) throw new Error(`云端推荐失败（HTTP ${response.status}）`)
-  const reader = response.body?.getReader()
-  if (!reader) throw new Error('云端响应为空')
-  const decoder = new TextDecoder()
-  let text = '', bytes = 0
-  try {
-    while (true) {
-      const chunk = await reader.read()
-      if (chunk.done) break
-      bytes += chunk.value.byteLength
-      if (bytes > 64 * 1024) throw new Error('云端响应过大')
-      text += decoder.decode(chunk.value, { stream: true })
-    }
-  } finally { await reader.cancel().catch(() => {}) }
+  const text = await requestAI(`${settings.baseUrl.replace(/\/+$/, '')}/chat/completions`, cloudPayload(request, facts, settings), apiKey, signal)
   signal.throwIfAborted()
   let content: unknown
-  try { content = JSON.parse(JSON.parse(text + decoder.decode()).choices[0].message.content).suggestions }
+  try { content = JSON.parse(JSON.parse(text).choices[0].message.content).suggestions }
   catch { throw new Error('云端返回格式无效') }
   if (!Array.isArray(content)) throw new Error('云端返回格式无效')
   return [...new Set(content.slice(0, 4).map(item => item?.command).filter((command): command is string =>

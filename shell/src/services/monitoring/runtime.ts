@@ -1,4 +1,3 @@
-import { watch } from 'vue'
 import { setBottomPanelActiveTab, store, type MonitorTab } from '../../stores/app'
 import { loadCredentialRecord } from '../vault'
 import { hostProxySource, resolveHostConnection } from '../proxy/profiles'
@@ -9,7 +8,6 @@ import { LinuxTelemetryProvider } from './metrics'
 
 const INTERVAL_MS = 2000
 const runtimes = new Map<string, MonitorRuntime>()
-let stopNodeWatch: (() => void) | undefined
 
 class MonitorRuntime {
   private controller?: AbortController
@@ -47,7 +45,6 @@ class MonitorRuntime {
         this.tab.monitor.needsPassword = true
         return
       }
-      if (!store.nodeConnected) throw new Error('Node 未连接，请连接 Node 后重试。')
       const connection = await connectMonitor({ ...snapshot, password: this.credentials }, controller.signal)
       if (!current()) { await connection.close(); return }
       this.connection = connection
@@ -141,15 +138,6 @@ export function disposeMonitor(tabId: string): void {
   runtimes.delete(tabId)
 }
 
-export function startMonitoringService(): void {
-  stopNodeWatch?.()
-  stopNodeWatch = watch(() => store.nodeConnected, connected => {
-    if (!connected) for (const runtime of runtimes.values()) runtime.fail(new Error('Node 已断开，请连接 Node 后重试。'))
-  })
-}
-
 export function stopMonitoringService(): void {
-  stopNodeWatch?.()
-  stopNodeWatch = undefined
   for (const tabId of runtimes.keys()) disposeMonitor(tabId)
 }

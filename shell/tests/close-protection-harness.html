@@ -4,12 +4,14 @@
   <body>
     <div id="app"></div>
     <script type="module">
+import "/tests/native-mock.ts"
       import { createApp, h, onBeforeUnmount } from 'vue'
       import { store } from '/src/stores/app'
       import { closeProtection } from '/src/services/close-protection'
       import { startWorkbenchCloseProtection } from '/src/services/workbench-close-protection'
-      import { enqueueTransfer, cancelTransfer, transferRuntime } from '/src/services/sftp/transfer-runtime'
-      import { TransferCancelledError } from '/src/services/sftp/transfer'
+      import { transferRuntime } from '/src/services/sftp/transfer-runtime'
+      import { enqueueTransfer, cancelTransfer } from '/tests/transfer-mock.ts'
+      import { TransferCancelledError } from '/tests/transfer-mock.ts'
 
       const jobs = new Map()
       let releaseMonitor

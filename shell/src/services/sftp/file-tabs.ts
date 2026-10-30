@@ -4,7 +4,7 @@ import { setBottomPanelActiveTab, store, type FileTab, type HostProfile } from '
 import { listDirectory } from './operations'
 import { createSftpClipboardPayload } from './clipboard'
 import { connectFileEndpoint } from '../files/connect'
-import { NodeFileBackend } from '../files/node-backend'
+import { NativeFileBackend } from '../files/native-backend'
 import { posixPaths } from '../files/path'
 import type { FileBackend, FileEndpoint } from '../files/types'
 import { readMeta, saveMeta } from '../storage'
@@ -47,7 +47,7 @@ export function createFileTab(host: HostProfile, sourceTabId: string, initialPat
   return newFileTab({ kind: 'sftp', hostId: host.id }, posixPaths.normalize(initialPath), undefined, source ? copyConnection(source) : undefined)
 }
 export function createLocalFileTab(split = false): FileTab {
-  return newFileTab({ kind: 'local', nodeId: '' }, '', split ? store.activeFileTabId || undefined : undefined)
+  return newFileTab({ kind: 'local' }, '', split ? store.activeFileTabId || undefined : undefined)
 }
 
 async function startFileTab(tabId: string, source?: RemoteConnection): Promise<void> {
@@ -60,10 +60,9 @@ async function startFileTab(tabId: string, source?: RemoteConnection): Promise<v
     sessions.set(tabId, backend)
     let initialPath = tab.file.cwd
     let fallbackNotice = ''
-    if (backend instanceof NodeFileBackend) {
-      tab.endpoint = { kind: 'local', nodeId: backend.nodeId }
+    if (backend instanceof NativeFileBackend && !backend.connection) {
       tab.file.roots = backend.info.roots
-      const recent = await readMeta<{ key: string; path: string }>(`localDirectory:${backend.nodeId}`)
+      const recent = await readMeta<{ key: string; path: string }>('localDirectory')
       initialPath = recent?.path ?? backend.info.home
       tab.file.defaultPath = backend.info.home
       try { if ((await backend.stat(initialPath, true)).kind !== 'directory') throw new Error('不是目录') }
@@ -107,7 +106,7 @@ export async function refreshFileTab(tabId: string): Promise<void> {
     if (listings.get(tabId) !== generation) return
     tab.file.entries = entries
     tab.label = fileTabLabel(tab)
-    if (tab.endpoint.kind === 'local') await saveMeta({ key: `localDirectory:${tab.endpoint.nodeId}`, path })
+    if (tab.endpoint.kind === 'local') await saveMeta({ key: 'localDirectory', path })
   } catch (error) {
     if (listings.get(tabId) === generation) tab.file.error = error instanceof Error ? error.message : String(error)
   } finally { if (listings.get(tabId) === generation) tab.file.loading = false }

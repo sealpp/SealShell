@@ -7,14 +7,28 @@ beforeEach(() => { vi.resetModules() })
 
 async function controlledTransfer() {
   const runtime = await import('./transfer-runtime')
-  let progress!: (bytes: number, total: number) => void
-  let finish!: (result: TransferResult) => void
+  const { installNativeAdapter } = await import('../../native/bridge')
+  const handlers = new Set<(event: any) => void>()
+  let snapshot: any
+  let finish!: (value: TransferResult) => void
   let fail!: (error: Error) => void
-  const task = runtime.enqueueTransfer('test transfer', (_signal, report) => {
-    progress = report
-    return new Promise<TransferResult>((resolve, reject) => { finish = resolve; fail = reject })
+  const emit = () => handlers.forEach(handler => handler({ type: 'transfer', task: { ...snapshot } }))
+  installNativeAdapter({
+    subscribe: async handler => { handlers.add(handler); return () => { handlers.delete(handler) } },
+    call: async <T>(operation: string, args: Record<string, unknown>): Promise<T> => {
+      if (operation === 'transfer_list') return [] as T
+      if (operation === 'transfer_enqueue') { snapshot = { id: args.id, label: args.label, state: 'running', progress: 0 }; emit() }
+      if (operation === 'transfer_wait') return new Promise<T>((resolve, reject) => {
+        finish = result => { snapshot = { ...snapshot, state: 'completed', result, progress: 1 }; emit(); resolve(result as T) }
+        fail = error => { snapshot = { ...snapshot, state: 'failed', error: error.message }; emit(); reject(error) }
+      })
+      return undefined as T
+    },
   })
-  return { ...runtime, task, progress, finish, fail }
+  const promise = runtime.enqueueTransfer('test transfer', { sourceId: 'a', targetId: 'b', directory: '/', paths: ['/file'], moveFiles: false })
+  await vi.waitFor(() => expect(finish).toBeTypeOf('function'))
+  const progress = (bytes: number, total: number) => { snapshot.progress = bytes / total; emit() }
+  return { ...runtime, task: { promise }, progress, finish, fail }
 }
 
 describe('transfer detail visibility', () => {

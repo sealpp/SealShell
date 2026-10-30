@@ -7,7 +7,7 @@ vi.mock('../proxy/profiles', () => ({ resolveHostConnection: fake.route, hostPro
 vi.mock('./connection', () => ({ connectMonitor: fake.connect }))
 
 import { store } from '../../stores/app'
-import { disposeMonitor, openMonitor, retryMonitor, startMonitoringService, stopMonitoringService } from './runtime'
+import { disposeMonitor, openMonitor, retryMonitor, stopMonitoringService } from './runtime'
 import { closeProtection } from '../close-protection'
 
 const encoder = new TextEncoder()
@@ -20,7 +20,6 @@ beforeEach(() => {
   fake.workers.length = 0
   store.tabs = []
   store.hosts = [{ id: 'a', name: 'A', address: 'old-host', port: 22, username: 'old-user', folderId: null }]
-  store.nodeConnected = true
   fake.credential.mockReset().mockResolvedValue({ password: 'old-password' })
   fake.route.mockReset().mockImplementation(async host => ({ host: host.address, port: host.port, username: host.username, password: '', proxy: { host: 'old-proxy' } }))
   fake.connect.mockReset().mockImplementation(async (options, signal: AbortSignal) => {
@@ -28,7 +27,6 @@ beforeEach(() => {
     fake.workers.push(worker)
     return worker
   })
-  startMonitoringService()
 })
 afterEach(() => {
   stopMonitoringService()
@@ -129,15 +127,14 @@ it('requests its own password and reports authentication failures without openin
   expect(store.tabs.map(tab => tab.kind)).toEqual(['monitor'])
 })
 
-it('stops on a Node disconnection and retries with the same snapshot', async () => {
+it('stops on a native SSH failure and retries with the same snapshot', async () => {
   const tab = openMonitor('a')!
   await settle()
-  store.nodeConnected = false
-  await nextTick()
+  fake.workers[0].exec.mockRejectedValueOnce(new Error('SSH disconnected'))
+  await vi.advanceTimersByTimeAsync(2100)
   expect(tab.state).toBe('error')
   expect(tab.monitor.telemetry).toBeNull()
   expect(fake.workers[0].signal.aborted).toBe(true)
-  store.nodeConnected = true
   await nextTick()
   await retryMonitor(tab.id)
   expect(tab.state).toBe('online')
