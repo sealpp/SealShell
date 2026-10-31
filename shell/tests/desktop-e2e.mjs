@@ -44,7 +44,8 @@ try {
   const serverURL = `http://127.0.0.1:${vitePort}`
   const debugPort = await freePort()
   const cargo = process.env.CARGO ?? join(process.env.USERPROFILE, '.cargo/bin/cargo.exe')
-  const build = start('build', cargo, ['build', '-p', 'sealshell', '--offline'], { TAURI_CONFIG: JSON.stringify({ build: { devUrl: serverURL } }) })
+  const executable = join(artifacts, 'sealshell-e2e.exe')
+  const build = start('build', cargo, ['rustc', '-p', 'sealshell', '--bin', 'sealshell', '--offline', '--', '-o', executable], { TAURI_CONFIG: JSON.stringify({ build: { devUrl: serverURL } }) })
   const built = await new Promise(resolve => build.once('exit', resolve))
   if (built !== 0) throw new Error('Desktop build failed; see build.log')
   const remote = join(artifacts, 'remote'), local = join(artifacts, 'local')
@@ -61,7 +62,7 @@ try {
   const port = Number(await until(() => /MOCK_SSH_PORT=(\d+)/.exec(output)?.[1]))
   start('vite', process.execPath, [join(shell, 'node_modules/vite/bin/vite.js'), '--port', String(vitePort), '--host', '127.0.0.1'])
   await until(async () => (await fetch(serverURL)).ok)
-  start('desktop', join(root, 'target/debug/sealshell.exe'), [], {
+  start('desktop', executable, [], {
     SEALSHELL_DATA_DIR: join(artifacts, 'data'), WEBVIEW2_USER_DATA_FOLDER: join(artifacts, 'webview'),
     WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${debugPort}`,
   })
@@ -82,6 +83,16 @@ try {
   await page.getByText('Desktop fixture', { exact: true }).dblclick()
   await page.locator('#host-key-accept').click()
   await page.waitForFunction(() => window.desktopFixture.store.tabs.some(tab => tab.kind === 'terminal' && tab.state === 'online'))
+  const systemIcon = page.locator('.conn-item').filter({ hasText: 'Desktop fixture' }).getByRole('img', { name: 'Ubuntu 24.04 LTS' })
+  await expect(systemIcon).toBeVisible()
+  await expect(systemIcon).toHaveJSProperty('naturalWidth', 32)
+  const detectedSystem = await page.evaluate(async () => {
+    const { nativeCall } = await import('/src/native/bridge.ts')
+    return nativeCall('store_get', { collection: 'hostSystems', key: 'desktop-fixture' })
+  })
+  expect(detectedSystem.info.id).toBe('ubuntu')
+  await page.screenshot({ path: join(artifacts, 'remote-system-icon.png') })
+  console.log('Desktop remote system: authenticated SSH discovery, Ubuntu icon and SQLite persistence')
   if (process.env.SEAL_E2E_BASH || process.env.SEAL_E2E_ZSH) {
     const directory = join(remote, "目录 a'b;$(touch sentinel) %20")
     await mkdir(directory)

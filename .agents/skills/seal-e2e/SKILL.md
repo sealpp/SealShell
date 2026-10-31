@@ -34,7 +34,7 @@ python scripts/build.py
 - Vue 单测保留编码、目录、监测/进程策略、候选意图、保存快照、队列显示和退出保护。
 - 浏览器 harness 显式导入 `shell/tests/native-mock.ts`。模拟凭据不是加密实现，密码保护由真实 DPAPI 测试验收。禁止为测试在产品中增加 localhost RPC 网关。
 - Rust 测试使用真实本机文件和 AsyncSSH，验证初始 PTY 尺寸、exec、主机密钥、认证、文件往返、队列、取消、回滚、保留项以及转发 half-close。
-- `shell/tests/desktop-e2e.mjs` 编译调试应用，用随机 Vite/CDP 端口和独立 SQLite/WebView2 目录启动，直接驱动真实桌面页面。覆盖连接、文件传输、编辑保存、监测和关闭确认；截图、日志留在系统临时目录。
+- `shell/tests/desktop-e2e.mjs` 将调试应用编译到本次临时目录，用随机 Vite/CDP 端口和独立 SQLite/WebView2 目录启动，直接驱动真实桌面页面；日常开发应用运行时也可验证。覆盖连接、系统识别与图标保存、文件传输、编辑保存、监测和关闭确认；截图、日志留在系统临时目录。
 - 发布安装包应另行验证内置资源和全新配置启动，开发服务器运行成功不能替代打包测试。未执行的 Win10 实机或另一台设备验收如实记录。
 
 ## Mock SSH
@@ -47,6 +47,7 @@ python scripts/build.py
 - `MOCK_SSH_REPORT_CWD=1`：普通 mock 上报目录。
 - `MOCK_SSH_FORWARDING=1`：允许 direct-tcpip。
 - `MOCK_SFTP_CONTROL_PATH`：测试控制 JSON，支持读写延迟、读取失败、最终 rename 失败、临时项删除失败。
+- `MOCK_SYSTEM_CONTROL_PATH`：系统探测控制 JSON，`systemMode` 可选 ubuntu、macos、windows、unknown、denied、timeout、oversize；原生回归还验证失败或超时后的会话可用性及取消后不写回。
 - `MOCK_SSH_BASH` / `MOCK_SSH_ZSH`：把实际 shell 接入测试；Git Bash/MSYS2 可在 Windows 使用。Bash 通过不能代替 zsh，mock 上报目录不能冒充实际 shell 验证。
 - `SEAL_PYTHON`：覆盖测试解释器路径。
 
