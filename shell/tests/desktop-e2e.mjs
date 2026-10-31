@@ -6,6 +6,7 @@ import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { verifyDesktopDragging } from './desktop-dragging.mjs'
 
 const shell = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const root = resolve(shell, '..')
@@ -62,7 +63,7 @@ try {
   const port = Number(await until(() => /MOCK_SSH_PORT=(\d+)/.exec(output)?.[1]))
   start('vite', process.execPath, [join(shell, 'node_modules/vite/bin/vite.js'), '--port', String(vitePort), '--host', '127.0.0.1'])
   await until(async () => (await fetch(serverURL)).ok)
-  start('desktop', executable, [], {
+  const desktop = start('desktop', executable, [], {
     SEALSHELL_DATA_DIR: join(artifacts, 'data'), WEBVIEW2_USER_DATA_FOLDER: join(artifacts, 'webview'),
     WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${debugPort}`,
   })
@@ -157,6 +158,7 @@ try {
     window.desktopFixture.remote = files.createFileTab(store.hosts[0], terminal.id, '/').id
   })
   await page.waitForFunction(() => window.desktopFixture.store.tabs.filter(tab => tab.kind === 'file').length === 2 && window.desktopFixture.store.tabs.filter(tab => tab.kind === 'file').every(tab => tab.state === 'online'))
+  await verifyDesktopDragging(page, { local, remote, artifacts, pid: desktop.pid })
   await page.evaluate(async ({ local }) => {
     const files = await import('/src/services/sftp/file-tabs.ts')
     await files.navigateFileTab(window.desktopFixture.local, local)

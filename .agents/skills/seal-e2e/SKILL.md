@@ -35,6 +35,7 @@ python scripts/build.py
 - 浏览器 harness 显式导入 `shell/tests/native-mock.ts`。模拟凭据不是加密实现，密码保护由真实 DPAPI 测试验收。禁止为测试在产品中增加 localhost RPC 网关。
 - Rust 测试使用真实本机文件和 AsyncSSH，验证初始 PTY 尺寸、exec、主机密钥、认证、文件往返、队列、取消、回滚、保留项以及转发 half-close。
 - `shell/tests/desktop-e2e.mjs` 将调试应用编译到本次临时目录，用随机 Vite/CDP 端口和独立 SQLite/WebView2 目录启动，直接驱动真实桌面页面；日常开发应用运行时也可验证。覆盖连接、系统识别与图标保存、文件传输、编辑保存、监测和关闭确认；截图、日志留在系统临时目录。
+- 桌面拖动回归由 `shell/tests/desktop-dragging.mjs` 和 `desktop-mouse.py` 执行，以 Windows 原生鼠标输入覆盖会话树移动及持久化、终端排序与分屏、底部实例分栏、文件复制及尺寸调整。CDP 鼠标和手造 DragEvent 会绕过 Windows OLE 拖放接管，不能单独证明真实鼠标可用；原生输入按实际 DPI 换算，只操作本次 fixture 的 PID，手势结束后恢复光标与前台窗口。
 - 发布安装包应另行验证内置资源和全新配置启动，开发服务器运行成功不能替代打包测试。未执行的 Win10 实机或另一台设备验收如实记录。
 
 ## Mock SSH
