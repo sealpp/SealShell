@@ -49,6 +49,7 @@ mock_sftp_root = Path(os.environ.get("MOCK_SFTP_ROOT", str(Path(tempfile.gettemp
 mock_sftp_root.mkdir(parents=True, exist_ok=True)
 (mock_sftp_root / "README.md").write_text("SealShell SFTP mock\n", encoding="utf-8")
 sftp_control_path = os.environ.get("MOCK_SFTP_CONTROL_PATH")
+system_control_path = os.environ.get("MOCK_SYSTEM_CONTROL_PATH")
 SAMPLE_COMMAND = (
     "printf '__SEAL_CPU__\\n'; cat /proc/stat; "
     "printf '__SEAL_MEM__\\n'; free -b; "
@@ -128,6 +129,20 @@ class MeasuredSFTPServer(asyncssh.SFTPServer):
 
 
 def command_output(command: str) -> tuple[str, int]:
+    if command.startswith("printf '__SEAL_SYSTEM_V1__") or command == "cmd /d /c ver":
+        control = json.loads(Path(system_control_path).read_text(encoding="utf-8")) if system_control_path else {}
+        mode = control.get("systemMode", "ubuntu")
+        if command == "cmd /d /c ver":
+            return ("Microsoft Windows [Version 10.0.26100.0]\r\n", 0) if mode == "windows" else ("", 1)
+        if mode in ("denied", "windows"):
+            return "command unavailable\n", 1
+        if mode == "oversize":
+            return "x" * 20000, 0
+        if mode == "macos":
+            return "__SEAL_SYSTEM_V1__\nDarwin\n", 0
+        if mode == "unknown":
+            return "__SEAL_SYSTEM_V1__\nLinux\nID=custom\nPRETTY_NAME=\"Custom Linux\"\n", 0
+        return "__SEAL_SYSTEM_V1__\nLinux\nID=ubuntu\nID_LIKE=debian\nPRETTY_NAME=\"Ubuntu 24.04 LTS\"\n", 0
     if command.startswith("# sealshell-recommendation-context"):
         call_count["recommendation_probe"] = call_count.get("recommendation_probe", 0) + 1
         write_state()
@@ -306,6 +321,10 @@ async def handle_process(process: asyncssh.SSHServerProcess) -> None:
     if command:
         call_count["exec"] += 1
         write_state()
+        if system_control_path and (command.startswith("printf '__SEAL_SYSTEM_V1__") or command == "cmd /d /c ver"):
+            control = json.loads(Path(system_control_path).read_text(encoding="utf-8"))
+            if control.get("systemMode") == "timeout":
+                await asyncio.sleep(5)
         output, status = command_output(command)
         process.stdout.write(output)
         if status:

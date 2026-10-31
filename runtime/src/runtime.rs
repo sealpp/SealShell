@@ -159,6 +159,20 @@ impl Runtime {
                     )
                     .await?,
             ),
+            "ssh_detect_system" => {
+                let session = self.ssh.get(string(&args, "id")?)?;
+                let Some(info) = crate::remote_system::detect(&session).await else {
+                    return Ok(Value::Null);
+                };
+                if session.cancel.is_cancelled() {
+                    return Ok(Value::Null);
+                }
+                encode(self.store.save_host_system(
+                    string(&args, "hostId")?,
+                    &session.target,
+                    info,
+                )?)
+            }
             "ssh_send" => {
                 self.ssh
                     .get(string(&args, "id")?)?

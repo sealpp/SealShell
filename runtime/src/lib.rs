@@ -4,6 +4,7 @@ pub mod forwarding;
 pub mod http;
 pub mod path_memory;
 pub mod proxy;
+pub mod remote_system;
 pub mod runtime;
 pub mod ssh;
 pub mod storage;

@@ -2,6 +2,7 @@ use crate::{
     Events,
     error::{Error, Result},
     proxy::{self, Proxy},
+    remote_system::Target,
     storage::Store,
 };
 use base64::Engine;
@@ -85,6 +86,7 @@ impl client::Handler for Verifier {
 pub struct Session {
     pub handle: client::Handle<Verifier>,
     pub cancel: CancellationToken,
+    pub target: Target,
     shell: Mutex<Option<mpsc::Sender<ShellInput>>>,
 }
 
@@ -327,6 +329,11 @@ impl SshService {
             Ok(Arc::new(Session {
                 handle,
                 cancel: cancel.clone(),
+                target: Target {
+                    address: connection.host.clone(),
+                    port: connection.port,
+                    username: connection.username.clone(),
+                },
                 shell: Mutex::new(None),
             }))
         };

@@ -38,6 +38,7 @@ async fn native_ssh_sftp_transfers_and_forwarding() {
         .arg(root.join(".agents/skills/seal-e2e/mock-ssh-server.py"))
         .env("MOCK_SFTP_ROOT", &remote)
         .env("MOCK_SFTP_CONTROL_PATH", &control)
+        .env("MOCK_SYSTEM_CONTROL_PATH", &control)
         .env("PYTHONIOENCODING", "utf-8")
         .env("MOCK_SSH_PASSWORD", "fixture-password")
         .env("MOCK_SSH_FORWARDING", "1")
@@ -195,6 +196,106 @@ async fn native_ssh_sftp_transfers_and_forwarding() {
         serde_json::from_slice(&std::fs::read(directory.path().join("state.json")).unwrap())
             .unwrap();
     assert_eq!(state["shell_initial_sizes"]["1"], json!([117, 39]));
+    runtime.call("store_write", json!({"changes":[{"collection":"hosts","key":"system-host","value":{
+        "id":"system-host","name":"System fixture","address":"127.0.0.1","port":port,"username":"fixture","folderId":null
+    }}]})).await.unwrap();
+    for (mode, family, distro) in [
+        ("ubuntu", "linux", "ubuntu"),
+        ("macos", "macos", "macos"),
+        ("windows", "windows", "windows"),
+        ("unknown", "linux", "custom"),
+    ] {
+        std::fs::write(&control, json!({"systemMode":mode}).to_string()).unwrap();
+        let system = runtime
+            .call(
+                "ssh_detect_system",
+                json!({"id":"terminal","hostId":"system-host"}),
+            )
+            .await
+            .unwrap();
+        assert_eq!(system["info"]["family"], family);
+        assert_eq!(system["info"]["id"], distro);
+        let persisted = runtime
+            .call(
+                "store_get",
+                json!({"collection":"hostSystems","key":"system-host"}),
+            )
+            .await
+            .unwrap();
+        assert_eq!(persisted, system);
+    }
+    for mode in ["denied", "timeout", "oversize"] {
+        std::fs::write(&control, json!({"systemMode":mode}).to_string()).unwrap();
+        assert!(
+            runtime
+                .call(
+                    "ssh_detect_system",
+                    json!({"id":"terminal","hostId":"system-host"})
+                )
+                .await
+                .unwrap()
+                .is_null()
+        );
+        let output = runtime
+            .call(
+                "ssh_exec",
+                json!({"id":"terminal","command":"printf exec-ok"}),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            output["exitCode"], 0,
+            "optional {mode} probe must leave the session usable"
+        );
+    }
+    runtime
+        .call(
+            "store_write",
+            json!({"changes":[{"collection":"hostSystems","key":"system-host"}]}),
+        )
+        .await
+        .unwrap();
+    runtime
+        .call(
+            "ssh_connect",
+            json!({"id":"system-cancel","connection":connection}),
+        )
+        .await
+        .unwrap();
+    let probe_runtime = runtime.clone();
+    std::fs::write(&control, json!({"systemMode":"timeout"}).to_string()).unwrap();
+    let probe = tokio::spawn(async move {
+        probe_runtime
+            .call(
+                "ssh_detect_system",
+                json!({"id":"system-cancel","hostId":"system-host"}),
+            )
+            .await
+            .unwrap()
+    });
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    runtime
+        .call("ssh_close", json!({"id":"system-cancel"}))
+        .await
+        .unwrap();
+    assert!(
+        tokio::time::timeout(Duration::from_secs(1), probe)
+            .await
+            .unwrap()
+            .unwrap()
+            .is_null()
+    );
+    assert!(
+        runtime
+            .call(
+                "store_get",
+                json!({"collection":"hostSystems","key":"system-host"})
+            )
+            .await
+            .unwrap()
+            .is_null()
+    );
+    std::fs::write(&control, b"{}").unwrap();
     runtime
         .call(
             "file_connect",

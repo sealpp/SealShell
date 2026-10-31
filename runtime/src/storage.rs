@@ -1,4 +1,5 @@
 use crate::error::{Error, Result};
+use crate::remote_system::{HostSystem, SystemInfo, Target};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -59,6 +60,36 @@ impl Store {
         rows.map(|row| Ok(serde_json::from_str(&row?)?)).collect()
     }
 
+    pub fn save_host_system(
+        &self,
+        id: &str,
+        target: &Target,
+        info: SystemInfo,
+    ) -> Result<Option<HostSystem>> {
+        let connection = self.0.lock().unwrap();
+        let raw: Option<String> = connection
+            .query_row(
+                "SELECT value FROM records WHERE collection='hosts' AND key=?1",
+                [id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        let Some(raw) = raw else { return Ok(None) };
+        if !target.matches_profile(&serde_json::from_str(&raw)?) {
+            return Ok(None);
+        }
+        let record = HostSystem {
+            id: id.into(),
+            target: target.clone(),
+            info,
+        };
+        connection.execute(
+            "INSERT INTO records VALUES ('hostSystems',?1,?2) ON CONFLICT(collection,key) DO UPDATE SET value=excluded.value",
+            params![id, serde_json::to_string(&record)?],
+        )?;
+        Ok(Some(record))
+    }
+
     /// A batch either commits fully or rolls back, including profile/credential edits.
     pub fn write(&self, changes: Vec<Write>, require_host: Option<&str>) -> Result<bool> {
         let mut connection = self.0.lock().unwrap();
@@ -80,7 +111,7 @@ impl Store {
             } else {
                 if change.collection == "hosts" {
                     transaction.execute(
-                        "DELETE FROM records WHERE collection='pathMemory' AND key=?1",
+                        "DELETE FROM records WHERE collection IN ('pathMemory','hostSystems') AND key=?1",
                         [&change.key],
                     )?;
                 }
