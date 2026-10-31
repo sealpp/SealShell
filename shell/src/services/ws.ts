@@ -25,6 +25,7 @@ import { initializeNativeEvents } from './native-events'
 import { closeFileTabSession } from './sftp/file-tabs'
 import { hostProxySource, loadProxyProfiles, resolveHostConnection } from './proxy/profiles'
 import { waitForTerminalSize } from './terminalSize'
+import { detectHostSystem, loadHostSystems } from './remoteSystem'
 
 const outputHandlers = new Map<string, (data: Uint8Array) => void>()
 const pendingOutput = new Map<string, Uint8Array[]>()
@@ -33,6 +34,7 @@ export async function initializeDesktop(): Promise<void> {
   await initializeNativeEvents()
   store.hosts = await listStoredHosts()
   store.folders = await listStoredFolders()
+  await loadHostSystems()
   await loadProxyProfiles()
 }
 
@@ -272,6 +274,7 @@ async function startTab(tab: Tab, host: HostProfile, password: string, options?:
     }
     delete reactiveTab.initialCwd
     updateTabState(sessionId, 'online')
+    void detectHostSystem(host.id, sessionId)
     if (store.loginDialogOpen && store.loginDialogHostId === host.id) {
       store.loginDialogOpen = false
       store.loginDialogError = ''

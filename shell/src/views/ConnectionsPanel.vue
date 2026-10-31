@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
-import { IconChevronDown, IconChevronRight, IconFolder, IconFolderOpen, IconTerminal2 } from '../ui/icons'
+import { IconChevronDown, IconChevronRight, IconFolder, IconFolderOpen } from '../ui/icons'
 import { store } from '../stores/app'
 import CommandContextMenu from '../components/CommandContextMenu.vue'
 import type { CommandContext } from '../services/context'
@@ -15,6 +15,8 @@ import {
 } from '../services/connectionTree'
 import { moveConnectionNodes } from '../services/ws'
 import { alertDialog } from '../services/dialogs'
+import HostSystemIcon from '../components/HostSystemIcon.vue'
+import { hostSystem } from '../services/remoteSystem'
 
 const draggingKeys = ref<string[]>([])
 const visibleNodes = computed(() => buildVisibleNodes(store.folders, store.hosts, store.expandedFolderIds))
@@ -24,6 +26,13 @@ const cutKeys = computed(() =>
 
 function isSelected(node: TreeNode): boolean {
   return store.selectedNodeIds.has(nodeKey(node.kind, node.id))
+}
+
+function nodeTitle(node: TreeNode): string | undefined {
+  const host = node.host
+  if (!host) return node.folder?.name
+  return [node.label, `SSH · ${host.username}@${host.address}:${host.port}`,
+    hostSystem(host)?.info.name, '双击连接'].filter(Boolean).join('\n')
 }
 
 function syncHostSelection() {
@@ -191,7 +200,7 @@ onBeforeUnmount(() => {
             :class="{ selected: isSelected(node), dragging: draggingKeys.includes(nodeKey(node.kind, node.id)), cut: cutKeys?.has(nodeKey(node.kind, node.id)), folder: node.kind === 'folder', 'root-host': node.kind === 'host' && node.depth === 0 }"
             :style="{ paddingLeft: `${8 + node.depth * 16}px` }"
             :draggable="true"
-            :title="node.kind === 'host' ? `${node.label}\nSSH · ${node.host?.username}@${node.host?.address}:${node.host?.port}\n双击连接` : node.folder?.name"
+            :title="nodeTitle(node)"
             @click="onNodeClick(node, $event)"
             @dblclick="node.kind === 'host' && node.host ? openConnect(node.host.id) : toggleFolder(node.id)"
             @dragstart="onDragStart(node, $event)"
@@ -214,8 +223,8 @@ onBeforeUnmount(() => {
               <IconFolderOpen v-if="store.expandedFolderIds.has(node.id)" :size="16" />
               <IconFolder v-else :size="16" />
             </span>
-            <span v-else class="node-icon" role="img" aria-label="SSH 终端">
-              <IconTerminal2 :size="16" />
+            <span v-else-if="node.host" class="node-icon">
+              <HostSystemIcon :host="node.host" />
             </span>
             <span class="conn-label">{{ node.label }}</span>
           </div>

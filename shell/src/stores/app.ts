@@ -4,6 +4,7 @@ import type { FileEndpoint } from '../services/files/types'
 import type { HostProxySettings, ProxyProfile, ProxySource } from '../services/proxy/types'
 import type { PortsState } from '../services/ports/types'
 import type { ProcessesState } from '../services/processes/types'
+import type { HostSystem } from '../services/remoteSystem'
 
 export type View = 'welcome' | 'shell'
 export type ShellState = 'idle' | 'connecting' | 'online' | 'error'
@@ -225,6 +226,7 @@ export interface AppState {
   view: View
   error: string
   hosts: HostProfile[]
+  hostSystems: Record<string, HostSystem>
   proxies: ProxyProfile[]
   folders: FolderProfile[]
   tabs: Tab[]
@@ -302,6 +304,7 @@ export const store = reactive<AppState>({
   view: 'welcome',
   error: '',
   hosts: [],
+  hostSystems: {},
   proxies: [],
   folders: [],
   tabs: [],
