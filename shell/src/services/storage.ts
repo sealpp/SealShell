@@ -50,6 +50,11 @@ export async function deleteHosts(ids: string[]): Promise<void> { await write(id
 export function readCredential(id: string): Promise<EncryptedCredential | undefined> { return get('credentials', id) }
 export function saveCredential(record: EncryptedCredential): Promise<void> { return put('credentials', record.id, record) }
 export async function clearCredential(id: string): Promise<void> { await write([remove('credentials', id)]) }
+export async function saveModelCatalog(value: { key: string }, credentialId?: string, credential?: EncryptedCredential | null): Promise<void> {
+  const changes: Change[] = [{ collection: 'meta', key: value.key, value }]
+  if (credentialId && credential !== undefined) changes.push({ collection: 'credentials', key: credentialId, value: credential ?? undefined })
+  await write(changes)
+}
 export async function saveProxyCatalog(items: ProxyProfile[], credentialId: string, credential?: EncryptedCredential | null): Promise<void> {
   const changes: Change[] = [{ collection: 'meta', key: 'proxyServers', value: { key: 'proxyServers', items } }]
   if (credential !== undefined) changes.push({ collection: 'credentials', key: credentialId, value: credential ?? undefined })
