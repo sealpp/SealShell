@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { RovingFocusItem, TabsContent, TabsList, TabsRoot, TabsTrigger } from 'reka-ui'
 import { store } from '../stores/app'
 import UiDialog from './UiDialog.vue'
@@ -10,6 +10,9 @@ import CommandSuggestionSettings from './CommandSuggestionSettings.vue'
 import ModelServiceSettings from './ModelServiceSettings.vue'
 import HistorySuggestionSettings from './HistorySuggestionSettings.vue'
 const aiExpanded = ref(true)
+watch(() => store.settingsSection, section => {
+  if (section === 'models' || section === 'suggestions') aiExpanded.value = true
+})
 const page = ref<{ flush(): Promise<boolean> } | null>(null)
 async function close() {
   if (await page.value?.flush() === false) return
@@ -27,9 +30,11 @@ async function select(section: string | number) {
       <TabsList as="nav" class="settings-nav workbench-selection-container" aria-label="设置分类" loop>
         <TabsTrigger value="appearance" class="settings-nav-item workbench-list-item">外观</TabsTrigger>
         <TabsTrigger value="history" class="settings-nav-item workbench-list-item">历史命令提示</TabsTrigger>
-        <TabsTrigger value="models" class="settings-nav-item workbench-list-item">模型服务</TabsTrigger>
-        <RovingFocusItem as-child><button type="button" class="settings-nav-item settings-nav-group" :aria-expanded="aiExpanded" aria-controls="ai-settings-items" @click="aiExpanded = !aiExpanded" @keydown.right.prevent.stop="aiExpanded = true" @keydown.left.prevent.stop="aiExpanded = false"><span :class="['codicon', aiExpanded ? 'codicon-chevron-down' : 'codicon-chevron-right']" aria-hidden="true" />AI 功能</button></RovingFocusItem>
-        <div v-if="aiExpanded" id="ai-settings-items"><TabsTrigger value="suggestions" class="settings-nav-item settings-nav-child workbench-list-item">智能命令提示</TabsTrigger></div>
+        <RovingFocusItem as-child><button type="button" class="settings-nav-item settings-nav-group" :aria-expanded="aiExpanded" aria-controls="ai-settings-items" @click="aiExpanded = !aiExpanded" @keydown.right.prevent.stop="aiExpanded = true" @keydown.left.prevent.stop="aiExpanded = false"><span :class="['codicon', aiExpanded ? 'codicon-chevron-down' : 'codicon-chevron-right']" aria-hidden="true" />AI 配置</button></RovingFocusItem>
+        <div v-if="aiExpanded" id="ai-settings-items">
+          <TabsTrigger value="models" class="settings-nav-item settings-nav-child workbench-list-item">模型服务</TabsTrigger>
+          <TabsTrigger value="suggestions" class="settings-nav-item settings-nav-child workbench-list-item">智能命令提示</TabsTrigger>
+        </div>
         <TabsTrigger value="proxies" class="settings-nav-item workbench-list-item">代理服务器</TabsTrigger>
         <TabsTrigger value="ports" class="settings-nav-item workbench-list-item">端口转发</TabsTrigger>
       </TabsList>
