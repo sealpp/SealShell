@@ -21,7 +21,7 @@ const props = withDefaults(defineProps<{
   showClose: true,
 })
 
-const emit = defineEmits<{ close: [] }>()
+const emit = defineEmits<{ close: []; openAutoFocus: [event: Event]; closeAutoFocus: [event: Event] }>()
 const portalTarget = usePortalTarget()
 
 function onOpenChange(open: boolean) {
@@ -36,6 +36,8 @@ function onOpenChange(open: boolean) {
       <DialogContent
         :class="['workbench-dialog-content', props.contentClass]"
         :style="{ width: props.width, height: props.height }"
+        @open-auto-focus="emit('openAutoFocus', $event)"
+        @close-auto-focus="emit('closeAutoFocus', $event)"
       >
         <div class="workbench-dialog-header">
           <DialogTitle
