@@ -87,6 +87,9 @@ try {
   const systemIcon = page.locator('.conn-item').filter({ hasText: 'Desktop fixture' }).getByRole('img', { name: 'Ubuntu 24.04 LTS' })
   await expect(systemIcon).toBeVisible()
   await expect(systemIcon).toHaveJSProperty('naturalWidth', 32)
+  const tabSystemIcon = page.locator('.terminal-tab').filter({ hasText: 'Desktop fixture' }).getByRole('img', { name: 'Ubuntu 24.04 LTS' })
+  await expect(tabSystemIcon).toBeVisible()
+  await expect(tabSystemIcon).toHaveAttribute('src', await systemIcon.getAttribute('src'))
   const detectedSystem = await page.evaluate(async () => {
     const { nativeCall } = await import('/src/native/bridge.ts')
     return nativeCall('store_get', { collection: 'hostSystems', key: 'desktop-fixture' })

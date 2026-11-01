@@ -69,3 +69,29 @@ test('updates an icon when discovery completes and keeps unknown distributions g
   await expect(icon).toBeVisible()
   await expect(icon).toHaveAttribute('src', /\/linux\.svg/)
 })
+
+test('updates all tabs for the same host when its detected system changes', async ({ page }) => {
+  await page.goto('/tests/tab-context-menu-harness.html')
+  await page.evaluate(async () => {
+    const { store } = await import('/src/stores/app.ts')
+    store.hosts = [{ id: 'shared-host', name: 'Shared', address: 'server', port: 22, username: 'root', folderId: null }]
+    for (const tab of store.tabs.slice(0, 2)) tab.hostId = 'shared-host'
+  })
+  const tabs = page.locator('.terminal-tab')
+  await expect(tabs.getByRole('img', { name: 'SSH 终端' })).toHaveCount(2)
+  await page.evaluate(async () => {
+    const { store } = await import('/src/stores/app.ts')
+    store.hostSystems['shared-host'] = {
+      id: 'shared-host', target: { address: 'server', port: 22, username: 'root' },
+      info: { family: 'linux', id: 'ubuntu', name: 'Ubuntu 24.04 LTS' },
+    }
+  })
+  await expect(tabs.getByRole('img', { name: 'Ubuntu 24.04 LTS' })).toHaveCount(2)
+  await page.evaluate(async () => {
+    const { store } = await import('/src/stores/app.ts')
+    store.hostSystems['shared-host'].info = { family: 'windows', id: 'windows', name: 'Windows' }
+    store.tabs[1].state = 'idle'
+  })
+  await expect(tabs.getByRole('img', { name: 'Windows', exact: true })).toHaveCount(2)
+  await expect(tabs.locator('.dot.offline')).toHaveCount(1)
+})
