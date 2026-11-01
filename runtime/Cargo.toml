@@ -7,7 +7,7 @@ edition = "2024"
 base64 = "0.22"
 bytes = "1"
 futures = "0.3"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream", "socks", "system-proxy"] }
 rusqlite = { version = "0.38", features = ["bundled"] }
 russh = { version = "0.65", default-features = false, features = ["ring", "rsa"] }
 russh-sftp = "3.0.1"
