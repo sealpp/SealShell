@@ -3,6 +3,7 @@ import { readMeta, saveProxyCatalog } from '../storage'
 import { encryptCredentialRecord, loadCredentialRecord } from '../vault'
 import { normalizeTarget, ProxyError, validateProxy, type ProxyConnection } from '../transport/types'
 import type { ProxyProfile, ProxySource, RemoteConnection } from './types'
+import { modelServices } from '../modelServices/catalog'
 
 const credentialId = (id: string) => `proxy:${id}`
 
@@ -12,6 +13,9 @@ export async function loadProxyProfiles(): Promise<void> {
 
 export function proxyReferences(id: string): HostProfile[] {
   return store.hosts.filter(host => host.proxy?.savedId === id)
+}
+export function modelProxyReferences(id: string) {
+  return modelServices.services.filter(service => service.proxy.mode === 'saved' && service.proxy.id === id)
 }
 
 export async function proxyPassword(source: ProxySource): Promise<string | undefined> {
@@ -46,6 +50,8 @@ export function deleteProxyProfile(id: string): Promise<void> {
   return serialize(async () => {
     const references = proxyReferences(id)
     if (references.length) throw new Error(`请先解除以下主机的引用：${references.map(host => host.name).join('、')}`)
+    const models = modelProxyReferences(id)
+    if (models.length) throw new Error(`请先解除以下模型服务的引用：${models.map(service => service.name).join('、')}`)
     const items = store.proxies.filter(item => item.id !== id).map(item => ({ ...item }))
     await saveProxyCatalog(items, credentialId(id), null)
     store.proxies = items

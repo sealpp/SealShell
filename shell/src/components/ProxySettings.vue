@@ -3,7 +3,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { IconPencil, IconPlayerPlay, IconPlus, IconTrash } from '../ui/icons'
 import { store } from '../stores/app'
 import { defaultProxy, type ProxyProfile } from '../services/proxy/types'
-import { deleteProxyProfile, editProxySource, proxyPassword, proxyReferences } from '../services/proxy/profiles'
+import { deleteProxyProfile, editProxySource, proxyPassword, proxyReferences, modelProxyReferences } from '../services/proxy/profiles'
 import { confirmDialog } from '../services/dialogs'
 import { randomId } from '../utils/id'
 import type { ProxyConnection } from '../services/transport/types'
@@ -18,6 +18,7 @@ const testing = ref<ProxyConnection | null>(null)
 const error = ref('')
 const blockedId = ref('')
 const references = computed(() => proxyReferences(blockedId.value))
+const modelReferences = computed(() => modelProxyReferences(blockedId.value))
 async function flush(): Promise<boolean> { return await editor.value?.flush() ?? true }
 async function select(profile: ProxyProfile) {
   if (!await flush()) return
@@ -30,7 +31,7 @@ async function add() { await select({ id: randomId(), name: '', ...defaultProxy(
 async function remove(profile: ProxyProfile) {
   if (!await flush()) return
   blockedId.value = profile.id
-  if (references.value.length) return
+  if (references.value.length || modelReferences.value.length) return
   if (!await confirmDialog('删除代理', `删除「${profile.name}」及其保存的凭据？`, { danger: true, confirmLabel: '删除' })) return
   try {
     await deleteProxyProfile(profile.id)
@@ -61,6 +62,7 @@ defineExpose({ flush })
       </div>
     </div>
     <div v-if="references.length" class="proxy-references"><UiStatus kind="warning" label="请先移除以下会话中的代理引用：" /><button v-for="host in references" :key="host.id" type="button" class="proxy-text-button" @click="editProxySource({ kind: 'host', id: host.id })">{{ host.name }}</button></div>
+    <div v-if="modelReferences.length" class="proxy-references"><UiStatus kind="warning" label="请先移除以下模型服务中的代理引用：" /><span v-for="service in modelReferences" :key="service.id">{{ service.name }} </span><button type="button" class="proxy-text-button" @click="store.settingsSection = 'models'">打开模型服务</button></div>
     <UiStatus v-if="error" kind="error" :label="error" />
     <ProxyEditor v-if="selected" :key="selected.id" ref="editor" :profile="selected" @test="testing = $event" />
     <ProxyTestDialog v-if="testing" :proxy="testing" @close="testing = null" />

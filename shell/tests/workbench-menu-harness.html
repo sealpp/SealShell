@@ -24,10 +24,14 @@ import "/tests/native-mock.ts"
       import WorkbenchMenu from '/src/components/WorkbenchMenu.vue'
       import SettingsDialog from '/src/components/SettingsDialog.vue'
       import AboutDialog from '/src/components/AboutDialog.vue'
+      import InteractionDialog from '/src/components/InteractionDialog.vue'
       import { store } from '/src/stores/app'
       import { loadTerminalPreferences } from '/src/services/terminalPreferences'
 
       await loadTerminalPreferences()
+      await (await import('/src/services/modelServices/catalog')).loadModelServices()
+      await (await import('/src/services/terminalSuggestions/runtime')).loadSuggestionPreferences()
+      await (await import('/src/services/proxy/profiles')).loadProxyProfiles()
 
       store.settingsModalOpen = false
       store.aboutModalOpen = false
@@ -46,6 +50,7 @@ import "/tests/native-mock.ts"
             ]),
             store.settingsModalOpen ? h(SettingsDialog) : null,
             store.aboutModalOpen ? h(AboutDialog) : null,
+            h(InteractionDialog),
           ])
         },
       }).mount('#app')

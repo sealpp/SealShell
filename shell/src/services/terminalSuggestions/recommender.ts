@@ -101,7 +101,7 @@ export function createRecommender(key: () => Promise<string>, ports: Recommendat
       }
       trace.directories = facts?.directories.length ?? 0; trace.files = facts?.files.length ?? 0
       try {
-        const candidates = await timed(signal, 8000, async modelSignal => {
+        const candidates = await timed(signal, (settings.parameters?.timeoutSeconds ?? 8) * 1000, async modelSignal => {
           const apiKey = await ports.key()
           modelSignal.throwIfAborted()
           progress?.('ai')

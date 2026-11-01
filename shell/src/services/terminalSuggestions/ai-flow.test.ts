@@ -24,7 +24,7 @@ it.each(['http://127.0.0.1:11434/v1', 'https://model.example/v1'])('requests the
   const signal = new AbortController().signal
   const suggestions = await generateRecommendations({ query: 'mkdir build', cwd: '/work', history: [] }, facts,
     { ...settings, baseUrl }, 'synthetic-key', signal)
-  expect(fetch).toHaveBeenCalledWith(`${baseUrl}/chat/completions`, expect.objectContaining({ model: settings.model }), 'synthetic-key', signal)
+  expect(fetch).toHaveBeenCalledWith(`${baseUrl}/chat/completions`, expect.objectContaining({ model: settings.model }), 'synthetic-key', signal, expect.objectContaining({ protocol: 'openai-chat', timeoutMs: 45000 }))
   expect(suggestions).toMatchObject([{ command: "mkdir '/work/build'", source: 'ai' }])
 })
 

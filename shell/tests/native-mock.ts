@@ -29,7 +29,11 @@ installNativeAdapter({
     else if (operation === 'transfer_concurrency') result = args.value
     else if (operation.endsWith('_close') || operation.endsWith('_cancel') || operation === 'host_key_decision') result = undefined
     else if (operation === 'http_request') {
-      const response = await fetch(args.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${args.apiKey}` }, body: JSON.stringify(args.body) })
+      const apiKey = args.credentialId ? JSON.parse(records.credentials?.[args.credentialId]?.ciphertext ?? '{}').apiKey : args.apiKey
+      const headers = args.protocol === 'anthropic' ? { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' } : { Authorization: `Bearer ${apiKey}` }
+      const url = new URL(args.url)
+      for (const [name, value] of Object.entries(args.query ?? {})) url.searchParams.set(name, String(value))
+      const response = await fetch(url, { method: args.method ?? 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: args.method === 'GET' ? undefined : JSON.stringify(args.body) })
       if (!response.ok) throw new Error(`云端推荐失败（HTTP ${response.status}）`)
       result = await response.text()
     } else throw new Error(`Native browser fixture unavailable: ${operation}`)

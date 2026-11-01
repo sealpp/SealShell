@@ -13,7 +13,7 @@ test('all settings categories share title typography, content alignment and navi
   await openSettings(page)
   const dialog = page.getByRole('dialog', { name: '设置', exact: true })
   const titles: Record<string, unknown> = {}
-  for (const name of ['外观', '命令提示', '代理服务器', '端口转发']) {
+  for (const name of ['外观', '历史命令提示', '代理服务器', '端口转发']) {
     const tab = dialog.getByRole('tab', { name, exact: true })
     await tab.click()
     await expect(tab).toHaveCSS('font-weight', '400')
@@ -27,7 +27,7 @@ test('all settings categories share title typography, content alignment and navi
       }
     })
   }
-  for (const name of ['命令提示', '代理服务器', '端口转发']) expect(titles[name], name).toEqual(titles['外观'])
+  for (const name of ['历史命令提示', '代理服务器', '端口转发']) expect(titles[name], name).toEqual(titles['外观'])
 })
 
 for (const width of [1280, 375]) {
@@ -38,8 +38,9 @@ for (const width of [1280, 375]) {
     const styles = []
     const screenshots = join(tmpdir(), 'seal-e2e', 'settings')
     await mkdir(screenshots, { recursive: true })
-    for (const [name, label] of [['外观', '字体'], ['命令提示', 'API 地址'], ['代理服务器', '代理地址']]) {
+    for (const [name, label] of [['外观', '字体'], ['模型服务', 'API 地址'], ['代理服务器', '代理地址']]) {
       await dialog.getByRole('tab', { name, exact: true }).click()
+      if (name === '模型服务') await dialog.getByRole('button', { name: '添加服务', exact: true }).click()
       if (name === '代理服务器') await dialog.getByRole('button', { name: '添加代理', exact: true }).click()
       const control = dialog.getByLabel(label, { exact: true })
       await control.focus()
@@ -100,8 +101,8 @@ test('port settings await saving on navigation and keep failed changes visible f
 test('switches communicate state through position, support keyboard and keep detailed help on demand', async ({ page }) => {
   await openSettings(page)
   const dialog = page.getByRole('dialog', { name: '设置', exact: true })
-  await dialog.getByRole('tab', { name: '命令提示', exact: true }).click()
-  const toggle = dialog.getByRole('switch', { name: '命令提示', exact: true })
+  await dialog.getByRole('tab', { name: '历史命令提示', exact: true }).click()
+  const toggle = dialog.getByRole('switch', { name: '历史命令提示', exact: true })
   const thumb = toggle.locator('.settings-switch-thumb')
   await expect(toggle).toBeChecked()
   const enabledX = (await thumb.boundingBox())!.x
@@ -110,12 +111,11 @@ test('switches communicate state through position, support keyboard and keep det
   await expect(toggle).not.toBeChecked()
   await expect.poll(async () => (await thumb.boundingBox())!.x).toBeLessThan(enabledX - 8)
   await expect(dialog.getByRole('status')).toHaveText('已自动保存')
-  await dialog.locator('.settings-switch-label').filter({ hasText: /^命令提示$/ }).click()
+  await dialog.locator('.settings-switch-label > span').filter({ hasText: /^历史命令提示$/ }).click()
   await expect(toggle).toBeChecked()
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await expect(thumb).toHaveCSS('transition-duration', '0s')
   await expect(dialog.getByText('历史仅存本机', { exact: false })).toBeHidden()
   await dialog.locator('.settings-help summary').click()
   await expect(dialog.getByText('历史仅存本机', { exact: false })).toBeVisible()
-  await expect(dialog.getByText('将输入与所选上下文发送至模型服务。', { exact: true })).toBeVisible()
 })

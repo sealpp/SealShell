@@ -256,7 +256,7 @@ export interface AppState {
   connectionModalOpen: boolean
   loginDialogOpen: boolean
   settingsModalOpen: boolean
-  settingsSection: 'appearance' | 'proxies' | 'ports' | 'suggestions'
+  settingsSection: 'appearance' | 'proxies' | 'ports' | 'suggestions' | 'models' | 'history'
   editingProxyId: string
   aboutModalOpen: boolean
   dirtyCloseConfirm: {

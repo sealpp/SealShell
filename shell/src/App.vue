@@ -29,6 +29,7 @@ import EncodingStatusItem from './components/EncodingStatusItem.vue'
 import EncodingPickerDialog from './components/EncodingPickerDialog.vue'
 import { loadTransferConcurrency } from './services/sftp/transfer-runtime'
 import { loadTerminalPreferences } from './services/terminalPreferences'
+import { loadModelServices } from './services/modelServices/catalog'
 import { loadSuggestionPreferences } from './services/terminalSuggestions/runtime'
 
 const ACTIVITY_BAR_WIDTH = 48
@@ -186,6 +187,7 @@ onMounted(async () => {
     await initializeDesktop()
     await loadTransferConcurrency()
     await loadTerminalPreferences()
+    await loadModelServices()
     await loadSuggestionPreferences()
 
   } catch (error) {

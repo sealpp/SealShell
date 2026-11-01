@@ -1,3 +1,4 @@
+import type { ModelParameters, ModelProtocol, ModelProxy } from '../modelServices/types'
 export interface RecommendationSettings {
   cloud: boolean
   automatic: boolean
@@ -5,6 +6,11 @@ export interface RecommendationSettings {
   shareHistory: boolean
   baseUrl: string
   model: string
+  preset?: string
+  protocol?: ModelProtocol
+  parameters?: ModelParameters
+  credentialId?: string
+  proxy?: ModelProxy
 }
 
 export const defaultRecommendationSettings: RecommendationSettings = {

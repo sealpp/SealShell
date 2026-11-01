@@ -20,9 +20,8 @@ import { publishTerminalSize } from '../services/terminalSize'
 import TerminalCommandSuggestions from '../components/TerminalCommandSuggestions.vue'
 import { attachCommandSuggestions, type TerminalSuggestionView } from '../services/terminalSuggestions/controller'
 import { historyProvider } from '../services/terminalSuggestions/model'
-import { commandSuggestions, loadSuggestionHistory, loadRecommendationKey, rememberSuggestionCommand } from '../services/terminalSuggestions/runtime'
+import { commandSuggestions, loadSuggestionHistory, resolveRecommendationSettings, rememberSuggestionCommand } from '../services/terminalSuggestions/runtime'
 import { createRecommender } from '../services/terminalSuggestions/recommender'
-import { parsePathCommand } from '../services/terminalSuggestions/paths'
 import '@xterm/xterm/css/xterm.css'
 
 const props = defineProps<{ tabId: string; viewportTabIds?: () => string[] }>()
@@ -53,7 +52,7 @@ const unwatchTerminalMount = ref<() => void>()
 
 const tab = computed(() => store.tabs.find((t) => t.id === props.tabId))
 const isActive = computed(() => store.activeTerminalTabId === props.tabId)
-const recommend = createRecommender(loadRecommendationKey)
+const recommend = createRecommender(async () => '')
 
 function historyError(error: unknown): void {
   commandSuggestions.error = error instanceof Error ? error.message : String(error)
@@ -208,19 +207,17 @@ function initTerminal() {
   terminal.open(termEl.value)
 
   suggestions = attachCommandSuggestions(terminal, {
-    enabled: () => commandSuggestions.enabled && tab.value?.state === 'online',
+    enabled: () => (commandSuggestions.enabled || commandSuggestions.recommendations.cloud) && tab.value?.state === 'online',
     active: () => isActive.value,
     providers: () => [{ suggestions: query => {
-      // Keep AI path results from being pinned below old history; local mode only reads history.
-      if (commandSuggestions.recommendations.cloud && commandSuggestions.recommendations.automatic && parsePathCommand(query)) return []
-      return historyProvider(commandSuggestions.rememberHistory ? commandSuggestions.history[tab.value?.hostId ?? ''] ?? [] : []).suggestions(query)
+      return historyProvider(commandSuggestions.enabled ? commandSuggestions.history[tab.value?.hostId ?? ''] ?? [] : []).suggestions(query)
     } }],
     context: () => ({ key: `${tab.value?.sessionId}:${tab.value?.cwd}:${commandSuggestions.revision}:${commandSuggestions.rememberHistory}`, cwd: tab.value?.cwd }),
     automatic: () => commandSuggestions.recommendations.automatic,
     enhancementEnabled: () => commandSuggestions.recommendations.cloud,
     enhance: (query, signal, publish, progress) => recommend({ query, sessionId: tab.value?.sessionId ?? '', cwd: tab.value?.cwd,
-      history: commandSuggestions.rememberHistory ? commandSuggestions.history[tab.value?.hostId ?? ''] ?? [] : [],
-    }, { ...commandSuggestions.recommendations }, signal, publish, progress),
+      history: commandSuggestions.history[tab.value?.hostId ?? ''] ?? [],
+    }, resolveRecommendationSettings(), signal, publish, progress),
     onAccept: (command, use) => {
       const hostId = tab.value?.hostId
       if (hostId) void rememberSuggestionCommand(hostId, command, use).catch(historyError)

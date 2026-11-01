@@ -258,41 +258,6 @@ test('keeps Ctrl+I and the former intent shortcut in the terminal without openin
   expect(await requests(page)).toBe(0)
 })
 
-test('saves cloud configuration through the native credential interface and preserves it across reload', async ({ page }) => {
-  await page.getByRole('button', { name: '命令提示设置', exact: true }).click()
-  // Locators can auto-scroll before editing; assert discoverability first.
-  await expect(page.getByRole('textbox', { name: 'API 地址', exact: true })).toBeInViewport({ ratio: 1 })
-  await expect(page.getByRole('textbox', { name: '模型', exact: true })).toBeInViewport({ ratio: 1 })
-  await expect(page.getByLabel('API Key', { exact: true })).toBeInViewport({ ratio: 1 })
-  await page.getByRole('switch', { name: 'AI 推荐', exact: true }).check()
-  await page.getByRole('textbox', { name: 'API 地址', exact: true }).fill('https://example.invalid/v1')
-  await page.getByRole('textbox', { name: '模型', exact: true }).fill('example-model')
-  await page.getByLabel('API Key', { exact: true }).fill('synthetic-private-test-key')
-  await expect(page.getByRole('status')).toContainText('已自动保存')
-  const stored = await page.evaluate(async () => {
-    const storage = await import(/* @vite-ignore */ '/src/services/storage.ts')
-    const vault = await import(/* @vite-ignore */ '/src/services/vault.ts')
-    return { meta: await storage.readMeta('commandSuggestions'), encrypted: await storage.readCredential('command-recommendations'), key: await vault.loadCredentialRecord('command-recommendations') }
-  })
-  expect(JSON.stringify(stored.meta)).not.toContain('synthetic-private-test-key')
-  // DPAPI encryption is verified by the native tests; this browser uses an explicit fixture.
-  expect(stored.encrypted.id).toBe('command-recommendations')
-  expect(stored.key.apiKey).toBe('synthetic-private-test-key')
-  await page.reload()
-  await expect(page.locator('#ready')).toHaveText('true')
-  await page.getByRole('button', { name: '命令提示设置', exact: true }).click()
-  await expect(page.getByRole('switch', { name: 'AI 推荐', exact: true })).toBeChecked()
-  await expect(page.getByRole('textbox', { name: '模型', exact: true })).toHaveValue('example-model')
-  await expect(page.getByLabel('API Key', { exact: true })).toHaveValue('')
-  await expect(page.getByLabel('API Key', { exact: true })).toHaveAttribute('placeholder', '已保存，输入可更换')
-  await page.getByRole('switch', { name: '自动请求 AI 建议', exact: true }).uncheck()
-  await expect(page.getByRole('status')).toContainText('已自动保存')
-  expect(await page.evaluate(async () => (await import('/src/services/terminalSuggestions/runtime.ts')).loadRecommendationKey())).toBe('synthetic-private-test-key')
-  await page.getByRole('button', { name: '清除 API Key', exact: true }).click()
-  await expect(page.getByRole('status')).toContainText('已自动保存')
-  expect(await page.evaluate(async () => (await import('/src/services/terminalSuggestions/runtime.ts')).loadRecommendationKey())).toBe('')
-})
-
 test('the production terminal requests AI for a path even without directory context', async ({ page }) => {
   await page.route('**/src/services/ws.ts', route => route.fulfill({ contentType: 'application/javascript', body: `
     export * from '/src/services/ws.ts?actual';
@@ -313,8 +278,8 @@ test('the production terminal requests AI for a path even without directory cont
   await page.goto('/tests/terminal-suggestions-harness.html')
   await page.waitForFunction(() => (window as any).productionReady)
   await page.evaluate(async () => {
-    const { saveSuggestionPreferences } = await import('/src/services/terminalSuggestions/runtime.ts')
-    await saveSuggestionPreferences(true, true, { cloud: true, automatic: true, remoteContext: false, shareHistory: false, baseUrl: 'https://model.example/v1', model: 'test-model' }, 'synthetic-key')
+    const { configureModelFixture } = await import('/tests/model-fixture.ts')
+    await configureModelFixture('https://model.example/v1')
   })
   await input(page).focus()
   await page.keyboard.type('cd demo')
@@ -352,8 +317,8 @@ test('the production terminal composes a real cloud adapter request and inserts 
   await page.goto('/tests/terminal-suggestions-harness.html')
   await page.waitForFunction(() => (window as any).productionReady)
   await page.evaluate(async () => {
-    const { saveSuggestionPreferences } = await import(/* @vite-ignore */ '/src/services/terminalSuggestions/runtime.ts')
-    await saveSuggestionPreferences(true, true, { cloud: true, automatic: true, remoteContext: false, shareHistory: false, baseUrl: 'https://model.example/v1', model: 'test-model' }, 'synthetic-key')
+    const { configureModelFixture } = await import(/* @vite-ignore */ '/tests/model-fixture.ts')
+    await configureModelFixture('https://model.example/v1')
   })
   await input(page).focus()
   await page.keyboard.type('python main')

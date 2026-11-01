@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process'
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { createWriteStream } from 'node:fs'
 import { createServer } from 'node:net'
+import { createServer as createHttpServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -12,7 +13,7 @@ const shell = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const root = resolve(shell, '..')
 const artifacts = await mkdtemp(join(tmpdir(), 'sealshell-desktop-'))
 const processes = []
-let browser, page
+let browser, page, modelServer
 const errors = []
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 async function until(check, timeout = 30000) {
@@ -73,6 +74,51 @@ try {
   page.on('pageerror', error => errors.push(error.message))
   await page.waitForSelector('.welcome', { timeout: 20000 })
   await expect(page.locator('.global-error')).toHaveCount(0)
+  const modelRequests = []
+  modelServer = createHttpServer((request, response) => {
+    let body = ''
+    request.on('data', chunk => { body += chunk })
+    request.on('end', () => {
+      const payload = body ? JSON.parse(body) : undefined
+      modelRequests.push({ url: request.url, method: request.method, authorization: request.headers.authorization, key: request.headers['x-api-key'], payload })
+      response.setHeader('Content-Type', 'application/json')
+      if (request.method === 'GET') response.end(JSON.stringify({ data: [{ id: 'online-model', name: 'Online model' }] }))
+      else if (request.url.endsWith('/messages')) response.end(JSON.stringify({ content: [{ type: 'text', text: 'OK' }] }))
+      else if (request.url.endsWith('/responses')) response.end(JSON.stringify({ output: [{ type: 'message', content: [{ type: 'output_text', text: 'OK' }] }] }))
+      else response.end(JSON.stringify({ choices: [{ message: { content: 'OK' } }] }))
+    })
+  })
+  await new Promise(resolve => modelServer.listen(0, '127.0.0.1', resolve))
+  await page.evaluate(async port => {
+    const { configureModelFixture } = await import('/tests/model-fixture.ts')
+    const { resolveModel } = await import('/src/services/modelServices/catalog.ts')
+    const { discoverModels, checkModel } = await import('/src/services/modelServices/client.ts')
+    const { readCredential } = await import('/src/services/storage.ts')
+    const runtime = await import('/src/services/terminalSuggestions/runtime.ts')
+    for (const protocol of ['openai-chat', 'anthropic', 'openai-responses']) {
+      await configureModelFixture(`http://127.0.0.1:${port}/v1`, 'desktop-model', 'native-model-fixture-key', protocol)
+      const resolved = resolveModel()
+      const online = await discoverModels(resolved.service, new AbortController().signal)
+      if (online[0]?.id !== 'online-model' || resolved.service.models.length !== 1) throw new Error('Model listing changed the configured catalog')
+      await checkModel(resolved, new AbortController().signal)
+      const credential = await readCredential(`model-service:${resolved.service.id}`)
+      if (!credential || JSON.stringify(credential).includes('native-model-fixture-key')) throw new Error('Model key is not protected')
+    }
+    await runtime.saveSuggestionPreferences(true, true, { ...runtime.commandSuggestions.recommendations, cloud: false })
+  }, modelServer.address().port)
+  expect(modelRequests.filter(request => request.method === 'GET')).toHaveLength(3)
+  const generated = modelRequests.filter(request => request.method === 'POST')
+  expect(generated.map(request => request.url)).toEqual(['/v1/chat/completions', '/v1/messages', '/v1/responses'])
+  expect(generated[0].authorization).toBe('Bearer native-model-fixture-key')
+  expect(generated[1].key).toBe('native-model-fixture-key')
+  expect(generated[1].authorization).toBeUndefined()
+  expect(generated[2].payload).toMatchObject({ input: 'Reply with OK.', store: false, max_output_tokens: 2048 })
+  await page.evaluate(async () => { const { store } = await import('/src/stores/app.ts'); store.settingsSection = 'models'; store.settingsModalOpen = true })
+  await expect(page.getByLabel('API Key', { exact: true })).toHaveValue('')
+  await expect(page.getByLabel('API Key', { exact: true })).toHaveAttribute('placeholder', '已保存，输入可更换')
+  await page.screenshot({ path: join(artifacts, 'model-services.png') })
+  await page.getByRole('dialog', { name: '设置', exact: true }).getByRole('button', { name: '关闭', exact: true }).click()
+  console.log('Desktop model services: three protocols, native model listing and generation, DPAPI keys, no key refill or automatic model additions')
   await page.evaluate(async ({ port }) => {
     const { store } = await import('/src/stores/app.ts')
     const ws = await import('/src/services/ws.ts')
@@ -216,6 +262,7 @@ try {
 } finally {
   if (page) await page.evaluate(async () => { const { nativeCall } = await import('/src/native/bridge.ts'); await nativeCall('runtime_close') }).catch(() => {})
   if (browser) await browser.close().catch(() => {})
+  if (modelServer) { modelServer.closeAllConnections(); await new Promise(resolve => modelServer.close(resolve)) }
   for (const child of processes.reverse()) {
     if (child.exitCode !== null) continue
     child.kill()

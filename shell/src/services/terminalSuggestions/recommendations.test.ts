@@ -30,7 +30,7 @@ describe('cloud boundary', () => {
     vi.mocked(requestAI).mockImplementation(fetch)
     expect(await generateRecommendations(request, facts, defaults, 'synthetic-key', new AbortController().signal)).toEqual([candidate])
     const [url, body, key] = fetch.mock.calls[0]
-    expect(url).toBe('https://api.deepseek.com/chat/completions')
+    expect(url).toBe('https://api.deepseek.com/v1/chat/completions')
     expect(key).toBe('synthetic-key')
     expect(JSON.stringify(body)).not.toContain('synthetic-key')
   })

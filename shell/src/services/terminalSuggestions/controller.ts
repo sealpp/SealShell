@@ -32,7 +32,7 @@ interface SuggestionOptions {
 export function attachCommandSuggestions(terminal: Terminal, options: SuggestionOptions) {
   let submittedUse: CommandUse = {}
   const tracker = new TerminalCommandLine(terminal, command => {
-    if (options.enabled()) options.onCommand(command, submittedUse)
+    options.onCommand(command, submittedUse)
   })
   const element = terminal.element!
   let view: TerminalSuggestionView | undefined
@@ -88,8 +88,8 @@ export function attachCommandSuggestions(terminal: Terminal, options: Suggestion
           if (valid() && view) show({ ...view, activity })
         })
         if (valid() && view) show({ ...view, loading: false, activity: undefined, status })
-      } catch {
-        if (valid() && view) show({ ...view, loading: false, activity: undefined, status: '推荐暂不可用' })
+      } catch (error) {
+        if (valid() && view) show({ ...view, loading: false, activity: undefined, status: error instanceof Error ? error.message : '推荐暂不可用' })
       }
     }, 650)
   }

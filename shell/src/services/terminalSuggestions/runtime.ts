@@ -1,14 +1,19 @@
-import { reactive } from 'vue'
+import { reactive, watch } from 'vue'
 import { clearCommandHistory, readCommandHistory, readMeta, recordCommandHistory, saveMeta } from '../storage'
 import { canRememberCommand, type CommandHistoryEntry, type CommandUse } from './model'
-import { loadCredentialRecord, saveCredentialRecord } from '../vault'
-import { defaultRecommendationSettings, validateRecommendationSettings, type RecommendationSettings } from './settings'
+import { modelServices, resolveModel } from '../modelServices/catalog'
+import { modelCredentialId, type ModelSelection } from '../modelServices/types'
+import { type RecommendationSettings } from './settings'
+
+export type RecommendationPreferences = Pick<RecommendationSettings, 'cloud' | 'automatic' | 'remoteContext' | 'shareHistory'>
+const defaultPreferences: RecommendationPreferences = { cloud: false, automatic: true, remoteContext: true, shareHistory: false }
 
 interface SuggestionPreferences {
   key: 'commandSuggestions'
   enabled: boolean
   rememberHistory: boolean
-  recommendations?: RecommendationSettings
+  recommendations: RecommendationPreferences
+  modelSelection: ModelSelection
 }
 
 export const commandSuggestions = reactive({
@@ -16,12 +21,14 @@ export const commandSuggestions = reactive({
   rememberHistory: true,
   history: {} as Record<string, CommandHistoryEntry[]>,
   error: '',
-  recommendations: { ...defaultRecommendationSettings },
+  recommendations: { ...defaultPreferences },
+  modelSelection: { mode: 'inherit' } as ModelSelection,
   revision: 0,
 })
 
 const loading = new Map<string, Promise<void>>()
 let historyWrites = Promise.resolve()
+watch(() => [modelServices.services, modelServices.primary], () => { commandSuggestions.revision++ }, { deep: true })
 
 function queueHistoryWrite(operation: () => Promise<void>): Promise<void> {
   const result = historyWrites.then(operation)
@@ -35,22 +42,28 @@ export async function loadSuggestionPreferences(): Promise<void> {
   if (preferences) {
     commandSuggestions.enabled = preferences.enabled
     commandSuggestions.rememberHistory = preferences.rememberHistory
-    commandSuggestions.recommendations = { ...defaultRecommendationSettings, ...preferences.recommendations }
+    const { cloud, automatic, remoteContext, shareHistory } = { ...defaultPreferences, ...preferences.recommendations }
+    commandSuggestions.recommendations = { cloud, automatic, remoteContext, shareHistory }
+    commandSuggestions.modelSelection = preferences.modelSelection ?? { mode: 'inherit' }
   }
 }
 
-export async function saveSuggestionPreferences(enabled: boolean, rememberHistory: boolean, recommendations = commandSuggestions.recommendations, apiKey?: string): Promise<void> {
-  if (recommendations.cloud) validateRecommendationSettings(recommendations)
-  if (apiKey !== undefined) await saveCredentialRecord('command-recommendations', { apiKey: apiKey.trim() })
-  await saveMeta<SuggestionPreferences>({ key: 'commandSuggestions', enabled, rememberHistory, recommendations: { ...recommendations } })
+export async function saveSuggestionPreferences(enabled: boolean, rememberHistory: boolean, recommendations = commandSuggestions.recommendations, modelSelection = commandSuggestions.modelSelection): Promise<void> {
+  const { cloud, automatic, remoteContext, shareHistory } = recommendations
+  const value: SuggestionPreferences = { key: 'commandSuggestions', enabled, rememberHistory, recommendations: { cloud, automatic, remoteContext, shareHistory }, modelSelection: JSON.parse(JSON.stringify(modelSelection)) }
+  await saveMeta(value)
   commandSuggestions.enabled = enabled
   commandSuggestions.rememberHistory = rememberHistory
-  commandSuggestions.recommendations = { ...recommendations }
+  commandSuggestions.recommendations = value.recommendations
+  commandSuggestions.modelSelection = value.modelSelection
   commandSuggestions.revision++
 }
 
-export async function loadRecommendationKey(): Promise<string> {
-  return (await loadCredentialRecord('command-recommendations'))?.apiKey ?? ''
+export function resolveRecommendationSettings(): RecommendationSettings {
+  const resolved = resolveModel(commandSuggestions.modelSelection)
+  return { ...commandSuggestions.recommendations, baseUrl: resolved.service.baseUrl, model: resolved.model.id,
+    preset: resolved.service.preset, protocol: resolved.protocol, parameters: resolved.model.parameters, proxy: resolved.service.proxy,
+    credentialId: modelCredentialId(resolved.service.id) }
 }
 
 export function loadSuggestionHistory(hostId: string): Promise<void> {
@@ -64,7 +77,7 @@ export function loadSuggestionHistory(hostId: string): Promise<void> {
 
 export function rememberSuggestionCommand(hostId: string, command: string, use: CommandUse = {}): Promise<void> {
   return queueHistoryWrite(async () => {
-    if (!commandSuggestions.enabled || !commandSuggestions.rememberHistory || !canRememberCommand(command)) return
+    if (!commandSuggestions.rememberHistory || !canRememberCommand(command)) return
     await loadSuggestionHistory(hostId)
     commandSuggestions.history[hostId] = await recordCommandHistory(hostId, command, use)
   })
