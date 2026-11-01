@@ -4,6 +4,7 @@ import { generateRecommendations } from './cloud'
 import { requestAI } from '../ai-http'
 vi.mock('../ai-http', () => ({ requestAI: vi.fn() }))
 import { defaultRecommendationSettings } from './settings'
+import { defaultModelParameters } from '../modelServices/types'
 import { recentRecommendationTraces } from './diagnostics'
 import { findCommandSuggestions } from './model'
 
@@ -98,4 +99,12 @@ it('does not let an exhausted context budget consume the separate model deadline
   await vi.advanceTimersByTimeAsync(6001)
   expect(await pending).toContain('AI 暂未')
   expect(fetch).toHaveBeenCalledTimes(1)
+})
+
+it('does not count invalid model parameters as a model request', async () => {
+  vi.mocked(requestAI).mockClear()
+  const requested = vi.fn()
+  await expect(generateRecommendations(request, facts, { ...settings, parameters: { ...defaultModelParameters(), contextWindow: 1024 } }, 'synthetic-key', new AbortController().signal, requested)).rejects.toThrow('最大输出')
+  expect(requested).not.toHaveBeenCalled()
+  expect(requestAI).not.toHaveBeenCalled()
 })

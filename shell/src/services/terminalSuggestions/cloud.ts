@@ -47,9 +47,10 @@ export async function generateRecommendations(request: RecommendationQuery, fact
   if (!apiKey && !settings.credentialId) throw new Error('请在模型服务设置中填写 API Key')
   if (!maySendToCloud(request.query)) throw new Error('输入可能包含凭据，已跳过云端推荐')
   signal.throwIfAborted()
-  onRequest?.()
   const protocol = settings.protocol ?? 'openai-chat'
-  const text = await requestAI(apiEndpoint(settings.baseUrl, protocol, 'generate'), cloudPayload(request, facts, settings), apiKey, signal, {
+  const endpoint = apiEndpoint(settings.baseUrl, protocol, 'generate'), payload = cloudPayload(request, facts, settings)
+  onRequest?.()
+  const text = await requestAI(endpoint, payload, apiKey, signal, {
     protocol, credentialId: settings.credentialId, proxy: settings.proxy, timeoutMs: (settings.parameters?.timeoutSeconds ?? 45) * 1000,
   })
   signal.throwIfAborted()
