@@ -1,22 +1,48 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import SettingsPage from './SettingsPage.vue'
 import ModelPicker from './ModelPicker.vue'
 import ModelServiceEditor from './ModelServiceEditor.vue'
-import { servicePresets } from '../services/modelServices/presets'
+import ModelServicePicker from './ModelServicePicker.vue'
+import type { ServicePreset } from '../services/modelServices/presets'
 import { deleteModelService, modelServices, newModelService, saveModelService, setPrimaryModel } from '../services/modelServices/catalog'
 import { confirmDialog } from '../services/dialogs'
 import { commandSuggestions } from '../services/terminalSuggestions/runtime'
 import type { ModelSelection } from '../services/modelServices/types'
-const selectedId = ref(modelServices.services[0]?.id ?? ''), presetId = ref('deepseek'), error = ref('')
+const selectedId = ref(modelServices.services[0]?.id ?? ''), error = ref('')
+const pickerOpen = ref(false), adding = ref(false), addError = ref('')
+const addButton = ref<HTMLButtonElement | null>(null)
+const serviceList = ref<HTMLElement | null>(null)
+let focusNewService: boolean | undefined
 const editor = ref<InstanceType<typeof ModelServiceEditor> | null>(null)
 const selected = computed(() => modelServices.services.find(item => item.id === selectedId.value))
 async function flush(): Promise<boolean> { return await editor.value?.flush() ?? true }
 async function select(id: string) { if (await flush()) selectedId.value = id }
-async function add() {
+async function openPicker() {
   if (!await flush()) return
-  try { const service = newModelService(servicePresets.find(item => item.id === presetId.value)!); await saveModelService(service); selectedId.value = service.id; error.value = '' }
-  catch (reason) { error.value = reason instanceof Error ? reason.message : String(reason) }
+  addError.value = ''; pickerOpen.value = true
+}
+function closePicker() { if (!adding.value) pickerOpen.value = false }
+async function add(preset: ServicePreset) {
+  if (adding.value) return
+  adding.value = true; addError.value = ''
+  try {
+    const service = newModelService(preset)
+    const names = new Set(modelServices.services.map(item => item.name))
+    for (let suffix = 2; names.has(service.name); suffix++) service.name = `${preset.name} ${suffix}`
+    await saveModelService(service)
+    selectedId.value = service.id; error.value = ''
+    focusNewService = preset.region === 'custom'; pickerOpen.value = false
+  } catch (reason) { addError.value = reason instanceof Error ? reason.message : String(reason) }
+  finally { adding.value = false }
+}
+async function onPickerClosed(event: Event) {
+  event.preventDefault()
+  await nextTick()
+  if (focusNewService !== undefined) {
+    serviceList.value?.querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: 'nearest' })
+    editor.value?.focusConfiguration(focusNewService); focusNewService = undefined
+  } else addButton.value?.focus()
 }
 async function primary(choice: ModelSelection) {
   try { await setPrimaryModel(choice.mode === 'custom' ? choice.model : null); error.value = '' }
@@ -39,12 +65,19 @@ defineExpose({ flush })
   <SettingsPage title="模型服务" class="model-services-settings">
     <ModelPicker :model-value="{ mode: 'custom', model: modelServices.primary }" :allow-inherit="false" label="主模型" @update:model-value="primary" />
     <p class="settings-description">各 AI 功能默认继承主模型，也可以在功能设置中独立选择。</p>
-    <div class="model-add-service"><label class="settings-field">平台预设<select v-model="presetId"><optgroup label="国内平台"><option v-for="preset in servicePresets.filter(item => item.region === 'cn')" :key="preset.id" :value="preset.id">{{ preset.name }}</option></optgroup><optgroup label="国外平台"><option v-for="preset in servicePresets.filter(item => item.region === 'global')" :key="preset.id" :value="preset.id">{{ preset.name }}</option></optgroup><option value="custom">自定义服务</option></select></label><button type="button" class="settings-reset-all" @click="add">添加服务</button></div>
     <p v-if="error" role="alert" class="model-error">{{ error }}</p>
-    <p v-if="!modelServices.services.length" class="settings-description">从平台预设添加服务，然后填写 API Key 并添加模型。</p>
-    <div v-else class="model-service-layout">
-      <div class="model-service-list workbench-selection-container" aria-label="已配置模型服务"><button v-for="service in modelServices.services" :key="service.id" type="button" class="settings-nav-item workbench-list-item" :class="{ selected: selectedId === service.id }" :aria-pressed="selectedId === service.id" @click="select(service.id)">{{ service.name }}</button></div>
-      <div class="model-service-detail"><div class="model-service-heading"><h3>{{ selected?.name }}</h3><button type="button" class="settings-icon-button" aria-label="删除模型服务" @click="remove"><span class="codicon codicon-trash" aria-hidden="true" /></button></div><ModelServiceEditor v-if="selected" :key="selected.id" ref="editor" :service="selected" /></div>
+    <div class="model-service-layout">
+      <aside class="model-service-list" aria-label="模型服务列表">
+        <div class="model-service-list-heading"><h3>已配置服务</h3><span>{{ modelServices.services.length }}</span></div>
+        <div ref="serviceList" class="model-service-items workbench-selection-container" role="group" aria-label="已配置模型服务">
+          <p v-if="!modelServices.services.length" class="model-service-list-empty">暂无服务</p>
+          <button v-for="service in modelServices.services" :key="service.id" type="button" class="settings-nav-item workbench-list-item" :class="{ selected: selectedId === service.id }" :aria-pressed="selectedId === service.id" @click="select(service.id)">{{ service.name }}</button>
+        </div>
+        <div class="model-service-list-footer"><button ref="addButton" type="button" class="settings-reset-all model-service-add" @click="openPicker"><span class="codicon codicon-add" aria-hidden="true" />添加服务</button></div>
+      </aside>
+      <div v-if="selected" class="model-service-detail"><div class="model-service-heading"><h3>{{ selected.name }}</h3><button type="button" class="settings-icon-button" aria-label="删除模型服务" @click="remove"><span class="codicon codicon-trash" aria-hidden="true" /></button></div><ModelServiceEditor :key="selected.id" ref="editor" :service="selected" /></div>
+      <div v-else class="model-service-empty"><span class="codicon codicon-cloud" aria-hidden="true" /><h3>添加第一个模型服务</h3><p class="settings-description">点击「添加服务」选择平台，再填写 API Key 并添加模型。</p></div>
     </div>
+    <ModelServicePicker :open="pickerOpen" :busy="adding" :error="addError" @close="closePicker" @select="add" @close-auto-focus="onPickerClosed" />
   </SettingsPage>
 </template>

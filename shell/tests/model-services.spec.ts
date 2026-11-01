@@ -9,8 +9,12 @@ async function open(page: Page) {
   await page.getByRole('menuitem', { name: '设置', exact: true }).click()
   await page.getByRole('tab', { name: '模型服务', exact: true }).click()
 }
-async function add(page: Page) {
+async function create(page: Page, name = 'DeepSeek') {
   await page.getByRole('button', { name: '添加服务', exact: true }).click()
+  await page.getByRole('dialog', { name: '添加模型服务', exact: true }).getByRole('button', { name: `添加 ${name}`, exact: true }).click()
+}
+async function add(page: Page) {
+  await create(page)
   await page.getByLabel('API Key', { exact: true }).fill('synthetic-model-secret')
 }
 async function fixture(page: Page) {
@@ -26,6 +30,83 @@ async function fixture(page: Page) {
     }
   })
 }
+
+test('adds from the service list, cancels without creating, searches platforms, and distinguishes repeated providers', async ({ page }) => {
+  await open(page)
+  const list = page.getByRole('complementary', { name: '模型服务列表', exact: true })
+  const addButton = list.getByRole('button', { name: '添加服务', exact: true })
+  await expect(list).toContainText('暂无服务')
+  await addButton.click()
+  const picker = page.getByRole('dialog', { name: '添加模型服务', exact: true })
+  await expect(picker.getByLabel('搜索平台', { exact: true })).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(picker).toBeHidden()
+  await expect(addButton).toBeFocused()
+  await expect(list).toContainText('暂无服务')
+  await addButton.click()
+  await picker.getByLabel('搜索平台', { exact: true }).fill('  DEEPSEEK  ')
+  await expect(picker.locator('.model-preset-grid button')).toHaveCount(1)
+  await picker.getByRole('button', { name: '添加 DeepSeek', exact: true }).press('Enter')
+  await expect(picker).toBeHidden()
+  await expect(page.getByLabel('API Key', { exact: true })).toBeFocused()
+  await expect(list.getByRole('button', { name: 'DeepSeek', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByLabel('API 地址', { exact: true })).toHaveValue('https://api.deepseek.com/v1')
+  await create(page)
+  await expect(list.getByRole('button', { name: 'DeepSeek 2', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByLabel('服务名称', { exact: true })).toHaveValue('DeepSeek 2')
+  await list.getByRole('button', { name: 'DeepSeek', exact: true }).click()
+  await expect(page.getByLabel('服务名称', { exact: true })).toHaveValue('DeepSeek')
+  await addButton.click()
+  await picker.getByRole('button', { name: '取消', exact: true }).click()
+  await expect(addButton).toBeFocused()
+  await expect(list.getByRole('group', { name: '已配置模型服务', exact: true }).getByRole('button')).toHaveCount(2)
+})
+
+test('keeps a custom service available when search has no results and opens its editable configuration', async ({ page }) => {
+  await open(page)
+  await page.getByRole('button', { name: '添加服务', exact: true }).click()
+  const picker = page.getByRole('dialog', { name: '添加模型服务', exact: true })
+  await picker.getByLabel('搜索平台', { exact: true }).fill('unlisted-provider')
+  await expect(picker.getByRole('status')).toContainText('没有匹配的平台')
+  await picker.getByRole('button', { name: '添加自定义服务', exact: true }).click()
+  await expect(page.getByLabel('服务名称', { exact: true })).toBeFocused()
+  await expect(page.getByLabel('API 地址', { exact: true })).toHaveValue('')
+  await page.getByLabel('服务名称', { exact: true }).fill('私有 API')
+  await page.getByLabel('API 地址', { exact: true }).fill('https://models.example.com/v1')
+  await page.getByLabel('默认协议', { exact: true }).selectOption('anthropic')
+  await page.getByRole('tab', { name: '历史命令提示', exact: true }).click()
+  await page.getByRole('tab', { name: '模型服务', exact: true }).click()
+  await expect(page.getByLabel('服务名称', { exact: true })).toHaveValue('私有 API')
+  await expect(page.getByLabel('API 地址', { exact: true })).toHaveValue('https://models.example.com/v1')
+  await expect(page.getByLabel('默认协议', { exact: true })).toHaveValue('anthropic')
+})
+
+test('keeps the picker and previous selection on save failure and retries without duplicate creation', async ({ page }) => {
+  await open(page); await create(page)
+  await page.evaluate(async () => {
+    const { nativeFixture } = await import('/tests/native-mock.ts')
+    nativeFixture.handlers.store_write = () => new Promise((_resolve, reject) => { (window as any).rejectModelSave = reject })
+  })
+  await page.getByRole('button', { name: '添加服务', exact: true }).click()
+  const picker = page.getByRole('dialog', { name: '添加模型服务', exact: true })
+  await picker.getByRole('button', { name: '添加 Anthropic · Claude', exact: true }).click()
+  await expect(picker.getByRole('status')).toHaveText('正在添加服务…')
+  await expect(picker.getByRole('button', { name: '添加 Anthropic · Claude', exact: true })).toBeDisabled()
+  await expect(picker.getByRole('button', { name: '取消', exact: true })).toBeDisabled()
+  await page.keyboard.press('Escape')
+  await expect(picker).toBeVisible()
+  await page.evaluate(() => (window as any).rejectModelSave(new Error('服务保存失败，请重试')))
+  await expect(picker.getByRole('alert')).toHaveText('服务保存失败，请重试')
+  await expect(page.locator('.model-service-items .selected')).toHaveText('DeepSeek')
+  await expect(page.locator('.model-service-items button')).toHaveCount(1)
+  await page.evaluate(async () => { const { nativeFixture } = await import('/tests/native-mock.ts'); delete nativeFixture.handlers.store_write })
+  await picker.getByRole('button', { name: '添加 Anthropic · Claude', exact: true }).click()
+  await expect(picker).toBeHidden()
+  await expect(page.locator('.model-service-items button')).toHaveCount(2)
+  await expect(page.locator('.model-service-items .selected')).toHaveText('Anthropic · Claude')
+  await expect(page.getByLabel('默认协议', { exact: true })).toHaveValue('anthropic')
+  await expect(page.getByLabel('API Key', { exact: true })).toBeFocused()
+})
 
 test('lists models without adding them, saves explicit choices and key, and detects with a model protocol override', async ({ page }) => {
   await open(page); await fixture(page); await add(page)

@@ -13,6 +13,7 @@ import ServiceModelRow from './ServiceModelRow.vue'
 const props = defineProps<{ service: ModelService }>()
 const draft = ref<ModelService>(JSON.parse(JSON.stringify(props.service)))
 const apiKey = ref<string | undefined>(), hasKey = ref(false)
+const nameInput = ref<HTMLInputElement | null>(null), keyInput = ref<HTMLInputElement | null>(null)
 let savedKey: string | undefined
 const autosave = useAutosave(() => ({ service: JSON.parse(JSON.stringify(draft.value)) as ModelService, apiKey: apiKey.value }), value => validateService(value.service), async value => {
   await saveModelService(value.service, value.apiKey === savedKey ? undefined : value.apiKey)
@@ -77,16 +78,17 @@ function setProxy(event: Event) {
   draft.value.proxy = mode === 'saved' ? { mode, id: store.proxies[0]?.id ?? '' } : { mode: mode as 'direct' | 'system' }
 }
 async function proxies() { if (await flush()) store.settingsSection = 'proxies' }
-defineExpose({ flush })
+function focusConfiguration(custom: boolean) { (custom ? nameInput.value : keyInput.value)?.focus() }
+defineExpose({ flush, focusConfiguration })
 </script>
 <template>
   <section class="model-service-editor" :aria-label="`${service.name} 配置`">
     <AutosaveStatus :state="autosave.state.value" :status="autosave.status.value" :error="autosave.error.value" />
     <div class="settings-fields-grid">
-      <label class="settings-field">服务名称<input v-model="draft.name"></label>
+      <label class="settings-field">服务名称<input ref="nameInput" v-model="draft.name"></label>
       <label class="settings-field">默认协议<select v-model="draft.protocol" aria-label="默认协议"><option v-for="(label, key) in protocolLabels" :key="key" :value="key">{{ label }}</option></select></label>
       <label class="settings-field settings-field--wide">API 地址<input v-model="draft.baseUrl" type="url" spellcheck="false" placeholder="https://api.example.com/v1"></label>
-      <div class="settings-field settings-field--wide"><label for="model-api-key">API Key</label><span class="settings-secret-control"><input id="model-api-key" v-model="apiKey" type="password" autocomplete="new-password" :placeholder="hasKey ? '已保存，输入可更换' : '输入 API Key'"><button v-if="hasKey || apiKey" class="settings-icon-button" type="button" aria-label="清除 API Key" @click="apiKey = ''"><span class="codicon codicon-trash" aria-hidden="true" /></button></span></div>
+      <div class="settings-field settings-field--wide"><label for="model-api-key">API Key</label><span class="settings-secret-control"><input id="model-api-key" ref="keyInput" v-model="apiKey" type="password" autocomplete="new-password" :placeholder="hasKey ? '已保存，输入可更换' : '输入 API Key'"><button v-if="hasKey || apiKey" class="settings-icon-button" type="button" aria-label="清除 API Key" @click="apiKey = ''"><span class="codicon codicon-trash" aria-hidden="true" /></button></span></div>
       <label class="settings-field">连接方式<select :value="draft.proxy.mode" aria-label="连接方式" @change="setProxy"><option value="direct">直连</option><option value="system">跟随系统代理</option><option value="saved" :disabled="!store.proxies.length">指定代理</option></select></label>
       <label v-if="draft.proxy.mode === 'saved'" class="settings-field">代理服务器<select v-model="draft.proxy.id" aria-label="代理服务器"><option v-if="!store.proxies.some(item => draft.proxy.mode === 'saved' && item.id === draft.proxy.id)" :value="draft.proxy.id" disabled>代理已删除，请重新选择</option><option v-for="proxy in store.proxies" :key="proxy.id" :value="proxy.id">{{ proxy.name }}</option></select></label>
     </div>

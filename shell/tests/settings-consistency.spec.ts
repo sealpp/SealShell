@@ -40,7 +40,13 @@ for (const width of [1280, 375]) {
     await mkdir(screenshots, { recursive: true })
     for (const [name, label] of [['外观', '字体'], ['模型服务', 'API 地址'], ['代理服务器', '代理地址']]) {
       await dialog.getByRole('tab', { name, exact: true }).click()
-      if (name === '模型服务') await dialog.getByRole('button', { name: '添加服务', exact: true }).click()
+      if (name === '模型服务') {
+        await dialog.getByRole('button', { name: '添加服务', exact: true }).click()
+        const picker = page.getByRole('dialog', { name: '添加模型服务', exact: true })
+        expect(await picker.evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1)
+        await picker.screenshot({ path: join(screenshots, `添加模型服务-${width}.png`) })
+        await picker.getByRole('button', { name: '添加 DeepSeek', exact: true }).click()
+      }
       if (name === '代理服务器') await dialog.getByRole('button', { name: '添加代理', exact: true }).click()
       const control = dialog.getByLabel(label, { exact: true })
       await control.focus()
