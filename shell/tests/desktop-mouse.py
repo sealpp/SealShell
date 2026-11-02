@@ -26,6 +26,7 @@ def main():
     parser.add_argument("--to", dest="end", required=True, type=float, nargs=2)
     parser.add_argument("--scale", required=True, type=float)
     parser.add_argument("--source-window", type=int)
+    parser.add_argument("--hold-at-target", type=float, default=0.15)
     options = parser.parse_args()
     user32 = ctypes.WinDLL("user32", use_last_error=True)
     user32.SetProcessDpiAwarenessContext.argtypes = [wintypes.HANDLE]
@@ -113,7 +114,7 @@ def main():
                 fraction = step / 24
                 move(*(first + (end - first) * fraction for first, end in zip(start, options.end)))
                 time.sleep(0.025)
-            time.sleep(0.15)
+            time.sleep(options.hold_at_target)
             if options.source_window:
                 point = wintypes.POINT()
                 user32.GetCursorPos(ctypes.byref(point))

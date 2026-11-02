@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { verifyDesktopDragging } from './desktop-dragging.mjs'
+import { verifyTerminalFileDrop } from './desktop-terminal-file-drop.mjs'
 
 const shell = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const root = resolve(shell, '..')
@@ -202,6 +203,11 @@ try {
     const { sendInput } = await import('/src/services/ssh.ts')
     await sendInput(terminal.sessionId, new TextEncoder().encode('echo smoke-ok\n'))
     window.desktopFixture.terminal = terminal.id
+  })
+  await verifyTerminalFileDrop(page, { local, remote, artifacts, pid: desktop.pid })
+  await page.evaluate(async () => {
+    const { store } = window.desktopFixture
+    const terminal = store.tabs.find(tab => tab.kind === 'terminal')
     const files = await import('/src/services/sftp/file-tabs.ts')
     window.desktopFixture.local = files.createLocalFileTab().id
     window.desktopFixture.remote = files.createFileTab(store.hosts[0], terminal.id, '/').id
