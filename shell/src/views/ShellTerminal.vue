@@ -449,7 +449,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 8px;
   padding: 6px 10px;
-  color: var(--workbench-error);
+  color: var(--vscode-inputValidation-errorForeground, var(--workbench-text));
   background: var(--vscode-inputValidation-errorBackground);
   font-size: 12px;
   overflow-wrap: anywhere;
