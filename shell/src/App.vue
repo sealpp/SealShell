@@ -28,6 +28,7 @@ import BottomPanelStatusButton from './components/BottomPanelStatusButton.vue'
 import EncodingStatusItem from './components/EncodingStatusItem.vue'
 import EncodingPickerDialog from './components/EncodingPickerDialog.vue'
 import { loadTransferConcurrency } from './services/sftp/transfer-runtime'
+import { preventFileNavigation } from './services/terminalFileDrop'
 import { loadTerminalPreferences } from './services/terminalPreferences'
 import { loadModelServices } from './services/modelServices/catalog'
 import { loadSuggestionPreferences } from './services/terminalSuggestions/runtime'
@@ -180,6 +181,7 @@ const stopContextSync = watch(
 )
 
 const stopCloseProtection = startWorkbenchCloseProtection(window)
+const stopFileNavigation = preventFileNavigation(document)
 let disposed = false
 
 onMounted(async () => {
@@ -213,6 +215,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   disposed = true
   stopCloseProtection()
+  stopFileNavigation()
   stopMonitoringService()
   stopProcessesService()
   stopPortsService()

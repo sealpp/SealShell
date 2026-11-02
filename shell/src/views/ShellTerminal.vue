@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ProxyErrorAction from '../components/ProxyErrorAction.vue'
+import { IconX } from '../ui/icons'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch, type CSSProperties } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -16,6 +17,7 @@ import { getTerminalFontFamily, getTerminalTheme } from '../services/terminalPre
 import { encodingDecoder } from '../services/encodings'
 import { encodeTerminalInput } from '../services/terminalEncoding'
 import { registerTerminalDirectoryHandlers } from '../services/terminalDirectory'
+import { isFileDrop, terminalUploadTarget, uploadTerminalFiles } from '../services/terminalFileDrop'
 import { publishTerminalSize } from '../services/terminalSize'
 import TerminalCommandSuggestions from '../components/TerminalCommandSuggestions.vue'
 import { attachCommandSuggestions, type TerminalSuggestionView } from '../services/terminalSuggestions/controller'
@@ -51,6 +53,39 @@ const unwatchPreferences = ref<() => void>()
 const unwatchTerminalMount = ref<() => void>()
 
 const tab = computed(() => store.tabs.find((t) => t.id === props.tabId))
+const fileDragDepth = ref(0)
+const uploadError = ref('')
+const fileDropPreview = computed(() => {
+  try { return { destination: terminalUploadTarget(props.tabId).destination, error: '' } }
+  catch (error) { return { destination: '', error: error instanceof Error ? error.message : String(error) } }
+})
+
+function fileDragEnter(event: DragEvent): void {
+  if (!isFileDrop(event)) return
+  event.preventDefault()
+  fileDragDepth.value++
+}
+function fileDragOver(event: DragEvent): void {
+  if (!isFileDrop(event)) return
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = fileDropPreview.value.error ? 'none' : 'copy'
+}
+function fileDragLeave(event: DragEvent): void {
+  if (isFileDrop(event)) fileDragDepth.value = Math.max(0, fileDragDepth.value - 1)
+}
+function fileDrop(event: DragEvent): void {
+  if (!isFileDrop(event)) return
+  event.preventDefault()
+  event.stopPropagation()
+  fileDragDepth.value = 0
+  uploadError.value = ''
+  try {
+    const target = terminalUploadTarget(props.tabId)
+    void uploadTerminalFiles(target, Array.from(event.dataTransfer?.files ?? []))
+      .catch(error => { uploadError.value = error instanceof Error ? error.message : String(error) })
+  } catch (error) { uploadError.value = error instanceof Error ? error.message : String(error) }
+}
+watch(() => tab.value?.sessionId, () => { fileDragDepth.value = 0; uploadError.value = '' })
 const isActive = computed(() => store.activeTerminalTabId === props.tabId)
 const recommend = createRecommender(async () => '')
 
@@ -356,7 +391,11 @@ onBeforeUnmount(() => {
     :context="terminalContext"
     :can-open="isTerminalScreenTarget"
   >
-    <div class="shell-terminal">
+    <div class="shell-terminal" @dragenter="fileDragEnter" @dragover="fileDragOver" @dragleave="fileDragLeave" @drop="fileDrop">
+      <div v-if="uploadError" class="terminal-upload-error" role="alert">
+        <span>上传失败：{{ uploadError }}</span>
+        <button type="button" aria-label="关闭上传错误" @click="uploadError = ''"><IconX :size="14" /></button>
+      </div>
       <div v-if="tab.state === 'error' && tab.proxySource" class="connection-error"><span>{{ tab.error }}</span><ProxyErrorAction :source="tab.proxySource" :message="tab.error" /></div>
       <div ref="termEl" class="shell-terminal-content">
         <TerminalCommandSuggestions
@@ -365,18 +404,63 @@ onBeforeUnmount(() => {
           @lock="suggestions?.lock()" @refresh="suggestions?.applyPending()"
         />
       </div>
+      <div v-if="fileDragDepth" class="terminal-file-drop" :class="{ unavailable: fileDropPreview.error }" role="status">
+        <template v-if="fileDropPreview.error">{{ fileDropPreview.error }}</template>
+        <template v-else><strong>上传到 {{ fileDropPreview.destination }}</strong><span>松开即可上传文件或文件夹，保留本地原件</span></template>
+      </div>
     </div>
   </CommandContextMenu>
 </template>
 
 <style scoped>
 .shell-terminal {
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
   height: 100%;
   overflow: hidden;
   background: var(--terminal-background, #0d0d0d);
+}
+.terminal-file-drop {
+  position: absolute;
+  inset: 6px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  border: 1px dashed var(--workbench-focus-border);
+  border-radius: 4px;
+  background: rgba(24, 24, 24, 0.9);
+  color: var(--workbench-text);
+  pointer-events: none;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+.terminal-file-drop strong { font-weight: 500; }
+.terminal-file-drop span { color: var(--vscode-descriptionForeground); }
+.terminal-file-drop.unavailable { border-color: var(--workbench-error); color: var(--workbench-error); }
+.terminal-upload-error {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  color: var(--workbench-error);
+  background: var(--vscode-inputValidation-errorBackground);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.terminal-upload-error button {
+  flex: none;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
 }
 
 .shell-terminal-content {
