@@ -24,6 +24,7 @@ public static class FixtureWindows {
     [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }
     [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr context);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr window, out Rect rect);
+    [DllImport("user32.dll")] public static extern bool SystemParametersInfo(uint action, uint parameter, out Rect rect, uint flags);
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr window, IntPtr after, int x, int y, int width, int height, uint flags);
 }
 '@
@@ -31,6 +32,14 @@ public static class FixtureWindows {
     $target = Get-Process -Id $TargetPid
     if ($target.MainWindowTitle -ne 'SealShell') { throw 'Target is not the fixture application' }
     $rect = New-Object FixtureWindows+Rect
+    $null = [FixtureWindows]::GetWindowRect($target.MainWindowHandle, [ref]$rect)
+    # Native gestures cannot reach client pixels under the taskbar, even though
+    # CDP screenshots and DOM bounds include that portion of a cascaded window.
+    $work = New-Object FixtureWindows+Rect
+    $null = [FixtureWindows]::SystemParametersInfo(48, 0, [ref]$work, 0)
+    $x = [Math]::Max($work.Left, [Math]::Min($rect.Left, $work.Right - ($rect.Right - $rect.Left)))
+    $y = [Math]::Max($work.Top, [Math]::Min($rect.Top, $work.Bottom - ($rect.Bottom - $rect.Top)))
+    $null = [FixtureWindows]::SetWindowPos($target.MainWindowHandle, [IntPtr]::Zero, $x, $y, 0, 0, 21)
     $null = [FixtureWindows]::GetWindowRect($target.MainWindowHandle, [ref]$rect)
     $null = [FixtureWindows]::SetWindowPos([IntPtr]$window.HWND, [IntPtr]::Zero, $rect.Right - 650, $rect.Top + 40, 650, 480, 20)
     Start-Sleep -Milliseconds 300

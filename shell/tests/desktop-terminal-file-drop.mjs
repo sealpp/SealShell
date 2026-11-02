@@ -13,6 +13,11 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 export async function verifyTerminalFileDrop(page, { local, remote, artifacts, pid }) {
   const terminal = page.locator('.main-dock .shell-terminal').first()
+  // Real shell fixtures use physical MSYS paths; SFTP is chrooted. Root is
+  // shared as a path spelling, while a physical cwd below tests the mismatch.
+  const nativeShell = !!(process.env.SEAL_E2E_BASH || process.env.SEAL_E2E_ZSH)
+  const targetDirectory = nativeShell ? '/' : '/terminal-drop'
+  const targetRoot = nativeShell ? remote : join(remote, 'terminal-drop')
   async function directory(path) {
     await page.evaluate(async path => {
       const { store } = window.desktopFixture
@@ -61,32 +66,37 @@ export async function verifyTerminalFileDrop(page, { local, remote, artifacts, p
   await writeFile(join(folder, 'nested', 'content.txt'), 'Explorer folder upload\n')
   await writeFile(file, 'Explorer file upload\n')
   await mkdir(join(remote, 'terminal-drop'))
-  await directory('/terminal-drop')
+  await directory(targetDirectory)
   expect(await page.evaluate(() => window.desktopFixture.store.tabs.some(tab => tab.kind === 'file'))).toBe(false)
-  await drop([folder, file], ':/terminal-drop', 'desktop-file-drop-preview.png')
-  await expect.poll(() => readFile(join(remote, 'terminal-drop', "drop-folder a'b 中文", 'nested', 'content.txt'), 'utf8')).toBe('Explorer folder upload\n')
-  expect(await readFile(join(remote, 'terminal-drop', 'terminal-drop.txt'), 'utf8')).toBe('Explorer file upload\n')
-  await access(join(remote, 'terminal-drop', "drop-folder a'b 中文", 'nested', 'empty'))
+  await drop([folder, file], `:${targetDirectory}`, 'desktop-file-drop-preview.png')
+  await expect.poll(() => readFile(join(targetRoot, "drop-folder a'b 中文", 'nested', 'content.txt'), 'utf8')).toBe('Explorer folder upload\n')
+  expect(await readFile(join(targetRoot, 'terminal-drop.txt'), 'utf8')).toBe('Explorer file upload\n')
+  await access(join(targetRoot, "drop-folder a'b 中文", 'nested', 'empty'))
   expect(await readFile(file, 'utf8')).toBe('Explorer file upload\n')
   await expect.poll(async () => (await tasks()).every(task => task.state === 'completed')).toBe(true)
 
-  await writeFile(join(remote, 'terminal-drop', "drop-folder a'b 中文", 'target-only.txt'), 'must be replaced')
+  await writeFile(join(targetRoot, "drop-folder a'b 中文", 'target-only.txt'), 'must be replaced')
   await writeFile(join(folder, 'nested', 'content.txt'), 'replacement folder\n')
-  await drop([folder], ':/terminal-drop')
+  await drop([folder], `:${targetDirectory}`)
   const conflict = page.getByRole('dialog', { name: '目标已存在' })
   await expect(conflict).toContainText('永久删除')
   await conflict.getByRole('button', { name: '整目录替换', exact: true }).click()
-  await expect.poll(() => readFile(join(remote, 'terminal-drop', "drop-folder a'b 中文", 'nested', 'content.txt'), 'utf8')).toBe('replacement folder\n')
-  await expect.poll(async () => { try { await access(join(remote, 'terminal-drop', "drop-folder a'b 中文", 'target-only.txt')); return true } catch { return false } }).toBe(false)
+  await expect.poll(() => readFile(join(targetRoot, "drop-folder a'b 中文", 'nested', 'content.txt'), 'utf8')).toBe('replacement folder\n')
+  await expect.poll(async () => { try { await access(join(targetRoot, "drop-folder a'b 中文", 'target-only.txt')); return true } catch { return false } }).toBe(false)
 
   const count = (await tasks()).length
   await page.evaluate(() => { window.desktopFixture.store.tabs.find(tab => tab.kind === 'terminal').cwd = undefined })
   await drop([file], '无法获取当前终端目录', 'desktop-file-drop-unknown.png')
+  await expect(terminal.getByRole('alert')).toContainText('无法获取当前终端目录')
+  await page.screenshot({ path: join(artifacts, 'desktop-file-drop-error.png') })
   expect((await tasks()).length).toBe(count)
-  await directory('/missing-drop-directory')
-  await drop([file], ':/missing-drop-directory')
+  const missingDirectory = nativeShell ? remote.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, drive) => `/${drive.toLowerCase()}`) : '/missing-drop-directory'
+  const missingFile = join(local, 'missing-upload.txt')
+  await writeFile(missingFile, 'must not fall back to root')
+  await directory(missingDirectory)
+  await drop([missingFile], `:${missingDirectory}`)
   await expect.poll(async () => (await tasks()).some(task => task.state === 'failed')).toBe(true)
-  await expect(access(join(remote, 'terminal-drop.txt'))).rejects.toThrow()
+  await expect(access(join(remote, 'missing-upload.txt'))).rejects.toThrow()
   await page.evaluate(async () => {
     const { dismissTransfer, transferRuntime } = await import('/src/services/sftp/transfer-runtime.ts')
     for (const task of [...transferRuntime.tasks]) if (task.state === 'failed') await dismissTransfer(task.id)
