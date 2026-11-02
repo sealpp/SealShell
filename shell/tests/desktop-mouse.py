@@ -25,6 +25,7 @@ def main():
     parser.add_argument("--from", dest="start", required=True, type=float, nargs=2)
     parser.add_argument("--to", dest="end", required=True, type=float, nargs=2)
     parser.add_argument("--scale", required=True, type=float)
+    parser.add_argument("--source-window", type=int)
     options = parser.parse_args()
     user32 = ctypes.WinDLL("user32", use_last_error=True)
     user32.SetProcessDpiAwarenessContext.argtypes = [wintypes.HANDLE]
@@ -37,6 +38,10 @@ def main():
     user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
     user32.BringWindowToTop.argtypes = [wintypes.HWND]
     user32.SendInput.argtypes = [wintypes.UINT, ctypes.POINTER(Input), ctypes.c_int]
+    user32.WindowFromPoint.argtypes = [wintypes.POINT]
+    user32.WindowFromPoint.restype = wintypes.HWND
+    user32.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
+    user32.GetAncestor.restype = wintypes.HWND
     callback = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
     windows = []
 
@@ -77,22 +82,44 @@ def main():
         user32.PeekMessageW(ctypes.byref(message), None, 0, 0, 0)
         user32.AttachThreadInput(current_thread, foreground_thread, True)
         try:
-            user32.BringWindowToTop(hwnd)
-            user32.SetForegroundWindow(hwnd)
+            focus = options.source_window or hwnd
+            if options.source_window:
+                user32.BringWindowToTop(hwnd)
+                user32.SetForegroundWindow(hwnd)
+            user32.BringWindowToTop(focus)
+            user32.SetForegroundWindow(focus)
         finally:
             user32.AttachThreadInput(current_thread, foreground_thread, False)
         time.sleep(0.1)
-        if user32.GetForegroundWindow() != hwnd:
+        if user32.GetForegroundWindow() != focus:
             raise RuntimeError("Could not focus the isolated fixture window")
-        move(*options.start)
+        start = options.start
+        if options.source_window:
+            start = [(start[0] - origin.x) / options.scale, (start[1] - origin.y) / options.scale]
+        move(*start)
+        if options.source_window:
+            point = wintypes.POINT()
+            user32.GetCursorPos(ctypes.byref(point))
+            actual = user32.GetAncestor(user32.WindowFromPoint(point), 2)
+            if actual != options.source_window:
+                raise RuntimeError("File source is obscured by another window")
         button(0x0002)  # MOUSEEVENTF_LEFTDOWN
         try:
             time.sleep(0.08)
+            if options.source_window:
+                move(start[0] + 12 / options.scale, start[1])
+                time.sleep(0.2)
             for step in range(1, 25):
                 fraction = step / 24
-                move(*(start + (end - start) * fraction for start, end in zip(options.start, options.end)))
+                move(*(first + (end - first) * fraction for first, end in zip(start, options.end)))
                 time.sleep(0.025)
             time.sleep(0.15)
+            if options.source_window:
+                point = wintypes.POINT()
+                user32.GetCursorPos(ctypes.byref(point))
+                actual = user32.GetAncestor(user32.WindowFromPoint(point), 2)
+                if actual != hwnd:
+                    raise RuntimeError("Drop target is obscured by another window")
         finally:
             button(0x0004)  # MOUSEEVENTF_LEFTUP
             # SendInput queues the release. Let the OLE loop consume it before

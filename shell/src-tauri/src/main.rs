@@ -4,6 +4,12 @@ use seal_runtime::{error::Result, runtime::Runtime};
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
 
+#[cfg(windows)]
+mod file_drop;
+
+#[tauri::command]
+fn file_drop_ack() {}
+
 #[tauri::command]
 async fn native_call(
     runtime: tauri::State<'_, Runtime>,
@@ -16,6 +22,10 @@ async fn native_call(
 fn main() {
     tauri::Builder::default()
         .on_page_load(|webview, payload| {
+            #[cfg(windows)]
+            if payload.event() == tauri::webview::PageLoadEvent::Finished {
+                file_drop::initialize(webview);
+            }
             if payload.event() == tauri::webview::PageLoadEvent::Started
                 && let Some(runtime) = webview.app_handle().try_state::<Runtime>()
             {
@@ -23,6 +33,8 @@ fn main() {
             }
         })
         .setup(|app| {
+            #[cfg(windows)]
+            file_drop::install(app)?;
             let directory = if cfg!(debug_assertions) {
                 std::env::var_os("SEALSHELL_DATA_DIR")
                     .map(std::path::PathBuf::from)
@@ -39,7 +51,7 @@ fn main() {
             )?);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![native_call])
+        .invoke_handler(tauri::generate_handler![native_call, file_drop_ack])
         .build(tauri::generate_context!())
         .expect("failed to build SealShell")
         .run(|handle, event| {
