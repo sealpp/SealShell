@@ -55,7 +55,7 @@ pub fn install(app: &tauri::App) -> tauri::Result<()> {
 }
 
 fn app_origin(app: &tauri::AppHandle) -> String {
-    if cfg!(debug_assertions)
+    if tauri::is_dev()
         && let Some(url) = &app.config().build.dev_url
     {
         return url.origin().ascii_serialization();
