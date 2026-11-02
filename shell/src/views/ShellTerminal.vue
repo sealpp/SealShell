@@ -68,7 +68,7 @@ function fileDragEnter(event: DragEvent): void {
 function fileDragOver(event: DragEvent): void {
   if (!isFileDrop(event)) return
   event.preventDefault()
-  if (event.dataTransfer) event.dataTransfer.dropEffect = fileDropPreview.value.error ? 'none' : 'copy'
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
 }
 function fileDragLeave(event: DragEvent): void {
   if (isFileDrop(event)) fileDragDepth.value = Math.max(0, fileDragDepth.value - 1)
