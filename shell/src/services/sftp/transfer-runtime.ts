@@ -51,10 +51,17 @@ export async function setTransferConcurrency(value: number): Promise<number> {
   return transferRuntime.concurrency
 }
 export async function enqueueTransfer(label: string, spec: { sourceId: string; targetId: string; paths: string[]; directory: string; moveFiles: boolean }): Promise<TransferResult> {
+  const id = await enqueue('transfer_enqueue', label, spec)
+  return nativeCall('transfer_wait', { id })
+}
+export async function enqueueUpload(label: string, spec: { sessionId: string; paths: string[]; directory: string }): Promise<void> {
+  await enqueue('transfer_upload', label, spec)
+}
+async function enqueue(operation: string, label: string, spec: Record<string, unknown>): Promise<string> {
   await initialize()
   const id = crypto.randomUUID()
-  await nativeCall('transfer_enqueue', { id, label, ...spec })
-  return nativeCall('transfer_wait', { id })
+  await nativeCall(operation, { id, label, ...spec })
+  return id
 }
 export async function cancelTransfer(id: string): Promise<boolean> { return nativeCall('transfer_cancel', { id }) }
 export async function retryTransfer(id: string): Promise<boolean> { return nativeCall('transfer_retry', { id }) }

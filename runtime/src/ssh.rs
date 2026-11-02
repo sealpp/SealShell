@@ -85,6 +85,7 @@ impl client::Handler for Verifier {
 
 pub struct Session {
     pub handle: client::Handle<Verifier>,
+    pub connection: Connection,
     pub cancel: CancellationToken,
     pub target: Target,
     shell: Mutex<Option<mpsc::Sender<ShellInput>>>,
@@ -328,6 +329,7 @@ impl SshService {
             }
             Ok(Arc::new(Session {
                 handle,
+                connection: connection.clone(),
                 cancel: cancel.clone(),
                 target: Target {
                     address: connection.host.clone(),

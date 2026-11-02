@@ -237,6 +237,35 @@ impl Runtime {
                 )?;
                 Ok(Value::Null)
             }
+            "transfer_upload" => {
+                let session = self.ssh.get(string(&args, "sessionId")?)?;
+                let directory = string(&args, "directory")?;
+                let paths: Vec<String> = decode(args["paths"].clone())?;
+                if !directory.starts_with('/')
+                    || directory.bytes().any(|byte| byte < 32 || byte == 127)
+                    || paths.is_empty()
+                    || paths.iter().any(|path| !Path::new(path).is_absolute())
+                {
+                    return Err(Error::new(
+                        "invalid_argument",
+                        "上传需要明确的终端目录和本机绝对路径",
+                    ));
+                }
+                self.transfers.enqueue(
+                    string(&args, "id")?.into(),
+                    string(&args, "label")?.into(),
+                    Spec {
+                        source: Endpoint::Local,
+                        target: Endpoint::Sftp {
+                            connection: Box::new(session.connection.clone()),
+                        },
+                        paths,
+                        directory: directory.into(),
+                        move_files: false,
+                    },
+                )?;
+                Ok(Value::Null)
+            }
             "transfer_list" => encode(self.transfers.list()),
             "transfer_concurrency" => encode(
                 self.transfers

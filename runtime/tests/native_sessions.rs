@@ -296,6 +296,73 @@ async fn native_ssh_sftp_transfers_and_forwarding() {
             .is_null()
     );
     std::fs::write(&control, b"{}").unwrap();
+    // Terminal uploads do not create file-browser endpoints. The queue keeps
+    // the authenticated connection snapshot after its source terminal closes.
+    runtime
+        .call(
+            "ssh_connect",
+            json!({"id":"drop-source","connection":connection}),
+        )
+        .await
+        .unwrap();
+    let dropped = directory.path().join("项目 a'b");
+    std::fs::create_dir_all(dropped.join("nested/empty")).unwrap();
+    std::fs::write(dropped.join("nested/file.txt"), "terminal folder upload\n").unwrap();
+    let blocking = directory.path().join("blocking.bin");
+    std::fs::write(&blocking, vec![37; 512 * 1024]).unwrap();
+    std::fs::create_dir(remote.join("drop-target")).unwrap();
+    runtime
+        .call("transfer_concurrency", json!({"value":1}))
+        .await
+        .unwrap();
+    std::fs::write(&control, json!({"writeDelayMs":500}).to_string()).unwrap();
+    runtime.call("transfer_upload", json!({"id":"drop-block","label":"block","sessionId":"drop-source","paths":[blocking],"directory":"/drop-target"})).await.unwrap();
+    runtime.call("transfer_upload", json!({"id":"drop-folder","label":"folder","sessionId":"drop-source","paths":[dropped],"directory":"/drop-target"})).await.unwrap();
+    let queued = runtime.call("transfer_list", json!({})).await.unwrap();
+    assert!(
+        queued
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|task| task["id"] == "drop-folder" && task["state"] == "queued")
+    );
+    runtime
+        .call("ssh_close", json!({"id":"drop-source"}))
+        .await
+        .unwrap();
+    std::fs::write(&control, b"{}").unwrap();
+    runtime
+        .call("transfer_wait", json!({"id":"drop-block"}))
+        .await
+        .unwrap();
+    runtime
+        .call("transfer_wait", json!({"id":"drop-folder"}))
+        .await
+        .unwrap();
+    assert_eq!(
+        std::fs::read_to_string(remote.join("drop-target/项目 a'b/nested/file.txt")).unwrap(),
+        "terminal folder upload\n"
+    );
+    assert!(remote.join("drop-target/项目 a'b/nested/empty").is_dir());
+    for directory_value in ["", "relative"] {
+        assert!(runtime.call("transfer_upload", json!({"id":"unknown-drop","label":"unknown","sessionId":"terminal","paths":[dropped],"directory":directory_value})).await.is_err());
+    }
+    runtime.call("transfer_upload", json!({"id":"missing-drop","label":"missing","sessionId":"terminal","paths":[dropped],"directory":"/missing-directory"})).await.unwrap();
+    assert!(
+        runtime
+            .call("transfer_wait", json!({"id":"missing-drop"}))
+            .await
+            .is_err()
+    );
+    assert!(
+        !remote.join("项目 a'b").exists(),
+        "an unavailable directory must never fall back to root"
+    );
+    assert!(runtime.call("transfer_upload", json!({"id":"closed-drop","label":"closed","sessionId":"drop-source","paths":[dropped],"directory":"/"})).await.is_err());
+    runtime
+        .call("transfer_concurrency", json!({"value":2}))
+        .await
+        .unwrap();
     runtime
         .call(
             "file_connect",

@@ -370,6 +370,9 @@ impl Transfers {
                     CancellationToken::new(),
                 )
                 .await?;
+            if target.stat(&task.spec.directory, true).await?.kind != "directory" {
+                return Err(Error::new("invalid_directory", "传输目标不是目录"));
+            }
             Ok::<_, Error>((source, target))
         };
         let backends =
