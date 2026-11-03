@@ -20,13 +20,14 @@ function getTargetIndex(ctx: CommandContext, ids: string[]): number {
 registerAction({
   id: 'tab.close',
   title: '关闭',
-  description: '关闭当前终端标签',
+  description: '关闭当前标签',
   category: 'workbench',
-  when: 'area == "tab"',
+  when: 'tabExists',
   enablement: (ctx) => !!getTab(ctx),
   run: (ctx) => {
     if (ctx.tabId) closeTabs([ctx.tabId])
   },
+  keybindings: [{ key: 'Mod+W', when: '!modalOpen' }],
   menus: [{ menuId: MenuId.TabContext, group: '1_tab', order: 10 }],
 })
 

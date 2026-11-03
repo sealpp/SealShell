@@ -162,7 +162,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="dockEl" class="main-dock-host">
+  <div ref="dockEl" class="main-dock-host" @pointerdown="store.focusedDock = 'terminal'" @focusin="store.focusedDock = 'terminal'">
     <DockviewVue
       class="main-dock"
       :theme="themeDark"

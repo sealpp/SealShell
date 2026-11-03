@@ -13,7 +13,8 @@ test.beforeEach(async ({ page }) => {
 test('opens the ordered menu from any part of a tab', async ({ page }) => {
   const menu = await openTabMenu(page, 1)
 
-  await expect(menu.getByRole('menuitem')).toHaveText(['关闭', '关闭其他', '关闭右侧', '关闭全部'])
+  await expect(menu.locator('.command-menu-label')).toHaveText(['关闭', '关闭其他', '关闭右侧', '关闭全部'])
+  await expect(menu.getByRole('menuitem').first().locator('.command-menu-shortcut')).toHaveText('Ctrl+W')
   await expect(menu.getByRole('menuitem', { name: '关闭右侧', exact: true })).toHaveAttribute('data-disabled', '')
 
   await page.keyboard.press('Escape')
@@ -25,7 +26,7 @@ test('opens the ordered menu from any part of a tab', async ({ page }) => {
 
 test('closes the context tab without changing the active tab', async ({ page }) => {
   const menu = await openTabMenu(page, 1)
-  await menu.getByRole('menuitem', { name: '关闭', exact: true }).click()
+  await menu.getByRole('menuitem', { name: '关闭 Ctrl+W', exact: true }).click()
 
   await expect(page.locator('#tab-ids')).toHaveText('tab-a,tab-c,tab-d')
   await expect(page.locator('#active-tab')).toHaveText('tab-a')

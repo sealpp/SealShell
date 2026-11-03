@@ -15,6 +15,29 @@ test.beforeEach(async ({ page }) => {
   await expect(pane(page).locator('.monaco-editor')).toBeVisible()
 })
 
+test('Ctrl+W closes the focused editor and preserves dirty-close confirmation', async ({ page }) => {
+  await replace(page, 'unsaved draft')
+  await page.keyboard.press('Control+w')
+  const dialog = page.getByRole('dialog', { name: '文件有未保存修改' })
+  await expect(dialog).toBeVisible()
+  await page.keyboard.press('Control+w')
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: '取消', exact: true }).click()
+  expect(await content(page)).toBe('unsaved draft')
+
+  await pane(page).locator('.view-lines').click()
+  await page.keyboard.press('Control+w')
+  await dialog.getByRole('button', { name: '不保存', exact: true }).click()
+  await expect(pane(page)).toHaveCount(0)
+
+  await page.evaluate(() => (window as any).editorFixture.add('next', '/next.txt', 'saved content'))
+  await expect(pane(page, 'next').locator('.monaco-editor')).toBeVisible()
+  await pane(page, 'next').locator('.view-lines').click()
+  await page.keyboard.press('Control+w')
+  await expect(pane(page, 'next')).toHaveCount(0)
+  await expect(dialog).toHaveCount(0)
+})
+
 test('renders dark local syntax, line numbers, folding, Chinese find/replace and wrap controls', async ({ page }) => {
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))

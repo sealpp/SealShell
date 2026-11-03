@@ -45,6 +45,72 @@ async function finishConnection(page: Page, index: number) {
   }, index)
 }
 
+test('Ctrl+W closes only the focused terminal and returns to welcome after the last tab', async ({ page }) => {
+  await openWorkbench(page)
+  const [first, second] = await addTabs(page, 2)
+  await expect.poll(() => page.evaluate(() => (window as any).initialSizeFixture.connections.length)).toBe(2)
+  await finishConnection(page, 0)
+  await finishConnection(page, 1)
+  const firstSession = await page.evaluate(async id => {
+    const { store } = await import('/src/stores/app.ts')
+    return store.tabs.find(tab => tab.id === id)!.sessionId
+  }, first)
+
+  await page.locator('.terminal-tab-label').first().click()
+  await page.locator('.xterm-helper-textarea:visible').focus()
+  await page.locator('.xterm-helper-textarea:visible').evaluate(element => {
+    for (const options of [{ repeat: true }, { isComposing: true }]) {
+      element.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', code: 'KeyW', ctrlKey: true, bubbles: true, ...options }))
+    }
+  })
+  await expect(page.locator('.terminal-tab')).toHaveCount(2)
+
+  await page.keyboard.press('Control+w')
+  await expect(page.locator('.terminal-tab')).toHaveCount(1)
+  expect(await page.evaluate(async () => {
+    const { store } = await import('/src/stores/app.ts')
+    return { ids: store.tabs.map(tab => tab.id), active: store.activeTerminalTabId, closed: (window as any).initialSizeFixture.closed }
+  })).toEqual({ ids: [second], active: second, closed: [firstSession] })
+
+  await page.locator('.xterm-helper-textarea:visible').focus()
+  await page.keyboard.press('Control+w')
+  await expect(page.locator('.terminal-tab')).toHaveCount(0)
+  await expect(page.locator('.welcome')).toBeVisible()
+})
+
+test('Ctrl+W follows focus between the terminal and the bottom editor', async ({ page }) => {
+  await openWorkbench(page)
+  const [terminalId] = await addTabs(page)
+  await expect.poll(() => page.evaluate(() => (window as any).initialSizeFixture.connections.length)).toBe(1)
+  await finishConnection(page, 0)
+  await page.evaluate(async () => {
+    const { store, setBottomPanelActiveTab } = await import('/src/stores/app.ts')
+    store.tabs.push({
+      id: 'editor', kind: 'editor', hostId: 'size-host', label: 'focus.txt', state: 'online', error: '',
+      sessionId: 'editor', terminalId: '', encoding: 'utf-8',
+      editor: { path: '/focus.txt', content: 'saved content', language: 'plaintext', encoding: 'utf-8',
+        bom: false, lineEnding: '\n', size: 13, contentVersion: 0, dirty: false, largeFileConfirmed: false },
+    })
+    setBottomPanelActiveTab('editor', 'editors')
+    store.bottomPanelOpen = true
+  })
+  const editor = page.locator('[data-editor-tab="editor"]')
+  await expect(editor.locator('.monaco-editor')).toBeVisible()
+  await editor.locator('.view-lines').click()
+  await page.locator('.xterm-screen:visible').click()
+  await page.keyboard.press('Control+w')
+  await expect(page.locator('.terminal-tab')).toHaveCount(0)
+  await expect(editor).toBeVisible()
+  expect(await page.evaluate(async () => {
+    const { store } = await import('/src/stores/app.ts')
+    return store.tabs.map(tab => tab.id)
+  })).not.toContain(terminalId)
+
+  await editor.locator('.view-lines').click()
+  await page.keyboard.press('Control+w')
+  await expect(editor).toHaveCount(0)
+})
+
 for (const width of [1280, 800]) {
   test(`new and reconnected terminals pass the fitted ${width}px viewport before opening SSH`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 })

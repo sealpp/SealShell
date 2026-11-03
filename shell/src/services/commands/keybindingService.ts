@@ -6,8 +6,8 @@ import type { ResolvedKeybinding } from './types'
 
 function isTextInputTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false
-  if (target.closest('.shell-terminal')) return false
   if (target.closest('[role="dialog"], .workbench-dialog-content')) return true
+  if (target.closest('.shell-terminal, .monaco-editor')) return false
   if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return true
   return target.closest('[contenteditable="true"]') !== null
 }

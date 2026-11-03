@@ -7,7 +7,8 @@ import { createApp, h } from 'vue'
 import 'dockview-vue/dist/styles/dockview.css'
 import '/src/styles/workbench.css'
 import '/src/services/actions'
-import { store, setBottomPanelActiveTab } from '/src/stores/app'
+import { store, getFocusedTabId, setBottomPanelActiveTab } from '/src/stores/app'
+import { keybindingService } from '/src/services/commands'
 import { registerFileSession } from '/src/services/sftp/file-tabs'
 import { createFilePaths } from '/src/services/files/path'
 import { FileOperationError } from '/src/services/files/types'
@@ -22,6 +23,7 @@ store.view = 'shell'
 store.bottomPanelOpen = true
 store.bottomPanelCategory = 'editors'
 store.bottomPanelHeight = 550
+keybindingService.attach(window, () => ({ area: 'editor', tabId: getFocusedTabId() }))
 const fixture = { store, writes: [], hold: false, release: null, fail: false, closed: 0, files: new Map(), add, closeTabs, reopenEditorTab }
 window.editorFixture = fixture
 function add(id, path, content, options = {}) {
