@@ -538,15 +538,6 @@ async fn native_ssh_sftp_transfers_and_forwarding() {
         .await
         .unwrap_err();
     assert_eq!(failure.code, "AUTHENTICATION_FAILED");
-    runtime.call("store_write",json!({"changes":[{"collection":"knownHosts","key":format!("127.0.0.1\0{port}"),"value":{"publicKey":"changed"}}]})).await.unwrap();
-    let failure = runtime
-        .call(
-            "ssh_connect",
-            json!({"id":"changed-key","connection":connection}),
-        )
-        .await
-        .unwrap_err();
-    assert_eq!(failure.code, "HOST_KEY_MISMATCH");
     runtime.close_all();
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {

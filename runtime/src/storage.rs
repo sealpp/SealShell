@@ -141,6 +141,7 @@ impl Store {
         port: u16,
         public_key: &str,
         fingerprint: &str,
+        expected_public_key: Option<&str>,
     ) -> Result<()> {
         let id = format!("{host}\0{port}");
         let mut connection = self.0.lock().unwrap();
@@ -152,18 +153,25 @@ impl Store {
                 |row| row.get(0),
             )
             .optional()?;
-        if let Some(previous) = previous {
-            let record: Value = serde_json::from_str(&previous)?;
-            if record["publicKey"] != public_key {
-                return Err(Error::new("HOST_KEY_MISMATCH", "主机指纹已改变"));
-            }
-        } else {
-            let record = serde_json::json!({"id":id,"host":host,"port":port,"publicKey":public_key,"fingerprint":fingerprint});
-            transaction.execute(
-                "INSERT INTO records VALUES ('knownHosts',?1,?2)",
-                params![id, record.to_string()],
-            )?;
+        let previous: Option<Value> = previous.map(|raw| serde_json::from_str(&raw)).transpose()?;
+        let previous_key = previous
+            .as_ref()
+            .and_then(|record| record["publicKey"].as_str());
+        if previous_key == Some(public_key) {
+            return Ok(());
         }
+        if previous_key != expected_public_key {
+            return Err(Error::new(
+                "HOST_KEY_MISMATCH",
+                "已保存的主机指纹在确认期间发生变化，请重新连接并核对",
+            ));
+        }
+        let record = serde_json::json!({"id":id,"host":host,"port":port,"publicKey":public_key,"fingerprint":fingerprint});
+        transaction.execute(
+            "INSERT INTO records VALUES ('knownHosts',?1,?2)
+             ON CONFLICT(collection,key) DO UPDATE SET value=excluded.value",
+            params![id, record.to_string()],
+        )?;
         transaction.commit()?;
         Ok(())
     }
@@ -246,11 +254,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::open(&dir.path().join("test.sqlite")).unwrap();
         store
-            .trust_host("host", 22, "first", "fingerprint")
+            .trust_host("host", 22, "first", "fingerprint", None)
             .unwrap();
         assert_eq!(
             store
-                .trust_host("host", 22, "second", "other")
+                .trust_host("host", 22, "second", "other", None)
                 .unwrap_err()
                 .code,
             "HOST_KEY_MISMATCH"
@@ -258,6 +266,38 @@ mod tests {
         assert_eq!(
             store.get("knownHosts", "host\x0022").unwrap().unwrap()["publicKey"],
             "first"
+        );
+    }
+
+    #[test]
+    fn host_key_changes_replace_only_the_record_that_was_confirmed() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(&dir.path().join("test.sqlite")).unwrap();
+        store.trust_host("host", 22, "first", "old", None).unwrap();
+        store
+            .trust_host("host", 22, "second", "new", Some("first"))
+            .unwrap();
+        // Concurrent approvals of the same new key are harmless.
+        store
+            .trust_host("host", 22, "second", "new", Some("first"))
+            .unwrap();
+        assert_eq!(
+            store
+                .trust_host("host", 22, "third", "stale", Some("first"))
+                .unwrap_err()
+                .code,
+            "HOST_KEY_MISMATCH"
+        );
+        let record = store.get("knownHosts", "host\x0022").unwrap().unwrap();
+        assert_eq!(record["publicKey"], "second");
+        assert_eq!(record["fingerprint"], "new");
+        // Trust is scoped to the address and port, not the address alone.
+        store
+            .trust_host("host", 2222, "third", "other", None)
+            .unwrap();
+        assert_eq!(
+            store.get("knownHosts", "host\x0022").unwrap().unwrap(),
+            record
         );
     }
     #[test]

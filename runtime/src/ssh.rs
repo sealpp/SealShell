@@ -53,14 +53,12 @@ impl client::Handler for Verifier {
         );
         let fingerprint = public.fingerprint(russh::keys::HashAlg::Sha256).to_string();
         let record_id = format!("{}\0{}", self.host, self.port);
-        if let Some(known) = self.store.get("knownHosts", &record_id)? {
-            if known["publicKey"] == key {
-                return Ok(true);
-            }
-            return Err(Error::new(
-                "HOST_KEY_MISMATCH",
-                "远端主机指纹与已保存记录不符，已拒绝连接",
-            ));
+        let known = self.store.get("knownHosts", &record_id)?;
+        if known
+            .as_ref()
+            .is_some_and(|record| record["publicKey"] == key)
+        {
+            return Ok(true);
         }
         let request_id = uuid::Uuid::new_v4().to_string();
         let (send, receive) = oneshot::channel();
@@ -69,15 +67,23 @@ impl client::Handler for Verifier {
             .unwrap()
             .insert(request_id.clone(), send);
         (self.events)(
-            json!({"type":"hostKey", "id":self.id, "requestId":request_id, "host":self.host, "port":self.port, "fingerprint":fingerprint}),
+            json!({"type":"hostKey", "id":self.id, "requestId":request_id, "host":self.host, "port":self.port, "fingerprint":fingerprint,
+                "previousFingerprint":known.as_ref().map(|record| &record["fingerprint"])}),
         );
         let accepted = tokio::select! { _ = self.cancel.cancelled() => false, answer = receive => answer.unwrap_or(false) };
         self.approvals.lock().unwrap().remove(&request_id);
         if accepted {
-            // Trust is checked and inserted in one transaction, including when
-            // two first-use prompts were accepted concurrently.
-            self.store
-                .trust_host(&self.host, self.port, &key, &fingerprint)?;
+            // Replace only the key shown in this prompt. A stale approval must
+            // not overwrite a different key trusted by another connection.
+            self.store.trust_host(
+                &self.host,
+                self.port,
+                &key,
+                &fingerprint,
+                known
+                    .as_ref()
+                    .and_then(|record| record["publicKey"].as_str()),
+            )?;
         }
         Ok(accepted)
     }
