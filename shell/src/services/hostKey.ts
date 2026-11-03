@@ -4,6 +4,7 @@ export interface HostKeyPromptState {
   host: string
   port: number
   fingerprint: string
+  previousFingerprint?: string | null
 }
 
 let pending: ((accepted: boolean) => void) | undefined

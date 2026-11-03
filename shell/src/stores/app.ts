@@ -274,6 +274,7 @@ export interface AppState {
     host: string
     port: number
     fingerprint: string
+    previousFingerprint?: string | null
   } | null
   editingHostId: string
   insertAfterTabId: string

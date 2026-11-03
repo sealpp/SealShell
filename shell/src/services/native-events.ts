@@ -14,7 +14,7 @@ export function initializeNativeEvents(): Promise<void> {
     pending.set(id, controller)
     prompts = prompts.catch(() => {}).then(async () => {
       let accepted = false
-      try { accepted = await requestHostKeyApproval({ host: event.host, port: event.port, fingerprint: event.fingerprint }, controller.signal) }
+      try { accepted = await requestHostKeyApproval({ host: event.host, port: event.port, fingerprint: event.fingerprint, previousFingerprint: event.previousFingerprint }, controller.signal) }
       finally {
         pending.delete(id)
         await nativeCall('host_key_decision', { requestId: event.requestId, accepted })
