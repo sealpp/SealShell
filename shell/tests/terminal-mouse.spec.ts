@@ -12,6 +12,10 @@ async function viewport(page: Page) {
   return page.evaluate(() => (window as any).mouseFixture.terminal.buffer.active.viewportY as number)
 }
 
+async function selection(page: Page) {
+  return page.evaluate(() => ((window as any).mouseFixture.terminal.getSelection() as string).replace(/\r\n/g, '\n'))
+}
+
 test.beforeEach(async ({ page }) => {
   await page.route('**/src/services/ws.ts', route => route.fulfill({ contentType: 'application/javascript', body: `
     export * from '/src/services/ws.ts?actual';
@@ -98,4 +102,103 @@ test('wheel handles line, page and fractional pixel deltas without moving the cu
   expect(result.boundary).toBe(1)
   expect(result.after).toEqual(result.cursor)
   expect(result.input).toEqual([])
+})
+
+for (const direction of ['up', 'down'] as const) {
+  test(`drag selection held inside the ${direction} edge keeps scrolling and stops on release`, async ({ page }) => {
+    await page.evaluate(() => (window as any).mouseFixture.terminal.scrollToLine(70))
+    const screen = (await page.locator('.xterm-screen').boundingBox())!
+    await page.mouse.move(screen.x + 20, screen.y + screen.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(screen.x + 80, direction === 'up' ? screen.y + 2 : screen.y + screen.height - 2, { steps: 5 })
+    const initial = await viewport(page)
+    if (direction === 'up') await expect.poll(() => viewport(page)).toBeLessThan(initial)
+    else await expect.poll(() => viewport(page)).toBeGreaterThan(initial)
+    const first = await selection(page)
+    await expect.poll(async () => (await selection(page)).split('\n').length).toBeGreaterThan(first.split('\n').length)
+    await page.mouse.up()
+    const stopped = await viewport(page)
+    const selected = await selection(page)
+    await page.waitForTimeout(200)
+    expect(await viewport(page)).toBe(stopped)
+    expect(await selection(page)).toBe(selected)
+    expect(await page.evaluate(() => (window as any).mouseFixture.input)).toEqual([])
+  })
+}
+
+test('leaving the edge stops scrolling and dragging to the opposite edge reverses it', async ({ page }) => {
+  await page.evaluate(() => (window as any).mouseFixture.terminal.scrollToLine(70))
+  const screen = (await page.locator('.xterm-screen').boundingBox())!
+  await page.mouse.move(screen.x + 20, screen.y + screen.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(screen.x + 80, screen.y + 2)
+  await expect.poll(() => viewport(page)).toBeLessThan(70)
+  await page.mouse.move(screen.x + 80, screen.y + screen.height / 2)
+  const stopped = await viewport(page)
+  await page.waitForTimeout(200)
+  expect(await viewport(page)).toBe(stopped)
+  await page.mouse.move(screen.x + 80, screen.y + screen.height - 2)
+  await expect.poll(() => viewport(page)).toBeGreaterThan(stopped)
+  await page.mouse.move(screen.x + 80, screen.y + screen.height + 10)
+  const outside = await viewport(page)
+  await expect.poll(() => viewport(page)).toBeGreaterThan(outside)
+  await page.mouse.up()
+  const released = await viewport(page)
+  await page.waitForTimeout(200)
+  expect(await viewport(page)).toBe(released)
+})
+
+test('losing focus ends edge scrolling even before mouseup', async ({ page }) => {
+  await page.evaluate(() => (window as any).mouseFixture.terminal.scrollToLine(70))
+  const screen = (await page.locator('.xterm-screen').boundingBox())!
+  await page.mouse.move(screen.x + 20, screen.y + screen.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(screen.x + 80, screen.y + 2)
+  await expect.poll(() => viewport(page)).toBeLessThan(70)
+  await page.locator('.xterm-helper-textarea').evaluate(element => (element as HTMLTextAreaElement).blur())
+  const stopped = await viewport(page)
+  await page.waitForTimeout(200)
+  expect(await viewport(page)).toBe(stopped)
+  await page.mouse.up()
+  expect(await page.evaluate(() => (window as any).mouseFixture.input)).toEqual([])
+})
+
+for (const mode of ['word', 'line', 'column'] as const) {
+  test(`edge scrolling preserves native ${mode} selection`, async ({ page }) => {
+    await page.evaluate(() => (window as any).mouseFixture.terminal.scrollToLine(70))
+    const screen = (await page.locator('.xterm-screen').boundingBox())!
+    const cell = await page.evaluate(() => {
+      const terminal = (window as any).mouseFixture.terminal
+      const rect = document.querySelector('.xterm-screen')!.getBoundingClientRect()
+      return { width: rect.width / terminal.cols, height: rect.height / terminal.rows }
+    })
+    if (mode === 'column') await page.keyboard.down('Alt')
+    await page.mouse.move(screen.x + cell.width * 11, screen.y + cell.height * 5.5)
+    await page.mouse.down({ clickCount: mode === 'word' ? 2 : mode === 'line' ? 3 : 1 })
+    await page.mouse.move(screen.x + cell.width * 14, screen.y + screen.height - 2)
+    await expect.poll(() => viewport(page)).toBeGreaterThan(70)
+    await page.mouse.move(screen.x + cell.width * 14, screen.y + cell.height * 8.5)
+    await page.mouse.up()
+    if (mode === 'column') await page.keyboard.up('Alt')
+    const lines = (await selection(page)).trimEnd().split('\n')
+    if (mode === 'word') expect(lines.at(-1)).toMatch(/^line-\d+ selectable$/)
+    else if (mode === 'line') expect(lines.join('\n')).toMatch(/^(line-\d+ selectable words\n)*line-\d+ selectable words$/)
+    else expect(lines).toEqual(lines.map(() => 'lec'))
+  })
+}
+
+test('Shift selection in remote mouse mode scrolls locally without mouse reports', async ({ page }) => {
+  await output(page, '\x1b[?1002h\x1b[?1006h\r\n')
+  await page.waitForFunction(() => (window as any).mouseFixture.terminal.modes.mouseTrackingMode === 'drag')
+  await page.evaluate(() => (window as any).mouseFixture.terminal.scrollToLine(70))
+  const screen = (await page.locator('.xterm-screen').boundingBox())!
+  await page.keyboard.down('Shift')
+  await page.mouse.move(screen.x + 20, screen.y + screen.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(screen.x + 80, screen.y + 2)
+  await expect.poll(() => viewport(page)).toBeLessThan(70)
+  await page.mouse.up()
+  await page.keyboard.up('Shift')
+  expect(await selection(page)).toContain('selectable words')
+  expect(await page.evaluate(() => (window as any).mouseFixture.input)).toEqual([])
 })
