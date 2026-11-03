@@ -9,6 +9,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { verifyDesktopDragging } from './desktop-dragging.mjs'
 import { verifyDesktopHostKeys } from './desktop-host-keys.mjs'
+import { verifyDesktopTerminalMouse } from './desktop-terminal-mouse.mjs'
 
 const shell = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const root = resolve(shell, '..')
@@ -145,6 +146,7 @@ try {
   await page.screenshot({ path: join(artifacts, 'remote-system-icon.png') })
   console.log('Desktop remote system: authenticated SSH discovery, Ubuntu icon and SQLite persistence')
   await verifyDesktopHostKeys(page, { port, artifacts })
+  await verifyDesktopTerminalMouse(page, { artifacts, pid: desktop.pid })
   if (process.env.SEAL_E2E_BASH || process.env.SEAL_E2E_ZSH) {
     const directory = join(remote, "目录 a'b;$(touch sentinel) %20")
     await mkdir(directory)

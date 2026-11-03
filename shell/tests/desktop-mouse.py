@@ -22,9 +22,11 @@ class Input(ctypes.Structure):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pid", required=True, type=int)
-    parser.add_argument("--from", dest="start", required=True, type=float, nargs=2)
-    parser.add_argument("--to", dest="end", required=True, type=float, nargs=2)
-    parser.add_argument("--scale", required=True, type=float)
+    parser.add_argument("--from", dest="start", type=float, nargs=2)
+    parser.add_argument("--to", dest="end", type=float, nargs=2)
+    parser.add_argument("--scale", type=float)
+    parser.add_argument("--hold-ms", type=int, default=150)
+    parser.add_argument("--prepare-only", action="store_true")
     options = parser.parse_args()
     user32 = ctypes.WinDLL("user32", use_last_error=True)
     user32.SetProcessDpiAwarenessContext.argtypes = [wintypes.HANDLE]
@@ -54,6 +56,24 @@ def main():
     if len(windows) != 1:
         raise RuntimeError(f"Expected one visible fixture window for {options.pid}, got {windows}")
     hwnd = windows[0]
+    if options.prepare_only:
+        # The default logical size can exceed the physical work area at high DPI.
+        # Fit this fixture before the caller measures DOM gesture coordinates.
+        work = wintypes.RECT()
+        bounds = wintypes.RECT()
+        if not user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(work), 0):
+            raise ctypes.WinError(ctypes.get_last_error())
+        if not user32.GetWindowRect(hwnd, ctypes.byref(bounds)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        width = min(bounds.right - bounds.left, work.right - work.left)
+        height = min(bounds.bottom - bounds.top, work.bottom - work.top)
+        left = max(work.left, min(bounds.left, work.right - width))
+        top = max(work.top, min(bounds.top, work.bottom - height))
+        if not user32.MoveWindow(hwnd, left, top, width, height, True):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return
+    if options.start is None or options.end is None or options.scale is None:
+        parser.error("gestures require --from, --to and --scale")
     origin = wintypes.POINT()
     if not user32.ClientToScreen(hwnd, ctypes.byref(origin)):
         raise ctypes.WinError(ctypes.get_last_error())
@@ -92,7 +112,7 @@ def main():
                 fraction = step / 24
                 move(*(start + (end - start) * fraction for start, end in zip(options.start, options.end)))
                 time.sleep(0.025)
-            time.sleep(0.15)
+            time.sleep(options.hold_ms / 1000)
         finally:
             button(0x0004)  # MOUSEEVENTF_LEFTUP
             # SendInput queues the release. Let the OLE loop consume it before
