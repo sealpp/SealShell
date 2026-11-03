@@ -17,6 +17,7 @@ import { encodingDecoder } from '../services/encodings'
 import { encodeTerminalInput } from '../services/terminalEncoding'
 import { registerTerminalDirectoryHandlers } from '../services/terminalDirectory'
 import { publishTerminalSize } from '../services/terminalSize'
+import { attachTerminalWheelScrolling } from '../services/terminalMouse'
 import TerminalCommandSuggestions from '../components/TerminalCommandSuggestions.vue'
 import { attachCommandSuggestions, type TerminalSuggestionView } from '../services/terminalSuggestions/controller'
 import { historyProvider } from '../services/terminalSuggestions/model'
@@ -31,6 +32,7 @@ const BACKEND_RESIZE_DEBOUNCE_MS = 80
 
 const termEl = ref<HTMLDivElement | null>(null)
 let terminal: Terminal | null = null
+let wheelScrolling: ReturnType<typeof attachTerminalWheelScrolling> | undefined
 let suggestions: ReturnType<typeof attachCommandSuggestions> | undefined
 const suggestion = shallowRef<TerminalSuggestionView>()
 const suggestionAppearance = shallowRef<CSSProperties>({})
@@ -205,6 +207,7 @@ function initTerminal() {
   fitAddon = new FitAddon()
   terminal.loadAddon(fitAddon)
   terminal.open(termEl.value)
+  wheelScrolling = attachTerminalWheelScrolling(terminal)
 
   suggestions = attachCommandSuggestions(terminal, {
     enabled: () => (commandSuggestions.enabled || commandSuggestions.recommendations.cloud) && tab.value?.state === 'online',
@@ -341,6 +344,7 @@ onBeforeUnmount(() => {
   unwatchPreferences.value?.()
   unwatchTerminalMount.value?.()
   suggestions?.dispose()
+  wheelScrolling?.dispose()
   if (tab.value?.sessionId) {
     setTerminalOutputHandler(tab.value.sessionId, null)
   }
