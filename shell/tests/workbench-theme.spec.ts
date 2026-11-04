@@ -76,7 +76,7 @@ test('keeps portal menus and dock tabs on the workbench palette when the termina
 test('renders local Codicons in the workbench and a newly opened offline dialog', async ({ page, context }) => {
   await openWorkbench(page)
   await page.evaluate(() => document.fonts.ready)
-  const icon = page.locator('.activity .codicon-list-tree')
+  const icon = page.locator('.activity .codicon-remote-explorer')
   await expect(icon).toBeVisible()
   await expect(icon).toHaveCSS('font-family', 'codicon')
   expect(await icon.evaluate(element => getComputedStyle(element, '::before').content)).not.toBe('none')

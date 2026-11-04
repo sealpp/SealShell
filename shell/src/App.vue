@@ -16,7 +16,7 @@ import FolderDialog from './components/FolderDialog.vue'
 import TerminalSessionInfo from './components/TerminalSessionInfo.vue'
 import ManualPasteDialog from './components/ManualPasteDialog.vue'
 import HostKeyPrompt from './components/HostKeyPrompt.vue'
-import { IconList } from './ui/icons'
+import { IconRemoteExplorer } from './ui/icons'
 import WorkbenchMenu from './components/WorkbenchMenu.vue'
 import SettingsDialog from './components/SettingsDialog.vue'
 import AboutDialog from './components/AboutDialog.vue'
@@ -243,7 +243,7 @@ onBeforeUnmount(() => {
             title="会话"
             @click="toggleConnections"
           >
-            <IconList :size="24" />
+            <IconRemoteExplorer :size="24" />
           </button>
 
         </div>
