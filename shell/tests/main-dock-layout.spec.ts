@@ -150,6 +150,49 @@ for (const split of [false, true]) {
   })
 }
 
+test('hover previews preserve split terminal bounds, instances and PTY sizes', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await openTerminals(page, ['layout-a', 'layout-b'])
+  const dock = page.locator('.main-dock')
+  const bounds = (await dock.boundingBox())!
+  await page.locator('.terminal-tab').filter({ hasText: 'layout-b' }).dragTo(dock, {
+    targetPosition: { x: bounds.width - 5, y: bounds.height / 2 },
+  })
+  await expect(page.locator('.main-dock .dv-groupview')).toHaveCount(2)
+  const activity = page.getByRole('button', { name: '会话', exact: true })
+  await activity.click()
+  await page.mouse.move(900, 400)
+  await expect(page.locator('#connections-sidebar')).toBeHidden()
+  await page.waitForTimeout(250)
+  const snapshot = () => page.evaluate(() => {
+    const fixture = (window as any).terminalLayoutFixture
+    return {
+      panels: [...document.querySelectorAll('.shell-terminal-content')].map(element => element.getBoundingClientRect().toJSON()),
+      bindings: fixture.bindings.length,
+      resizes: fixture.resizes.length,
+      inputs: fixture.inputs.length,
+      remoteSizes: [...fixture.remoteSizes],
+    }
+  })
+  const before = await snapshot()
+  await activity.hover()
+  await expect(page.locator('#connections-sidebar.floating')).toBeVisible()
+  await page.waitForTimeout(250)
+  expect(await snapshot()).toEqual(before)
+  await page.locator('.xterm-helper-textarea').first().focus()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('#connections-sidebar')).toBeHidden()
+  expect(await snapshot()).toEqual(before)
+  await page.mouse.move(900, 400)
+  await activity.hover()
+  await expect(page.locator('#connections-sidebar.floating')).toBeVisible()
+  await page.locator('.conn-item').hover()
+  await page.mouse.move(900, 400)
+  await expect(page.locator('#connections-sidebar')).toBeHidden()
+  await page.waitForTimeout(250)
+  expect(await snapshot()).toEqual(before)
+})
+
 test('preserves terminal instances, background output and input routing across tab switches', async ({ page }) => {
   await openTerminals(page, ['layout-a', 'layout-b'])
   const tab = (id: string) => page.locator('.terminal-tab').filter({ hasText: id })

@@ -17,6 +17,7 @@ const props = defineProps<{
   canOpen?: (event: MouseEvent) => boolean
 }>()
 
+const emit = defineEmits<{ openChange: [open: boolean] }>()
 const open = ref(false)
 const triggerEl = shallowRef<Element | null>(null)
 const invocationContext = shallowRef<CommandContext | null>(null)
@@ -42,6 +43,7 @@ function onContextMenu(event: MouseEvent) {
 
 function onOpenChange(nextOpen: boolean) {
   open.value = nextOpen
+  emit('openChange', nextOpen)
   if (!nextOpen) {
     invocationContext.value = null
   }

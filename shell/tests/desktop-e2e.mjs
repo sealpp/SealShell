@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { verifyDesktopDragging } from './desktop-dragging.mjs'
 import { verifyDesktopHostKeys } from './desktop-host-keys.mjs'
 import { verifyDesktopTerminalMouse } from './desktop-terminal-mouse.mjs'
+import { verifyDesktopSidebarPreview } from './desktop-sidebar-preview.mjs'
 
 const shell = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const root = resolve(shell, '..')
@@ -76,6 +77,7 @@ try {
   page.on('pageerror', error => errors.push(error.message))
   await page.waitForSelector('.welcome', { timeout: 20000 })
   await expect(page.locator('.global-error')).toHaveCount(0)
+  await verifyDesktopSidebarPreview(page, { artifacts })
   const modelRequests = []
   modelServer = createHttpServer((request, response) => {
     let body = ''

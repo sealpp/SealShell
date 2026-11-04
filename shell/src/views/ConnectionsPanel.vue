@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
-import { IconChevronDown, IconChevronRight, IconFolder, IconFolderOpen } from '../ui/icons'
+import { computed, inject, onBeforeUnmount, ref } from 'vue'
+import { IconChevronDown, IconChevronRight, IconFolder, IconFolderOpen, IconPin, IconPinned } from '../ui/icons'
+import { sidebarMenuOpenKey } from '../ui/sidebarPreview'
 import { store } from '../stores/app'
 import CommandContextMenu from '../components/CommandContextMenu.vue'
 import type { CommandContext } from '../services/context'
@@ -19,6 +20,7 @@ import HostSystemIcon from '../components/HostSystemIcon.vue'
 import { hostSystem } from '../services/remoteSystem'
 
 const draggingKeys = ref<string[]>([])
+const onMenuOpenChange = inject(sidebarMenuOpenKey, () => {})
 const visibleNodes = computed(() => buildVisibleNodes(store.folders, store.hosts, store.expandedFolderIds))
 const cutKeys = computed(() =>
   store.connectionClipboard?.mode === 'cut' ? new Set(store.connectionClipboard.nodeKeys) : undefined,
@@ -182,11 +184,23 @@ onBeforeUnmount(() => {
   <div class="connections-panel">
     <div class="connections-header">
       <span>会话</span>
+      <button
+        type="button"
+        class="sidebar-pin-button"
+        :aria-label="store.sidebarOpen ? '取消固定会话侧栏' : '固定会话侧栏'"
+        :aria-pressed="store.sidebarOpen"
+        :title="store.sidebarOpen ? '取消固定（悬停预览）' : '固定会话侧栏'"
+        @click="commandService.execute('workbench.toggleConnections', { area: 'global' })"
+      >
+        <IconPinned v-if="store.sidebarOpen" :size="16" />
+        <IconPin v-else :size="16" />
+      </button>
     </div>
     <CommandContextMenu
       :menu-id="ROOT_MENU_ID"
       :context="rootContext"
       :can-open="(event) => event.target === event.currentTarget"
+      @open-change="onMenuOpenChange"
     >
       <div class="conn-list workbench-selection-container" tabindex="0" @dragover="onDragOverRoot" @drop="onDropRoot">
         <CommandContextMenu
@@ -194,6 +208,7 @@ onBeforeUnmount(() => {
           :key="nodeKey(node.kind, node.id)"
           :menu-id="node.kind === 'folder' ? FOLDER_MENU_ID : HOST_MENU_ID"
           :context="() => nodeContext(node)"
+          @open-change="onMenuOpenChange"
         >
           <div
             class="conn-item workbench-list-item"
@@ -253,6 +268,26 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--workbench-border-muted);
   font-size: 12px;
   font-weight: 600;
+  color: var(--workbench-text-strong);
+}
+
+.sidebar-pin-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 24px;
+  height: 24px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--workbench-radius-small);
+  background: transparent;
+  color: var(--workbench-text-muted);
+  cursor: pointer;
+}
+
+.sidebar-pin-button:hover {
+  background: var(--workbench-toolbar-hover-bg);
   color: var(--workbench-text-strong);
 }
 

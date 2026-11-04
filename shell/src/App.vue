@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { getFocusedTabId, store } from './stores/app'
 import { initializeDesktop } from './services/ws'
 import { commandService, keybindingService, syncAppContext, ContextKeys } from './services/commands'
@@ -17,6 +17,7 @@ import TerminalSessionInfo from './components/TerminalSessionInfo.vue'
 import ManualPasteDialog from './components/ManualPasteDialog.vue'
 import HostKeyPrompt from './components/HostKeyPrompt.vue'
 import { IconRemoteExplorer } from './ui/icons'
+import { sidebarMenuOpenKey, useSidebarPreview } from './ui/sidebarPreview'
 import WorkbenchMenu from './components/WorkbenchMenu.vue'
 import SettingsDialog from './components/SettingsDialog.vue'
 import AboutDialog from './components/AboutDialog.vue'
@@ -38,6 +39,7 @@ const MIN_TERMINAL_WIDTH = 320
 
 const mainEl = ref<HTMLElement | null>(null)
 const activityEl = ref<HTMLElement | null>(null)
+const connectionsButton = ref<HTMLButtonElement | null>(null)
 const sidebarEl = ref<HTMLElement | null>(null)
 const resizingSidebar = ref(false)
 let activePointerId: number | null = null
@@ -46,7 +48,29 @@ let resizerEl: HTMLElement | null = null
 let resizeFrame: number | null = null
 let pendingResizeDelta = 0
 
-const sidebarVisible = computed(() => store.sidebarOpen && store.sidebarView === 'connections')
+const sidebarPinned = computed(() => store.sidebarOpen && store.sidebarView === 'connections')
+const modalOpen = computed(() => store.connectionModalOpen || store.loginDialogOpen
+  || store.settingsModalOpen || store.aboutModalOpen || store.folderModalOpen
+  || store.deleteNodeConfirmOpen || !!store.hostKeyPrompt || !!store.dirtyCloseConfirm
+  || !!store.interactionDialog || !!store.encodingPicker || !!store.terminalSessionInfo?.open
+  || !!store.manualPaste?.open)
+const sidebarPreview = useSidebarPreview(sidebarPinned, modalOpen)
+const sidebarVisible = computed(() => sidebarPinned.value || sidebarPreview.open.value)
+provide(sidebarMenuOpenKey, sidebarPreview.setMenuOpen)
+
+watch(sidebarVisible, visible => {
+  if (!visible && sidebarEl.value?.contains(document.activeElement)) {
+    connectionsButton.value?.focus({ preventScroll: true })
+  }
+})
+
+function dismissSidebarPreview(event: KeyboardEvent) {
+  if (!sidebarPreview.open.value) return
+  event.preventDefault()
+  event.stopPropagation()
+  sidebarPreview.dismiss()
+}
+
 const layoutStyle = computed(() => ({
   '--sidebar-width': `${store.sidebarWidth}px`,
 }))
@@ -58,7 +82,7 @@ function toggleConnections() {
 function getTerminalWidth(): number {
   const mainWidth = mainEl.value?.clientWidth ?? 0
   const activityWidth = activityEl.value?.offsetWidth ?? ACTIVITY_BAR_WIDTH
-  const sidebarWidth = sidebarVisible.value
+  const sidebarWidth = sidebarPinned.value
     ? sidebarEl.value?.offsetWidth ?? store.sidebarWidth
     : 0
   return Math.max(0, mainWidth - activityWidth - sidebarWidth)
@@ -156,13 +180,7 @@ const stopContextSync = watch(
     store.bottomPanelOpen,
     store.tabs.map((tab) => `${tab.id}:${tab.state}`).join(','),
     store.sidebarOpen,
-    store.connectionModalOpen,
-    store.loginDialogOpen,
-    store.settingsModalOpen,
-    store.aboutModalOpen,
-    store.dirtyCloseConfirm,
-    store.interactionDialog,
-    store.encodingPicker,
+    modalOpen.value,
   ],
   () => {
     syncAppContext({
@@ -173,7 +191,7 @@ const stopContextSync = watch(
       [ContextKeys.bottomPanelCategory]: store.bottomPanelCategory,
       [ContextKeys.bottomPanelOpen]: store.bottomPanelOpen,
       [ContextKeys.sidebarOpen]: store.sidebarOpen,
-      [ContextKeys.modalOpen]: store.connectionModalOpen || store.loginDialogOpen || store.settingsModalOpen || store.aboutModalOpen || !!store.dirtyCloseConfirm || !!store.interactionDialog || !!store.encodingPicker,
+      [ContextKeys.modalOpen]: modalOpen.value,
     })
   },
   { immediate: true },
@@ -183,6 +201,7 @@ const stopCloseProtection = startWorkbenchCloseProtection(window)
 let disposed = false
 
 onMounted(async () => {
+  window.addEventListener('blur', sidebarPreview.dismiss)
   try {
     await initializeDesktop()
     await loadTransferConcurrency()
@@ -212,6 +231,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   disposed = true
+  window.removeEventListener('blur', sidebarPreview.dismiss)
   stopCloseProtection()
   stopMonitoringService()
   stopProcessesService()
@@ -224,7 +244,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="app">
+  <div class="app" @keydown.esc.capture="dismissSidebarPreview">
     <div v-if="store.error" class="global-error">{{ store.error }}</div>
     <div
       ref="mainEl"
@@ -235,12 +255,17 @@ onBeforeUnmount(() => {
       <div ref="activityEl" class="activity">
         <div class="top-icons">
           <button
+            ref="connectionsButton"
             type="button"
             aria-label="会话"
-            :aria-pressed="sidebarVisible"
+            :aria-pressed="sidebarPinned"
+            :aria-expanded="sidebarVisible"
+            aria-controls="connections-sidebar"
             class="icon workbench-activity-button"
-            :class="{ active: store.sidebarOpen && store.sidebarView === 'connections' }"
+            :class="{ active: sidebarVisible }"
             title="会话"
+            @pointerenter="sidebarPreview.enterTrigger"
+            @pointerleave="sidebarPreview.leaveTrigger"
             @click="toggleConnections"
           >
             <IconRemoteExplorer :size="24" />
@@ -251,11 +276,19 @@ onBeforeUnmount(() => {
           <WorkbenchMenu />
         </div>
       </div>
-      <aside ref="sidebarEl" class="sidebar primary-sidebar" :class="{ collapsed: !sidebarVisible }">
+      <aside
+        id="connections-sidebar"
+        ref="sidebarEl"
+        class="sidebar primary-sidebar"
+        :class="{ collapsed: !sidebarVisible, floating: sidebarVisible && !sidebarPinned }"
+        :aria-hidden="!sidebarVisible"
+        @pointerenter="sidebarPreview.enterPanel"
+        @pointerleave="sidebarPreview.leavePanel"
+      >
         <PrimarySidebar />
       </aside>
       <div
-        v-if="sidebarVisible"
+        v-if="sidebarPinned"
         class="panel-resizer"
         :class="{ dragging: resizingSidebar }"
         aria-hidden="true"
@@ -418,6 +451,17 @@ button, input, select, textarea {
 .sidebar.primary-sidebar {
   width: var(--sidebar-width, 220px);
   min-width: 160px;
+}
+
+.sidebar.floating {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 48px;
+  z-index: 40;
+  width: min(var(--sidebar-width, 220px), calc(100% - 48px));
+  min-width: 0;
+  box-shadow: 4px 0 12px var(--vscode-widget-shadow);
 }
 
 .sidebar.collapsed {
