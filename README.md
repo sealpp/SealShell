@@ -24,3 +24,5 @@ python scripts/build.py
 ```
 
 The installer is written to `target/release/bundle/nsis/`. Rust code lives in `runtime/`, the desktop host in `shell/src-tauri/`, and Vue in `shell/src/`. Architecture and design documentation remain in the separate private repository.
+
+Licensed under the [Apache License 2.0](LICENSE).
