@@ -18,6 +18,7 @@ import { encodeTerminalInput } from '../services/terminalEncoding'
 import { registerTerminalDirectoryHandlers } from '../services/terminalDirectory'
 import { publishTerminalSize } from '../services/terminalSize'
 import { attachTerminalSelectionScrolling, attachTerminalWheelScrolling } from '../services/terminalMouse'
+import { attachTerminalAccessibilityInput } from '../services/terminalAccessibilityInput'
 import TerminalCommandSuggestions from '../components/TerminalCommandSuggestions.vue'
 import { attachCommandSuggestions, type TerminalSuggestionView } from '../services/terminalSuggestions/controller'
 import { historyProvider } from '../services/terminalSuggestions/model'
@@ -34,6 +35,7 @@ const termEl = ref<HTMLDivElement | null>(null)
 let terminal: Terminal | null = null
 let wheelScrolling: ReturnType<typeof attachTerminalWheelScrolling> | undefined
 let selectionScrolling: ReturnType<typeof attachTerminalSelectionScrolling> | undefined
+let accessibilityInput: ReturnType<typeof attachTerminalAccessibilityInput> | undefined
 let suggestions: ReturnType<typeof attachCommandSuggestions> | undefined
 const suggestion = shallowRef<TerminalSuggestionView>()
 const suggestionAppearance = shallowRef<CSSProperties>({})
@@ -208,6 +210,7 @@ function initTerminal() {
   fitAddon = new FitAddon()
   terminal.loadAddon(fitAddon)
   terminal.open(termEl.value)
+  accessibilityInput = attachTerminalAccessibilityInput(terminal)
   wheelScrolling = attachTerminalWheelScrolling(terminal)
   selectionScrolling = attachTerminalSelectionScrolling(terminal)
 
@@ -348,6 +351,7 @@ onBeforeUnmount(() => {
   suggestions?.dispose()
   wheelScrolling?.dispose()
   selectionScrolling?.dispose()
+  accessibilityInput?.dispose()
   if (tab.value?.sessionId) {
     setTerminalOutputHandler(tab.value.sessionId, null)
   }
