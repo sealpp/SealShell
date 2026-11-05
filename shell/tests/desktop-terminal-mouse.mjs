@@ -37,6 +37,13 @@ export async function verifyDesktopTerminalMouse(page, { artifacts, pid }) {
     })
     const write = text => page.evaluate(text => new Promise(resolve => window.desktopTerminalMouse.terminal.write(text, resolve)), text)
     const viewport = () => page.evaluate(() => window.desktopTerminalMouse.terminal.buffer.active.viewportY)
+    // SSH online can precede Bash/zsh startup output; wait for the fixture prompt.
+    if (process.env.SEAL_E2E_BASH || process.env.SEAL_E2E_ZSH) {
+      await page.waitForFunction(() => {
+        const buffer = window.desktopTerminalMouse.terminal.buffer.active
+        return /[$#%] $/.test(buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(false, 0, buffer.cursorX) ?? '')
+      })
+    }
     await write(Array.from({ length: 250 }, (_, i) => `mouse-line-${String(i).padStart(3, '0')} selectable words`).join('\r\n') + '\r\n')
     const bottom = await viewport()
     await screen.hover()
