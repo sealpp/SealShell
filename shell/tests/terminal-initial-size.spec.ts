@@ -45,6 +45,102 @@ async function finishConnection(page: Page, index: number) {
   }, index)
 }
 
+for (const split of [false, true]) {
+  test(`Ctrl+Shift+R reconnects only the focused terminal${split ? ' in split panes' : ''}`, async ({ page }) => {
+    await openWorkbench(page)
+    const ids = await addTabs(page, 2)
+    await expect.poll(() => page.evaluate(() => (window as any).initialSizeFixture.connections.length)).toBe(2)
+    await finishConnection(page, 0)
+    await finishConnection(page, 1)
+    await page.evaluate(async () => {
+      const { saveCredentialRecord } = await import('/src/services/vault.ts')
+      await saveCredentialRecord('size-host', { password: 'test' })
+    })
+    if (split) {
+      const dock = page.locator('.main-dock')
+      const bounds = (await dock.boundingBox())!
+      await page.locator('.terminal-tab').last().dragTo(dock, {
+        targetPosition: { x: bounds.width - 5, y: bounds.height / 2 },
+      })
+      await expect(page.locator('.main-dock .dv-groupview')).toHaveCount(2)
+    }
+    const snapshot = () => page.evaluate(async () => {
+      const { store } = await import('/src/stores/app.ts')
+      return store.tabs.map(tab => ({ id: tab.id, sessionId: tab.sessionId, terminalId: tab.terminalId }))
+    })
+    let previous = await snapshot()
+    for (let index = 0; index < ids.length; index++) {
+      const group = page.locator('.main-dock .dv-groupview').nth(split ? index : 0)
+      if (split) await group.locator('.xterm-screen').click()
+      else await page.locator('.terminal-tab-label').nth(index).click()
+      await group.locator('.xterm-helper-textarea').focus()
+      await page.keyboard.press('Control+Shift+R')
+      await expect.poll(() => page.evaluate(() => (window as any).initialSizeFixture.connections.length)).toBe(3 + index)
+      const current = await snapshot()
+      expect(current.map(tab => tab.id)).toEqual(ids)
+      expect(current[index].sessionId).not.toBe(previous[index].sessionId)
+      expect(current[index].terminalId).toBe(previous[index].terminalId)
+      expect(current[1 - index]).toEqual(previous[1 - index])
+      expect(await page.evaluate(() => (window as any).initialSizeFixture.closed.at(-1))).toBe(previous[index].sessionId)
+      await finishConnection(page, 2 + index)
+      await expect(page.locator('.terminal-tab .dot.online')).toHaveCount(2)
+      await expect(page.locator('.main-dock .dv-groupview')).toHaveCount(split ? 2 : 1)
+      previous = current
+    }
+  })
+}
+
+test('Ctrl+Shift+R requests an unsaved password and reconnects in the same tab', async ({ page }) => {
+  await openWorkbench(page)
+  const [id] = await addTabs(page)
+  await expect.poll(() => page.evaluate(() => (window as any).initialSizeFixture.connections.length)).toBe(1)
+  await finishConnection(page, 0)
+  await page.locator('.xterm-helper-textarea').focus()
+  await page.keyboard.press('Control+Shift+R')
+  const dialog = page.getByRole('dialog', { name: '登录到 Size fixture' })
+  await expect(dialog).toBeVisible()
+  expect(await page.evaluate(() => (window as any).initialSizeFixture.closed)).toEqual([])
+  await dialog.getByRole('button', { name: '取消', exact: true }).click()
+  await expect(page.locator('.terminal-tab .dot.online')).toHaveCount(1)
+  await page.locator('.xterm-helper-textarea').focus()
+  await page.keyboard.press('Control+Shift+R')
+  await dialog.getByLabel('密码', { exact: true }).fill('test')
+  await dialog.getByRole('button', { name: '登录', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => (window as any).initialSizeFixture.connections.length)).toBe(2)
+  await finishConnection(page, 1)
+  await expect(dialog).toHaveCount(0)
+  await expect(page.locator('.terminal-tab .dot.online')).toHaveCount(1)
+  expect(await page.evaluate(async () => {
+    const { store } = await import('/src/stores/app.ts')
+    return store.tabs.map(tab => tab.id)
+  })).toEqual([id])
+})
+
+test('Ctrl+Shift+R reconnects pending and disconnected terminals without reviving an old handshake', async ({ page }) => {
+  await openWorkbench(page)
+  await addTabs(page)
+  await expect.poll(() => page.evaluate(() => (window as any).initialSizeFixture.connections.length)).toBe(1)
+  await page.evaluate(async () => {
+    const { saveCredentialRecord } = await import('/src/services/vault.ts')
+    await saveCredentialRecord('size-host', { password: 'test' })
+  })
+  await page.locator('.xterm-helper-textarea').focus()
+  await page.keyboard.press('Control+Shift+R')
+  await expect.poll(() => page.evaluate(() => (window as any).initialSizeFixture.connections.length)).toBe(2)
+  await finishConnection(page, 0)
+  await expect(page.locator('.terminal-tab .dot.connecting')).toHaveCount(1)
+  await finishConnection(page, 1)
+  await expect(page.locator('.terminal-tab .dot.online')).toHaveCount(1)
+  await page.evaluate(async () => {
+    const { store } = await import('/src/stores/app.ts')
+    store.tabs[0].state = 'idle'
+  })
+  await page.keyboard.press('Control+Shift+R')
+  await expect.poll(() => page.evaluate(() => (window as any).initialSizeFixture.connections.length)).toBe(3)
+  await finishConnection(page, 2)
+  await expect(page.locator('.terminal-tab .dot.online')).toHaveCount(1)
+})
+
 test('Ctrl+W closes only the focused terminal and returns to welcome after the last tab', async ({ page }) => {
   await openWorkbench(page)
   const [first, second] = await addTabs(page, 2)

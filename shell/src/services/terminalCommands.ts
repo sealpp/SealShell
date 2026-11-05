@@ -1,6 +1,6 @@
 import type { Terminal } from '@xterm/xterm'
 import { setBottomPanelActiveTab, store } from '../stores/app'
-import { closeTab, connectHost, createHost } from './ws'
+import { closeTab, connectHost, createHost, reconnectTerminal } from './ws'
 import { writeToClipboard, readFromClipboard } from '../utils/clipboard'
 import { getBufferText, getScreenText, getSelectedText } from '../utils/terminalText'
 import type { CommandContext } from './context'
@@ -52,6 +52,22 @@ registerAction({
   },
   keybindings: [{ key: 'Mod+Backquote' }],
   menus: [{ menuId: MenuId.TerminalContext, order: 10 }],
+})
+
+registerAction({
+  id: 'terminal.reconnect',
+  title: '重新连接',
+  description: '重新连接当前终端',
+  category: 'terminal',
+  when: 'tabExists',
+  enablement: (ctx) => {
+    const tab = getTab(ctx)
+    return tab?.kind === 'terminal' && store.hosts.some((host) => host.id === tab.hostId)
+  },
+  run: (ctx) => {
+    if (ctx.tabId) return reconnectTerminal(ctx.tabId)
+  },
+  keybindings: [{ key: 'Ctrl+Shift+R', when: '!modalOpen && focusedDock == "terminal" && area != "host"' }],
 })
 
 registerAction({

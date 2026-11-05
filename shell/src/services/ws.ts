@@ -237,6 +237,22 @@ export async function connectHost(host: HostProfile, insertAfterTabId?: string, 
   }
 }
 
+export async function reconnectTerminal(tabId: string): Promise<void> {
+  const tab = store.tabs.find((item) => item.id === tabId && item.kind === 'terminal')
+  const host = store.hosts.find((item) => item.id === tab?.hostId)
+  if (!tab || !host) return
+  try {
+    const credential = await getSavedCredential(host.id)
+    if (credential === undefined) {
+      openLoginDialog(host, '', tab.id)
+      return
+    }
+    reconnectTab(tab, host, credential)
+  } catch (error) {
+    store.error = error instanceof Error ? error.message : String(error)
+  }
+}
+
 async function startTab(tab: Tab, host: HostProfile, password: string, options?: AddTabOptions): Promise<void> {
   const { allowLoginDialog = true } = options ?? {}
   const sessionId = tab.sessionId
